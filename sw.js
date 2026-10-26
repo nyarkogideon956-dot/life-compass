@@ -1,4 +1,4 @@
-const CACHE = 'life-compass-v7';
+const CACHE = 'life-compass-v9';
 const FILES = [
   './',
   './index.html',
