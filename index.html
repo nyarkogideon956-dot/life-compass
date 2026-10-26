@@ -122,6 +122,35 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .wkmini{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:14px;color:var(--muted)}
 .wkmini b{color:var(--navy);font-size:16px}
 .up{color:var(--ok);font-size:12.5px}
+#alarm{position:fixed;inset:0;z-index:60;background:rgba(12,60,120,.96);display:flex;align-items:center;justify-content:center;padding:24px}
+#alarm[hidden]{display:none}
+.alarmbox{background:#fff;border-radius:22px;padding:26px 20px 20px;width:100%;max-width:360px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+.alarmbox .bell{color:var(--navy);animation:shake .6s infinite}
+.alarmbox .atime{font-size:40px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums}
+.alarmbox .atitle{font-size:19px;font-weight:600;margin-bottom:8px}
+@keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-14deg)}75%{transform:rotate(14deg)}}
+@media (prefers-reduced-motion:reduce){.alarmbox .bell{animation:none}}
+.addrow{display:grid;grid-template-columns:1fr 104px 44px;gap:6px;align-items:center}
+.addrow .btn{height:40px;padding:0;display:flex;align-items:center;justify-content:center}
+.todo.done b{text-decoration:line-through;color:var(--muted);font-weight:400}
+.alarms{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.achip{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;padding:4px 10px;border-radius:999px;background:var(--sky);color:var(--navy)}
+.achip.med{background:#E3F4EB;color:#1E7F52}.achip.diary{background:#F1EAFB;color:#5B3A99}
+.days{display:flex;gap:5px}
+.days label{flex:1;cursor:pointer}
+.days input{position:absolute;opacity:0;pointer-events:none}
+.days span{display:flex;align-items:center;justify-content:center;height:38px;border-radius:10px;border:1.5px solid var(--sky2);font-weight:600;color:var(--navy)}
+.days input:checked+span{background:var(--navy);border-color:var(--navy);color:#fff}
+.days input:focus-visible+span{outline:3px solid var(--blue)}
+.switch{position:relative;display:inline-block;width:46px;height:28px;flex:none}
+.switch input{opacity:0;width:0;height:0}
+.switch span{position:absolute;inset:0;background:#C9D6E6;border-radius:99px;transition:.2s}
+.switch span::before{content:"";position:absolute;width:22px;height:22px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+.switch input:checked+span{background:var(--navy)}
+.switch input:checked+span::before{transform:translateX(18px)}
+.chip.good{background:#E3F4EB;color:#1E7F52}.chip.bad{background:#FBEAEA;color:var(--bad)}
+.dentry{padding-bottom:6px}
+.f2[hidden],.f[hidden],.jentry[hidden]{display:none}
 .timer .clock{font-size:46px;font-weight:700;text-align:center;color:var(--navy);font-variant-numeric:tabular-nums;letter-spacing:.02em;margin:4px 0}
 .timer.on{border:2px solid var(--blue)}
 .timer.on .chip{background:#E3F4EB;color:#1E7F52}
@@ -154,6 +183,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 <div id="sheet"></div>
 <div class="toast" id="toast"></div>
 <div id="lock" hidden></div>
+<div id="alarm" hidden></div>
 
 <script>
 /* ---------- storage ---------- */
@@ -186,12 +216,15 @@ function fresh(){
       dailyBudget:0,
       bibleLang:'',
       langs:[['E','English'],['TW','Twi (Asante)'],['TWA','Twi (Akuapem)'],['EW','Ewe'],['GA','Ga'],['FA','Fante'],['DG','Dangme'],['NZ','Nzema'],['HA','Hausa'],['F','French']],
-      myTemplates:[]
+      myTemplates:[],
+      alarm:{beep:30, diaryTime:'21:00', diaryOn:true}
     },
     days:{}, ministry:[], goals:[], vision:{faith:'',health:'',goals:'',money:'',others:''},
     money:[], helps:[], reviews:{},
     bible:{book:1, chapter:1, read:{}, log:[]}, answers:{},
-    savings:[], students:[]
+    savings:[], students:[],
+    todos:[], reminders:[], meds:[], medTaken:{}, food:{eat:[],avoid:[]}, diary:{}, fired:{}, snooze:[],
+    study:{active:null, journal:[]}
   };
 }
 
@@ -317,10 +350,11 @@ function load(){
     const raw = localStorage.getItem(KEY);
     if(!raw) return fresh();
     const d = JSON.parse(raw), f = fresh();
-    return {...f, ...d, settings:{...f.settings, ...(d.settings||{})}, vision:{...f.vision, ...(d.vision||{})}, bible:{...f.bible, ...(d.bible||{})}, answers:d.answers||{}};
+    return {...f, ...d, settings:{...f.settings, ...(d.settings||{})}, vision:{...f.vision, ...(d.vision||{})}, bible:{...f.bible, ...(d.bible||{})}, answers:d.answers||{}, food:{...f.food, ...(d.food||{})}, study:{...f.study, ...(d.study||{})}};
   }catch(e){ return fresh(); }
 }
 let S = load();
+(function tidy(){ try{ const keep=addDays(ymd(new Date()),-14); Object.keys(S.fired||{}).forEach(k=>{ if(k<keep) delete S.fired[k]; }); }catch(e){} })();
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast('Could not save — storage full?'); } }
 
 /* ---------- helpers ---------- */
@@ -374,7 +408,9 @@ const I = {
   check:'<path d="m5 12 5 5 9-10"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
-  edit:'<path d="M4 20h4L19 9l-4-4L4 16v4z"/>'
+  edit:'<path d="M4 20h4L19 9l-4-4L4 16v4z"/>',
+  bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
+  arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>'
 };
 function svg(name,size=22){ return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${I[name]}</svg>`; }
 function checkBox(on,a,extra=''){ return `<button class="check ${on?'on':''}" data-a="${a}" ${extra} aria-pressed="${!!on}"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">${I.check}</svg></button>`; }
@@ -415,6 +451,8 @@ V.today = () => {
     </div></div>`;
   if(hasData && (sinceBackup===null || sinceBackup>=7))
     html += `<div class="banner"><span style="flex:1">${sinceBackup===null?'You haven\'t made a backup yet.':'Last backup was '+sinceBackup+' days ago.'} Your data lives only on this phone.</span><button class="btn sm" data-a="backup">Back up</button></div>`;
+  if(SA()) html += `<div class="banner" style="background:var(--sky);border-color:var(--sky2);color:var(--navy)"><span style="flex:1"><b>Studying:</b> ${esc(studyTitle(SA()))} · ${hoursText(studyMs()/3.6e6)}</span><button class="btn sm" data-a="gostudy">Open</button></div>`;
+  html += planCard(t);
   html += weekCard(t);
   html += timerCard();
   html += encouragement(t);
@@ -430,6 +468,7 @@ V.today = () => {
     <div class="row"><div class="lbl">Sleep last night (hours)</div><input class="mini" type="number" inputmode="decimal" step="0.5" min="0" max="24" data-f="sleep" value="${d.sleep??''}" placeholder="${st.sleepTarget}"></div>
     <div class="row"><div class="lbl">Exercise (minutes)</div><input class="mini" type="number" inputmode="numeric" min="0" data-f="exercise" value="${d.exercise??''}" placeholder="${st.exerciseTarget}"></div>
     <div class="row"><div class="lbl">Weight (kg)<small>Optional</small></div><input class="mini" type="number" inputmode="decimal" step="0.1" min="0" data-f="weight" value="${d.weight??''}"></div>
+    ${medCard(t,true)}
   </div>`;
   html += todayMoneyCard(t);
   if(S.students.some(x=>x.status!=='stopped')){
@@ -445,6 +484,7 @@ V.today = () => {
   html += `<div class="card"><h2>${svg('goals',18)} This month's goals<span class="sp"></span><button class="btn sm ghost" data-a="go" data-t="goals">See all</button></h2>
     ${monthGoals.length?monthGoals.slice(0,6).map(goalRow).join(''):`<div class="empty">No goals for ${monthName(MONTH())} yet.</div><button class="btn" data-a="goalsheet" data-h="1m">Set a goal for this month</button>`}
   </div>`;
+  html += diaryCard(t);
   return html;
 };
 
@@ -477,6 +517,12 @@ function weekStats(ws, maxDays=7){
     saved: S.money.filter(e=>(e.type==='save'||e.type==='withdraw')&&inW(e.date)).reduce((a,e)=>a+(e.type==='save'?1:-1)*n(e.amount),0),
     topCat: (()=>{ const c={}; S.money.filter(e=>e.type==='spend'&&inW(e.date)).forEach(e=>c[catOf(e)]=(c[catOf(e)]||0)+n(e.amount)); const k=Object.keys(c).sort((a,b)=>c[b]-c[a])[0]; return k?[k,c[k]]:null; })(),
     helped: S.helps.filter(x=>inW(x.date)).length,
+    studyMins: S.study.journal.filter(j=>inW(j.date)).reduce((a,j)=>a+n(j.mins),0),
+    todosDone: S.todos.filter(x=>x.done && x.doneDate && inW(x.doneDate)).length,
+    todosLeft: S.todos.filter(x=>!x.done && x.date<=end).length,
+    diaryDays: days.filter(s=>(S.diary[s]||'').trim()).length,
+    ateWell: days.filter(s=>D(s).ateWell).length,
+    medPct: (()=>{ let due=0,tk=0; days.forEach(s=>medDoses(s).forEach(d=>{ due++; if(d.taken) tk++; })); return due?Math.round(tk/due*100):null; })(),
     goalsDone: S.goals.filter(g=>g.done && g.doneDate && inW(g.doneDate)).map(g=>g.title)
   };
 }
@@ -508,6 +554,7 @@ function weekSheet(ws){
     <div class="area">Faith</div>
     ${line('Bible reading days', wk(w.bible), delta(w.bible,p.bible,' days'))}
     ${line('Chapters read', w.chapters)}
+    ${line('Personal study time', hoursText(w.studyMins/60), delta(w.studyMins,p.studyMins,' min'))}
     ${line('Personal study / prayer / meeting prep', `${w.study} / ${w.prayer} / ${w.meeting} days`)}
     ${line('Ministry', w.minHours+' h', delta(w.minHours,p.minHours,' h'))}
     ${line('Bible studies conducted', w.studies)}
@@ -516,6 +563,8 @@ function weekSheet(ws){
     ${line('Average sleep', w.sleepAvg!==null?w.sleepAvg+' h':'—', w.sleepAvg!==null&&p.sleepAvg!==null?delta(w.sleepAvg,p.sleepAvg,' h'):'')}
     ${line('Water target reached', wk(w.waterDays)+' days')}
     ${line('Exercise', w.exDays+' days · '+w.exMin+' min', delta(w.exMin,p.exMin,' min'))}
+    ${w.medPct!==null?line('Medicine taken on time', w.medPct+'%'):''}
+    ${line('Days I ate healthily', wk(w.ateWell))}
     ${w.wEnd!==null?line('Weight', w.wEnd+' kg', w.wStart!==w.wEnd?`<small class="muted">${r1(w.wEnd-w.wStart)>0?'+':''}${r1(w.wEnd-w.wStart)} kg this week</small>`:''):''}
     <div class="area">Money</div>
     ${line('Paid to myself', money(w.paid))}
@@ -525,12 +574,363 @@ function weekSheet(ws){
     <div class="area">Helping others and goals</div>
     ${line('Times I helped someone', w.helped, delta(w.helped,p.helped))}
     ${line('Goals completed', w.goalsDone.length)}
+    ${line('To-do items done', w.todosDone, w.todosLeft?'<small class="muted">'+w.todosLeft+' still open</small>':'')}
+    ${line('Diary entries', wk(w.diaryDays))}
     ${w.goalsDone.length?`<div class="muted" style="padding:0 0 8px">${w.goalsDone.map(esc).join(' · ')}</div>`:''}
     <div class="area">Weekly backup</div>
     <p class="muted" style="margin:0 0 8px">${sinceBackup===null?'No backup made yet.':sinceBackup===0?'Backed up today. ✓':'Last backup '+sinceBackup+' day'+(sinceBackup===1?'':'s')+' ago.'}</p>
     <div class="btns"><button class="btn" style="flex:1" data-a="backup">Back up now</button><button class="btn ghost" style="flex:1" data-a="close">Close</button></div>`, null);
   weekSheet.open = ws;
 }
+
+/* ================= PLANNER: to-do, alarms, medicine, food, diary ================= */
+const WD = [[1,'M'],[2,'T'],[3,'W'],[4,'T'],[5,'F'],[6,'S'],[0,'S']];
+const WDN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const RTYPES = [['study','Personal study'],['meeting','Meeting preparation'],['family','Family worship'],['task','Task'],['other','Other']];
+const mins = hhmm => { const [h,m]=String(hhmm||'0:0').split(':').map(Number); return h*60+m; };
+const nowMins = () => { const d=new Date(); return d.getHours()*60+d.getMinutes(); };
+function fmtTime(hhmm){ const [h,m]=String(hhmm).split(':').map(Number); const d=new Date(); d.setHours(h,m,0,0); return d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}); }
+function daysText(days){ if(!days||days.length===7) return 'Every day'; const set=new Set(days); if(days.length===5&&[1,2,3,4,5].every(x=>set.has(x))) return 'Weekdays'; if(days.length===2&&set.has(0)&&set.has(6)) return 'Weekends'; return WD.filter(([v])=>set.has(v)).map(([v])=>WDN[v]).join(', '); }
+const AL = () => S.settings.alarm || (S.settings.alarm={beep:30,diaryTime:'21:00',diaryOn:true});
+
+/* everything that should ring on a given date */
+function dueOn(date){
+  const wd=parse(date).getDay(), out=[];
+  S.reminders.filter(r=>r.on!==false && (r.days||[]).includes(wd)).forEach(r=>out.push({key:'rem:'+r.id, time:r.time, title:r.title, kind:r.type||'other', id:r.id, beep:r.beep, created:r.created||0}));
+  S.meds.filter(m=>m.on!==false && (!m.until || date<=m.until)).forEach(m=>(m.times||[]).forEach(tm=>out.push({key:'med:'+m.id+':'+tm, time:tm, title:'Take '+m.name+(m.dose?' ('+m.dose+')':''), kind:'med', id:m.id, slot:tm, created:m.created||0})));
+  S.todos.filter(x=>x.time && x.alarm!==false && !x.done && x.date===date).forEach(x=>out.push({key:'todo:'+x.id, time:x.time, title:x.text, kind:'todo', id:x.id, created:x.createdAt||0}));
+  if(AL().diaryOn) out.push({key:'diary', time:AL().diaryTime, title:'Write about your day', kind:'diary', created:Date.now(), quietMiss:true});
+  return out.sort((a,b)=>mins(a.time)-mins(b.time));
+}
+function firedMap(date=TODAY()){ return S.fired[date] || (S.fired[date]={}); }
+
+/* ---- sound (works offline; generated by the phone, no internet) ---- */
+let AC=null;
+function audio(){ try{ if(!AC){ const C=window.AudioContext||window.webkitAudioContext; if(C) AC=new C(); } if(AC && AC.state==='suspended') AC.resume(); }catch(e){} return AC; }
+document.addEventListener('pointerdown', ()=>audio(), {passive:true});
+let beepTimer=null, beepStop=0;
+function startBeep(seconds){
+  stopBeep(); beepStop=Date.now()+seconds*1000;
+  const tick=()=>{
+    if(Date.now()>beepStop){ stopBeep(); return; }
+    const ac=audio();
+    if(ac){ [0,0.18].forEach((off,i)=>{ const o=ac.createOscillator(), g=ac.createGain(); o.type='square'; o.frequency.value=i?1175:880; g.gain.setValueAtTime(0.0001,ac.currentTime+off); g.gain.exponentialRampToValueAtTime(0.25,ac.currentTime+off+0.02); g.gain.exponentialRampToValueAtTime(0.0001,ac.currentTime+off+0.15); o.connect(g); g.connect(ac.destination); o.start(ac.currentTime+off); o.stop(ac.currentTime+off+0.16); }); }
+    try{ navigator.vibrate && navigator.vibrate([350,150,350]); }catch(e){}
+  };
+  tick(); beepTimer=setInterval(tick, 1000);
+}
+function stopBeep(){ if(beepTimer) clearInterval(beepTimer); beepTimer=null; try{ navigator.vibrate && navigator.vibrate(0); }catch(e){} }
+
+/* ---- ringing ---- */
+let ringing=null, wakeLock=null;
+function ring(item){
+  ringing=item;
+  firedMap()[item.key]='rang'; save();
+  startBeep(n(item.beep)||AL().beep||30);
+  const el=document.getElementById('alarm');
+  const extra = item.kind==='med'?`<button class="btn" data-al="taken">I've taken it</button>`
+    : item.kind==='todo'?`<button class="btn" data-al="done">Mark as done</button>`
+    : item.kind==='diary'?`<button class="btn" data-al="diary">Write now</button>`
+    : (item.kind==='study'||item.kind==='meeting'||item.kind==='family')?`<button class="btn" data-al="studied">OK, I'm starting</button>`:'';
+  el.innerHTML=`<div class="alarmbox"><div class="bell">${svg('bell',40)}</div><div class="atime">${fmtTime(item.time)}</div><div class="atitle">${esc(item.title)}</div>
+    <div class="btns" style="flex-direction:column;width:100%">${extra}<button class="btn ghost" data-al="snooze">Snooze 10 minutes</button><button class="btn ghost" data-al="stop">Stop</button></div></div>`;
+  el.hidden=false;
+  if(document.hidden && 'serviceWorker' in navigator && window.Notification && Notification.permission==='granted'){
+    navigator.serviceWorker.ready.then(r=>r.showNotification(item.title,{body:'Life Compass · '+fmtTime(item.time), tag:item.key, requireInteraction:true, vibrate:[400,200,400,200,400], icon:'icon-192.png'})).catch(()=>{});
+  }
+}
+function closeAlarm(){ stopBeep(); ringing=null; const el=document.getElementById('alarm'); el.hidden=true; el.innerHTML=''; render(); }
+document.addEventListener('click', e=>{
+  const b=e.target.closest('[data-al]'); if(!b||!ringing) return;
+  const it=ringing, a=b.dataset.al;
+  if(a==='snooze'){ S.snooze.push({key:it.key+':s'+Date.now(), at:Date.now()+10*60000, item:it}); save(); toast('Snoozed for 10 minutes'); }
+  if(a==='taken'){ const m=S.medTaken[TODAY()]||(S.medTaken[TODAY()]={}); m[it.id+':'+it.slot]=true; save(); toast('Marked as taken'); }
+  if(a==='done'){ const x=S.todos.find(t=>t.id===it.id); if(x){ x.done=true; x.doneDate=TODAY(); save(); } toast('Done'); }
+  if(a==='diary'){ tab='today'; setTimeout(()=>{ const d=document.getElementById('diaryBox'); if(d){ d.scrollIntoView({block:'center'}); d.focus(); } },120); }
+  if(a==='studied'){ if(it.kind==='meeting'){ day().meeting=true; save(); toast('Ticked on Today'); } else { tab='faith'; faithTab='study'; if(!SA()) startStudy(true); } }
+  closeAlarm();
+});
+
+/* ---- the clock that checks every 10 seconds ---- */
+function checkAlarms(){
+  if(!S || !document.getElementById('alarm') || ringing || !document.getElementById('lock').hidden) return;
+  const t=TODAY(), now=nowMins(), fm=firedMap(t);
+  const sz=S.snooze.find(z=>z.at<=Date.now());
+  if(sz){ S.snooze=S.snooze.filter(z=>z!==sz); save(); ring({...sz.item, key:sz.key}); return; }
+  for(const it of dueOn(t)){
+    if(fm[it.key]) continue;
+    const diff=now-mins(it.time);
+    if(diff>=0 && diff<=2){ ring(it); return; }
+    if(diff>2){
+      const due=new Date(); due.setHours(Math.floor(mins(it.time)/60), mins(it.time)%60, 0, 0);
+      fm[it.key] = (!it.quietMiss && it.created && it.created < due.getTime()) ? 'missed' : 'seen'; save();
+    }
+  }
+}
+setInterval(checkAlarms, 10000);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) setTimeout(checkAlarms,400); });
+
+/* keep the screen awake while an alarm is due soon (optional) */
+async function keepAwake(on){ try{ if(on && 'wakeLock' in navigator && !wakeLock){ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{wakeLock=null}); } if(!on && wakeLock){ await wakeLock.release(); wakeLock=null; } }catch(e){} }
+
+/* ---- links that put the alarm in the phone itself ---- */
+function phoneAlarmLink(time,title){ const [h,m]=time.split(':').map(Number); return `intent:#Intent;action=android.intent.action.SET_ALARM;i.android.intent.extra.alarm.HOUR=${h};i.android.intent.extra.alarm.MINUTES=${m};S.android.intent.extra.alarm.MESSAGE=${encodeURIComponent(title)};end`; }
+function gcalLink(time,title,days,date){
+  const d=date||TODAY(), [h,m]=time.split(':').map(Number);
+  const st=parse(d); st.setHours(h,m,0,0); const en=new Date(st.getTime()+30*60000);
+  const f=x=>x.getFullYear()+String(x.getMonth()+1).padStart(2,'0')+String(x.getDate()).padStart(2,'0')+'T'+String(x.getHours()).padStart(2,'0')+String(x.getMinutes()).padStart(2,'0')+'00';
+  const by=['SU','MO','TU','WE','TH','FR','SA'];
+  const rr = !days ? '' : days.length===7 ? '&recur='+encodeURIComponent('RRULE:FREQ=DAILY') : '&recur='+encodeURIComponent('RRULE:FREQ=WEEKLY;BYDAY='+days.map(x=>by[x]).join(','));
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${f(st)}/${f(en)}&ctz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone||'Africa/Accra')}${rr}&details=${encodeURIComponent('Reminder from Life Compass')}`;
+}
+function closedAppHelp(time,title,days,date){
+  return `<div class="area">Ring even when the app is closed</div>
+    <p class="muted" style="margin:0 0 8px">Life Compass beeps while it is open. To be sure you hear it with the app closed, also add it to your phone:</p>
+    <div class="btns"><a class="btn sm ghost" href="${phoneAlarmLink(time,title)}">Set phone alarm</a><a class="btn sm ghost" href="${gcalLink(time,title,days,date)}" target="_blank" rel="noopener">Add to Google Calendar</a></div>
+    <p class="muted" style="margin:6px 0 0;font-size:12.5px">Phone alarm works on most Android phones: check the days in your Clock app. Google Calendar needs data once; after that it reminds you offline.</p>`;
+}
+
+/* ---- reminder editor (personal study, tasks, etc.) ---- */
+function reminderSheet(id, type){
+  const r = id ? S.reminders.find(x=>x.id===id) : {title:type==='study'?'Personal study':'', type:type||'study', time:'19:00', days:[0,1,2,3,4,5,6], beep:AL().beep, on:true, note:''};
+  const daysSet=new Set(r.days||[]);
+  openSheet(`<h3>${id?'Edit alarm':'New alarm'}</h3>
+    <div class="f2"><div class="f"><label>Type</label><select id="rType">${RTYPES.map(([k,l])=>`<option value="${k}" ${k===r.type?'selected':''}>${l}</option>`).join('')}</select></div>
+    <div class="f"><label>Time</label><input type="time" id="rTime" value="${r.time}"></div></div>
+    <div class="f"><label>Name</label><input type="text" id="rTitle" value="${esc(r.title)}" placeholder="Personal study — Watchtower"></div>
+    <div class="f"><label>Days</label><div class="days">${WD.map(([v,l])=>`<label><input type="checkbox" value="${v}" ${daysSet.has(v)?'checked':''}><span>${l}</span></label>`).join('')}</div>
+      <div class="btns" style="margin-top:6px"><button class="btn sm ghost" data-a="rdays" data-d="all">Every day</button><button class="btn sm ghost" data-a="rdays" data-d="wk">Weekdays</button><button class="btn sm ghost" data-a="rdays" data-d="none">Clear</button></div></div>
+    <div class="f2"><div class="f"><label>Beep for</label><select id="rBeep">${[15,30,60].map(v=>`<option value="${v}" ${v===n(r.beep)?'selected':''}>${v} seconds</option>`).join('')}</select></div>
+    <div class="f"><label>&nbsp;</label><button class="btn ghost" data-a="testbeep" style="width:100%">Test sound</button></div></div>
+    <div class="f"><label>What to do (optional)</label><textarea id="rNote" placeholder="Study the Watchtower for Sunday; prepare comments">${esc(r.note||'')}</textarea></div>
+    ${actions}
+    ${closedAppHelp(r.time, r.title||'Personal study', r.days, null)}
+    ${id?`<button class="btn danger" data-a="delrem" data-id="${id}" style="margin-top:12px">Delete alarm</button>`:''}`, ()=>{
+      const tm=val('rTime'); if(!tm) return fail('rTime','Choose a time');
+      const days=[...document.querySelectorAll('.days input:checked')].map(x=>n(x.value));
+      if(!days.length) return fail('rTime','Choose at least one day');
+      const rt=val('rType'), title=val('rTitle').trim()||RTYPES.find(x=>x[0]===rt)[1];
+      const rec = id ? r : {id:uid(), on:true}; if(!id || rec.time!==tm) rec.created=Date.now(); Object.assign(rec,{type:rt, time:tm, title, days, beep:n(val('rBeep')), note:val('rNote').trim()});
+      if(!id) S.reminders.push(rec);
+      const fm=firedMap(); delete fm['rem:'+rec.id];
+      return true;
+    });
+}
+function alarmsSheet(){
+  const a=AL();
+  const perm = window.Notification ? Notification.permission : 'unsupported';
+  openSheet(`<h3>Alarms and reminders</h3>
+    <div class="list">${S.reminders.length?S.reminders.slice().sort((x,y)=>mins(x.time)-mins(y.time)).map(r=>`<div class="it"><div class="x" data-a="remsheet" data-id="${r.id}" style="cursor:pointer"><b>${fmtTime(r.time)} · ${esc(r.title)}</b><small>${daysText(r.days)} · beeps ${r.beep||a.beep} s</small></div>
+      <label class="switch"><input type="checkbox" data-remon="${r.id}" ${r.on!==false?'checked':''}><span></span></label></div>`).join(''):'<div class="empty">No alarms yet.</div>'}</div>
+    <button class="btn" data-a="remsheet" style="margin-top:10px">Add an alarm</button>
+    <div class="area">Diary reminder</div>
+    <div class="row" style="border:0"><div class="lbl">Remind me to write about my day</div><label class="switch"><input type="checkbox" id="aDiaryOn" ${a.diaryOn?'checked':''}><span></span></label></div>
+    <div class="f2"><div class="f"><label>At</label><input type="time" id="aDiaryTime" value="${a.diaryTime}"></div>
+    <div class="f"><label>Usual beep length</label><select id="aBeep">${[15,30,60].map(v=>`<option value="${v}" ${v===a.beep?'selected':''}>${v} seconds</option>`).join('')}</select></div></div>
+    <div class="area">Notifications</div>
+    <p class="muted" style="margin:0 0 8px">${perm==='granted'?'Notifications are on. If the app is open in the background, you also get a pop-up.':perm==='denied'?'Notifications are blocked for this app in Chrome settings.':perm==='unsupported'?'This browser does not support notifications.':'Allow notifications so a pop-up appears when the app is open in the background.'}</p>
+    ${perm==='default'?`<button class="btn ghost" data-a="askNotif">Allow notifications</button>`:''}
+    <div class="area">Important</div>
+    <p class="muted" style="margin:0">The beep works offline, but only while Life Compass is open (on screen or recently used). Phones stop web apps that are fully closed. For alarms you must not miss, use <b>Set phone alarm</b> or <b>Add to Google Calendar</b> inside each alarm.</p>
+    <button class="btn ghost" data-a="close" style="margin-top:14px">Close</button>`, null);
+  const upd=()=>{ a.diaryOn=document.getElementById('aDiaryOn').checked; a.diaryTime=val('aDiaryTime')||'21:00'; a.beep=n(val('aBeep'))||30; delete firedMap().diary; save(); };
+  ['aDiaryOn','aDiaryTime','aBeep'].forEach(i=>document.getElementById(i).addEventListener('change',upd));
+}
+
+/* ---- to-do list with automatic carry-forward ---- */
+function todosFor(t){
+  const carried=S.todos.filter(x=>!x.done && x.date<t).sort((a,b)=>a.date.localeCompare(b.date));
+  const today=S.todos.filter(x=>x.date===t).sort((a,b)=>(a.done-b.done)||((a.time?mins(a.time):9999)-(b.time?mins(b.time):9999)));
+  return {carried, today};
+}
+function todoRow(x,t){
+  const from = x.date<t ? `<span class="chip" style="font-size:11.5px">from ${WDN[parse(x.date).getDay()]} ${parse(x.date).getDate()}</span>` : '';
+  return `<div class="it todo ${x.done?'done':''}">${checkBox(x.done,'tododone','data-id="'+x.id+'"')}
+    <div class="x" data-a="todosheet" data-id="${x.id}" style="cursor:pointer"><b>${esc(x.text)}</b><small>${x.time?svg('bell',12)+' '+fmtTime(x.time)+' ':''}${from}</small></div>
+    ${x.done?'':`<button class="icon-btn" data-a="todotmr" data-id="${x.id}" aria-label="Move to tomorrow" title="Move to tomorrow">${svg('arrow',18)}</button>`}</div>`;
+}
+function planCard(t){
+  const {carried, today}=todosFor(t), all=[...carried,...today], done=today.filter(x=>x.done).length;
+  const due=dueOn(t), fm=firedMap(t), now=nowMins();
+  const upcoming=due.filter(x=>mins(x.time)>=now-2 && !fm[x.key] && x.kind!=='todo');
+  const missed=due.filter(x=>fm[x.key]==='missed');
+  return `<div class="card"><h2>${svg('today',18)} Today's plan<span class="sp"></span><span class="chip">${done}/${today.length+carried.length} done</span></h2>
+    ${missed.length?`<div class="banner" style="margin-bottom:10px"><span style="flex:1"><b>Missed while the app was closed:</b><br>${missed.slice(0,4).map(x=>fmtTime(x.time)+' · '+esc(x.title)).join('<br>')}${missed.length>4?'<br>and '+(missed.length-4)+' more':''}</span><button class="btn sm ghost" data-a="clearmissed">OK</button></div>`:''}
+    ${upcoming.length?`<div class="alarms">${upcoming.slice(0,4).map(x=>`<span class="achip ${x.kind}">${svg('bell',13)} ${fmtTime(x.time)} · ${esc(x.title)}</span>`).join('')}</div>`:''}
+    <div class="addrow"><input type="text" id="todoText" placeholder="Add something to do today…" enterkeyhint="done"><input type="time" id="todoTime" aria-label="Alarm time (optional)"><button class="btn sm" data-a="todoadd" aria-label="Add">${svg('plus',18)}</button></div>
+    <p class="muted" style="margin:4px 0 6px;font-size:12.5px">Add a time if you want it to beep. Anything not done moves to the next day by itself.</p>
+    <div class="list">${all.length?all.map(x=>todoRow(x,t)).join(''):'<div class="empty">Nothing planned yet. What do you want to get done today?</div>'}</div>
+    <div class="btns" style="margin-top:10px"><button class="btn sm ghost" data-a="todosheet" data-tomorrow="1">Plan tomorrow</button><button class="btn sm ghost" data-a="alarms">${svg('bell',15)} Alarms</button>${today.some(x=>x.done)?`<button class="btn sm ghost" data-a="cleardone">Clear done</button>`:''}</div></div>`;
+}
+function todoSheet(id, tomorrow){
+  const x = id ? S.todos.find(t=>t.id===id) : {text:'', date:tomorrow?addDays(TODAY(),1):TODAY(), time:'', alarm:true, note:''};
+  openSheet(`<h3>${id?'Edit to-do':tomorrow?'Plan for tomorrow':'New to-do'}</h3>
+    <div class="f"><label>What to do</label><input type="text" id="tdText" value="${esc(x.text)}" placeholder="Visit Brother Mensah"></div>
+    <div class="f2"><div class="f"><label>Day</label><input type="date" id="tdDate" value="${x.date}"></div>
+    <div class="f"><label>Alarm time (optional)</label><input type="time" id="tdTime" value="${x.time||''}"></div></div>
+    <div class="f"><label>Notes</label><textarea id="tdNote">${esc(x.note||'')}</textarea></div>
+    ${actions}
+    ${x.time?closedAppHelp(x.time, x.text, null, x.date):''}
+    ${id?`<button class="btn danger" data-a="deltodo" data-id="${id}" style="margin-top:12px">Delete</button>`:''}`, ()=>{
+      const tx=val('tdText').trim(); if(!tx) return fail('tdText','Write what you want to do');
+      const rec = id ? x : {id:uid(), done:false, created:TODAY()}; rec.createdAt=Date.now();
+      Object.assign(rec,{text:tx, date:val('tdDate')||TODAY(), time:val('tdTime'), note:val('tdNote').trim(), alarm:true});
+      if(!id) S.todos.push(rec); delete firedMap(rec.date)['todo:'+rec.id]; return true;
+    });
+}
+
+/* ---- diary ---- */
+function diaryCard(t){
+  const prev=Object.keys(S.diary).filter(d=>d<t && S.diary[d]).length;
+  return `<div class="card"><h2>${svg('edit',18)} My day<span class="sp"></span><span class="muted" style="font-weight:400;font-size:13px">${AL().diaryOn?'Reminder '+fmtTime(AL().diaryTime):''}</span></h2>
+    <textarea id="diaryBox" data-diary="${t}" placeholder="What happened today? What went well? What did I learn? What am I thankful for?" style="min-height:110px">${esc(S.diary[t]||'')}</textarea>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px"><span class="muted" style="font-size:12.5px">Saves as you type · stays on this phone</span>${prev?`<button class="btn sm ghost" data-a="diarypast">Past entries (${prev})</button>`:''}</div></div>`;
+}
+function diaryPastSheet(){
+  const ds=Object.keys(S.diary).filter(d=>S.diary[d]).sort().reverse().slice(0,60);
+  openSheet(`<h3>My diary</h3><input type="search" id="diarySearch" placeholder="Search your diary…" style="margin-bottom:10px">
+    <div id="diaryList">${ds.map(d=>`<div class="dentry" data-text="${esc((S.diary[d]||'').toLowerCase())}"><div class="area">${parse(d).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div><div class="vision">${esc(S.diary[d])}</div></div>`).join('')}</div>
+    <button class="btn ghost" data-a="close" style="margin-top:14px">Close</button>`, null);
+  document.getElementById('diarySearch').addEventListener('input',e=>{ const q=e.target.value.toLowerCase(); document.querySelectorAll('.dentry').forEach(el=>el.hidden=q&&!el.dataset.text.includes(q)); });
+}
+
+/* ---- medicine ---- */
+function medDoses(t){ const out=[]; S.meds.filter(m=>m.on!==false && (!m.until||t<=m.until)).forEach(m=>(m.times||[]).forEach(tm=>out.push({m,tm,taken:!!(S.medTaken[t]||{})[m.id+':'+tm]}))); return out.sort((a,b)=>mins(a.tm)-mins(b.tm)); }
+function medCard(t, compact){
+  const ds=medDoses(t), taken=ds.filter(d=>d.taken).length;
+  if(compact) return ds.length?`<div class="area" style="margin-top:6px">Medicine · ${taken}/${ds.length} taken</div>${ds.map(d=>`<div class="row"><div class="lbl">${esc(d.m.name)}<small>${fmtTime(d.tm)}${d.m.dose?' · '+esc(d.m.dose):''}</small></div>${checkBox(d.taken,'medtick','data-id="'+d.m.id+'" data-tm="'+d.tm+'"')}</div>`).join('')}`:'';
+  return `<div class="card"><h2>${svg('health',18)} Medicine<span class="sp"></span>${ds.length?`<span class="chip">${taken}/${ds.length} taken today</span>`:''}</h2>
+    ${ds.length?ds.map(d=>`<div class="row"><div class="lbl">${fmtTime(d.tm)} · ${esc(d.m.name)}<small>${esc(d.m.dose||'')}${d.m.food?' · '+esc(d.m.food):''}</small></div>${checkBox(d.taken,'medtick','data-id="'+d.m.id+'" data-tm="'+d.tm+'"')}</div>`).join(''):'<div class="empty">Add any medicine or supplement you take, with the times. The app beeps at each time and you tick it when taken.</div>'}
+    ${S.meds.length?`<div class="list" style="margin-top:8px">${S.meds.map(m=>`<div class="it"><div class="x" data-a="medsheet" data-id="${m.id}" style="cursor:pointer"><b>${esc(m.name)}</b><small>${(m.times||[]).map(fmtTime).join(', ')}${m.until?' · until '+nice(m.until):''}${m.on===false?' · paused':''}</small></div><button class="icon-btn" data-a="medsheet" data-id="${m.id}" aria-label="Edit">${svg('edit',18)}</button></div>`).join('')}</div>`:''}
+    <button class="btn ghost" data-a="medsheet" style="margin-top:10px">Add medicine</button></div>`;
+}
+function medSheet(id){
+  const m = id ? S.meds.find(x=>x.id===id) : {name:'', dose:'', times:['08:00'], food:'After food', until:'', on:true, note:''};
+  const timeRow=(tm,i)=>`<div class="f2 mtrow" style="grid-template-columns:1fr 34px;align-items:center;margin-bottom:6px"><input type="time" class="mt" value="${tm}"><button class="icon-btn" data-a="delmt" aria-label="Remove time">${svg('trash',17)}</button></div>`;
+  openSheet(`<h3>${id?'Edit medicine':'Add medicine'}</h3>
+    <div class="f"><label>Name</label><input type="text" id="mdName" value="${esc(m.name)}" placeholder="Amlodipine, Vitamin C"></div>
+    <div class="f2"><div class="f"><label>Dose</label><input type="text" id="mdDose" value="${esc(m.dose||'')}" placeholder="1 tablet"></div>
+    <div class="f"><label>When</label><select id="mdFood">${['After food','Before food','With food','Any time'].map(o=>`<option ${o===m.food?'selected':''}>${o}</option>`).join('')}</select></div></div>
+    <div class="f"><label>Times each day (each one beeps)</label><div id="mdTimes">${(m.times||[]).map(timeRow).join('')}</div><button class="btn sm ghost" data-a="addmt">${svg('plus',15)} Add a time</button></div>
+    <div class="f2"><div class="f"><label>Take until (optional)</label><input type="date" id="mdUntil" value="${m.until||''}"></div>
+    <div class="f"><label>Status</label><select id="mdOn"><option value="1" ${m.on!==false?'selected':''}>Active</option><option value="0" ${m.on===false?'selected':''}>Paused</option></select></div></div>
+    <div class="f"><label>Notes (doctor, refill date)</label><textarea id="mdNote">${esc(m.note||'')}</textarea></div>
+    ${actions}
+    ${(m.times||[])[0]?closedAppHelp(m.times[0], 'Take '+(m.name||'medicine'), [0,1,2,3,4,5,6], null):''}
+    ${id?`<button class="btn danger" data-a="delmed" data-id="${id}" style="margin-top:12px">Delete medicine</button>`:''}`, ()=>{
+      const nm=val('mdName').trim(); if(!nm) return fail('mdName','Enter the medicine name');
+      const times=[...new Set([...document.querySelectorAll('#mdTimes .mt')].map(x=>x.value).filter(Boolean))].sort();
+      if(!times.length) return fail('mdName','Add at least one time');
+      const rec = id ? m : {id:uid()}; rec.created=rec.created&&id&&String(rec.times)===String(times)?rec.created:Date.now(); Object.assign(rec,{name:nm, dose:val('mdDose').trim(), food:val('mdFood'), times, until:val('mdUntil'), on:val('mdOn')==='1', note:val('mdNote').trim()});
+      if(!id) S.meds.push(rec); return true;
+    });
+  medSheet.timeRow=timeRow;
+}
+
+/* ---- food ---- */
+function foodCard(t){
+  const d=day(t), f=S.food;
+  return `<div class="card"><h2>${svg('health',18)} Food</h2>
+    ${['breakfast','lunch','supper'].map(k=>`<div class="f"><label>${k[0].toUpperCase()+k.slice(1)} today</label><input type="text" data-meal="${k}" value="${esc((d.meals||{})[k]||'')}" placeholder="${k==='breakfast'?'Oats and banana':k==='lunch'?'Brown rice, beans, vegetables':'Light soup with fish'}"></div>`).join('')}
+    <div class="row" style="border:0"><div class="lbl">I ate healthily today</div>${checkBox(d.ateWell,'tick','data-k="ateWell"')}</div>
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:10px"><div><div class="area" style="margin-top:0">Foods to eat more</div>${f.eat.length?`<div class="chips" style="margin-top:4px">${f.eat.map(x=>`<span class="chip good">${esc(x)}</span>`).join('')}</div>`:'<div class="muted" style="font-size:13px">None yet</div>'}</div>
+    <div><div class="area" style="margin-top:0">Foods to cut down</div>${f.avoid.length?`<div class="chips" style="margin-top:4px">${f.avoid.map(x=>`<span class="chip bad">${esc(x)}</span>`).join('')}</div>`:'<div class="muted" style="font-size:13px">None yet</div>'}</div></div>
+    <button class="btn ghost" data-a="foodsheet" style="margin-top:10px">Edit my food plan</button></div>`;
+}
+function foodSheet(){
+  const f=S.food;
+  openSheet(`<h3>My food plan</h3><p class="muted" style="margin:0 0 10px">One food per line. These show on your Health page as a daily reminder.</p>
+    <div class="f"><label>Foods to eat more</label><textarea id="fEat" style="min-height:120px" placeholder="Kontomire\nGarden eggs\nBeans\nFish\nFruit: pawpaw, oranges">${esc(f.eat.join('\n'))}</textarea></div>
+    <div class="f"><label>Foods to cut down</label><textarea id="fAvoid" style="min-height:100px" placeholder="Soft drinks\nFried food\nToo much salt">${esc(f.avoid.join('\n'))}</textarea></div>
+    ${actions}`, ()=>{
+      const sp=v=>[...new Set(v.split('\n').map(x=>x.trim()).filter(Boolean))];
+      f.eat=sp(val('fEat')); f.avoid=sp(val('fAvoid')); return true;
+    });
+}
+
+/* ---- personal study schedule card (Faith → Bible) ---- */
+function studyScheduleCard(){
+  const rs=S.reminders.filter(r=>['study','meeting','family'].includes(r.type)).sort((a,b)=>mins(a.time)-mins(b.time));
+  return `<div class="card"><h2>${svg('bell',18)} Personal study times</h2>
+    ${rs.length?`<div class="list">${rs.map(r=>`<div class="it"><div class="x" data-a="remsheet" data-id="${r.id}" style="cursor:pointer"><b>${fmtTime(r.time)} · ${esc(r.title)}</b><small>${daysText(r.days)}${r.note?' · '+esc(r.note):''}</small></div><label class="switch"><input type="checkbox" data-remon="${r.id}" ${r.on!==false?'checked':''}><span></span></label></div>`).join('')}</div>`:'<div class="empty">Set the days and time you do personal study, meeting preparation or family worship. The app beeps to remind you.</div>'}
+    <button class="btn ghost" data-a="remsheet" data-type="study" style="margin-top:10px">Add a study time</button></div>`;
+}
+
+/* ================= PERSONAL STUDY: session + journal ================= */
+const MATERIALS = ['Bible chapter','Watchtower study article','Meeting workbook','Book or brochure','Topic research','Other'];
+function SA(){ return S.study.active; }
+function studyMs(a=SA()){ return a ? a.sessionMs + (a.running ? Date.now()-a.startedAt : 0) : 0; }
+function studyTitle(a){ return a.material==='Bible chapter' ? BOOKS[a.book-1][0]+' '+a.chapter : (a.title||a.material); }
+function studyJWLink(a){ return a.material==='Bible chapter' ? jwlib(bcode(a.book,a.chapter)) : 'jwlibrary:///finder'+(LANG()?'?wtlocale='+encodeURIComponent(LANG()):''); }
+function startStudy(preset){
+  const mat = preset ? 'Bible chapter' : val('stMat') || 'Bible chapter';
+  const a = {material:mat, startedAt:Date.now(), sessionMs:0, running:true, date:TODAY(), learned:'', apply:'', verse:'', questions:''};
+  if(mat==='Bible chapter'){ a.book = preset ? S.bible.book : n(val('stBook'))||S.bible.book; a.chapter = preset ? S.bible.chapter : n(val('stCh'))||1; }
+  else { const t=val('stTitle').trim(); if(!t){ fail('stTitle','Write what you are studying'); return; } a.title=t; }
+  S.study.active=a; save(); render(); toast('Study started — the timer keeps running while you are in JW Library');
+}
+function studyView(){
+  const a=SA(), wk=weekStart(), m=MONTH()+'-01';
+  const wkMin=S.study.journal.filter(j=>j.date>=wk).reduce((x,j)=>x+n(j.mins),0);
+  const daysMonth=new Set(S.study.journal.filter(j=>j.date>=m).map(j=>j.date)).size;
+  let html='';
+  if(a){
+    html += `<div class="card timer on"><h2>${svg('faith',18)} Studying now<span class="sp"></span><span class="chip">${a.running?'Running':'Paused'}</span></h2>
+      <div style="text-align:center;font-weight:600;font-size:17px">${esc(studyTitle(a))}</div>
+      <div class="muted" style="text-align:center;font-size:13px">${esc(a.material)}</div>
+      <div class="clock" id="stClock">${clock(studyMs(a))}</div>
+      <a class="btn" href="${studyJWLink(a)}" style="width:100%">${svg('faith',18)}&nbsp; Open ${a.material==='Bible chapter'?esc(studyTitle(a))+' in ':''}JW Library</a>
+      <p class="muted" style="margin:6px 0 10px;text-align:center;font-size:12.5px">Study and highlight in JW Library, then come back here to write your main points.</p>
+      <div class="f"><label>What I learned</label><textarea data-st="learned" placeholder="Main points from today's study">${esc(a.learned)}</textarea></div>
+      <div class="f"><label>How I will apply it</label><textarea data-st="apply" placeholder="One thing I will do this week">${esc(a.apply)}</textarea></div>
+      <div class="f2"><div class="f"><label>Verse to remember</label><input type="text" data-st="verse" value="${esc(a.verse)}" placeholder="Proverbs 3:5"></div>
+      <div class="f"><label>Questions to research</label><input type="text" data-st="questions" value="${esc(a.questions)}" placeholder="Optional"></div></div>
+      <div class="btns"><button class="btn" style="flex:2" data-a="stfinish">Finish and save</button>${a.running?`<button class="btn ghost" style="flex:1" data-a="stpause">Pause</button>`:`<button class="btn ghost" style="flex:1" data-a="stresume">Resume</button>`}</div>
+      <button class="btn sm ghost" data-a="stcancel" style="margin-top:8px;width:100%">Cancel without saving</button></div>`;
+  } else {
+    const B=S.study.next||{book:S.bible.book, chapter:S.bible.chapter}, chs=BOOKS[B.book-1][1];
+    html += `<div class="card"><h2>${svg('faith',18)} Start personal study</h2>
+      <div class="f"><label>What are you studying?</label><select id="stMat">${MATERIALS.map(x=>`<option>${x}</option>`).join('')}</select></div>
+      <div id="stBibleRow" class="f2"><div class="f"><label>Book</label><select id="stBook">${BOOKS.map((b,i)=>`<option value="${i+1}" ${i+1===B.book?'selected':''}>${b[0]}</option>`).join('')}</select></div>
+        <div class="f"><label>Chapter</label><select id="stCh">${Array.from({length:chs},(_,i)=>`<option ${i+1===B.chapter?'selected':''}>${i+1}</option>`).join('')}</select></div></div>
+      <div id="stTitleRow" class="f" hidden><label>Title or topic</label><input type="text" id="stTitle" placeholder="Watchtower: Keep your joy"></div>
+      <button class="btn" data-a="ststart">Start study</button>
+      <p class="muted" style="margin:8px 0 0;font-size:12.5px">A timer starts and you can jump to JW Library. Everything is saved on this phone and works offline.</p></div>`;
+  }
+  html += `<div class="card"><div class="stat"><div><small>Study time this week</small><b>${hoursText(wkMin/60)}</b></div><div><small>Days studied this month</small><b>${daysMonth}</b></div></div></div>`;
+  html += studyScheduleCard();
+  html += journalCard();
+  return html;
+}
+function journalCard(){
+  const js=[...S.study.journal].sort((x,y)=>y.date.localeCompare(x.date)||(y.ts||0)-(x.ts||0));
+  return `<div class="card"><h2>My study journal<span class="sp"></span><span class="chip">${js.length} entr${js.length===1?'y':'ies'}</span></h2>
+    ${js.length?`<input type="search" id="jSearch" placeholder="Search notes, verses, topics…" style="margin-bottom:8px">
+    <div class="list" id="jList">${js.slice(0,50).map(j=>`<div class="it jentry" data-text="${esc([j.title,j.learned,j.apply,j.verse,j.questions].join(' ').toLowerCase())}" data-a="jopen" data-id="${j.id}" style="cursor:pointer"><div class="x"><b>${esc(j.title)}</b><small>${nice(j.date)} · ${hoursText(n(j.mins)/60)}${j.verse?' · '+esc(j.verse):''}</small>${j.learned?`<div style="font-size:14px;margin-top:2px">${esc(j.learned.length>110?j.learned.slice(0,110)+'…':j.learned)}</div>`:''}</div></div>`).join('')}</div>`
+    :'<div class="empty">Your study notes appear here after each session, so you can look back at what you learned.</div>'}</div>`;
+}
+function journalSheet(id){
+  const j=S.study.journal.find(x=>x.id===id);
+  openSheet(`<h3>${esc(j.title)}</h3><p class="muted" style="margin:-6px 0 10px">${parse(j.date).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'})} · ${esc(j.material)}</p>
+    <div class="f2"><div class="f"><label>Date</label><input type="date" id="jDate" value="${j.date}"></div><div class="f"><label>Minutes</label><input type="number" id="jMins" value="${j.mins}"></div></div>
+    <div class="f"><label>What I learned</label><textarea id="jLearned" style="min-height:110px">${esc(j.learned)}</textarea></div>
+    <div class="f"><label>How I will apply it</label><textarea id="jApply">${esc(j.apply)}</textarea></div>
+    <div class="f2"><div class="f"><label>Verse to remember</label><input type="text" id="jVerse" value="${esc(j.verse)}"></div><div class="f"><label>Questions to research</label><input type="text" id="jQ" value="${esc(j.questions||'')}"></div></div>
+    ${j.book?`<a class="btn ghost" href="${jwlib(bcode(j.book,j.chapter))}" style="width:100%;margin-bottom:8px">Open ${esc(j.title)} in JW Library</a>`:''}
+    ${actions}<button class="btn danger" data-a="jdel" data-id="${j.id}" style="margin-top:8px">Delete entry</button>`, ()=>{
+      Object.assign(j,{date:val('jDate')||j.date, mins:Math.max(0,n(val('jMins'))), learned:val('jLearned').trim(), apply:val('jApply').trim(), verse:val('jVerse').trim(), questions:val('jQ').trim()}); return true;
+    });
+}
+function finishStudy(){
+  const a=SA(); if(!a) return;
+  const ms=studyMs(a), minsDone=Math.max(1,Math.round(ms/60000));
+  S.study.journal.push({id:uid(), ts:Date.now(), date:a.date||TODAY(), mins:minsDone, material:a.material, title:studyTitle(a), book:a.book||null, chapter:a.chapter||null, learned:a.learned.trim(), apply:a.apply.trim(), verse:a.verse.trim(), questions:a.questions.trim()});
+  day(a.date||TODAY()).study=true;
+  if(a.material==='Bible chapter'){ const set=new Set(S.bible.read[a.book]||[]); if(!set.has(a.chapter)){ set.add(a.chapter); S.bible.read[a.book]=[...set].sort((x,y)=>x-y); S.bible.log.push({date:TODAY(), book:a.book, chapter:a.chapter, note:a.learned.trim()}); } day().bible=true; }
+  if(a.material==='Bible chapter'){ S.study.next = a.chapter<BOOKS[a.book-1][1] ? {book:a.book, chapter:a.chapter+1} : {book:a.book%66+1, chapter:1}; }
+  S.study.active=null; save(); render(); toast('Saved: '+hoursText(minsDone/60)+' of personal study');
+}
+setInterval(()=>{ const el=document.getElementById('stClock'); if(el && SA() && SA().running) el.textContent=clock(studyMs()); }, 1000);
 
 /* ---------- field service timer (uses the phone's clock; works offline) ---------- */
 function T(){ return S.timer || (S.timer={running:false, startedAt:null, sessionMs:0, segments:0}); }
@@ -623,7 +1023,7 @@ V.goals = () => {
 
 let faithTab='reading', reportMonth=null;
 V.faith = () => {
-  let html = `<div class="seg">${[['reading','Bible'],['ministry','Ministry'],['students','Students']].map(([k,l])=>`<button class="${k===faithTab?'on':''}" data-a="faithtab" data-k="${k}">${l}</button>`).join('')}</div>`;
+  let html = `<div class="seg">${[['reading','Bible'],['study','Study'],['ministry','Ministry'],['students','Students']].map(([k,l])=>`<button class="${k===faithTab?'on':''}" data-a="faithtab" data-k="${k}">${l}</button>`).join('')}</div>`;
   if(faithTab==='reading'){
     const m=MONTH(), readDays = Object.keys(S.days).filter(k=>k.slice(0,7)===m && S.days[k].bible).length, dayOfMonth=parse(TODAY()).getDate();
     html += bibleCard();
@@ -631,6 +1031,7 @@ V.faith = () => {
       <div class="legend"><span><i style="background:var(--navy)"></i>Read</span><span><i style="background:#F5B700;border-radius:50%"></i>Ministry</span></div></div>`;
     html += notesCard();
   }
+  if(faithTab==='study') html += studyView();
   if(faithTab==='ministry') html += ministryView();
   if(faithTab==='students') html += studentsView();
   return html;
@@ -920,7 +1321,8 @@ V.health = () => {
   const exStreak = streak(x=>n(x.exercise)>0), waStreak = streak(x=>n(x.water)>=st.waterTarget);
   const weights = Object.keys(S.days).filter(k=>n(S.days[k].weight)>0).sort();
   const wLast = weights.length?n(S.days[weights[weights.length-1]].weight):null, wFirst = weights.length?n(S.days[weights[0]].weight):null;
-  let html = `<div class="card"><h2>Last 14 days</h2>
+  let html = medCard(TODAY()) + foodCard(TODAY());
+  html += `<div class="card"><h2>Last 14 days</h2>
     <div class="stat"><div><small>Exercise streak</small><b>${exStreak} day${exStreak===1?'':'s'}</b></div><div><small>Water target streak</small><b>${waStreak} day${waStreak===1?'':'s'}</b></div></div></div>`;
   html += `<div class="card"><h2>Sleep · average ${avg(sl)} h</h2>${bars(sl,lab,st.sleepTarget,'#0C3C78')}<div class="muted">Dashed line = your target of ${st.sleepTarget} h</div></div>`;
   html += `<div class="card"><h2>Water · average ${avg(wa)} glasses</h2>${bars(wa,lab,st.waterTarget,'#2E86DE')}</div>`;
@@ -1323,6 +1725,33 @@ document.addEventListener('click', e => {
     case 'backup': { const ws=weekSheet.open; backup(); if(ws) weekSheet(ws); break; }
     case 'restore': document.getElementById('restoreFile').click(); break;
     case 'freshsheet': freshSheet(); break;
+    case 'ststart': startStudy(); break;
+    case 'stpause': { const a=SA(); a.sessionMs+=Date.now()-a.startedAt; a.running=false; save(); render(); break; }
+    case 'stresume': { const a=SA(); a.startedAt=Date.now(); a.running=true; save(); render(); break; }
+    case 'stfinish': finishStudy(); break;
+    case 'stcancel': if(confirm('Cancel this study session? Your notes from this session will be lost.')){ S.study.active=null; save(); render(); } break;
+    case 'jopen': journalSheet(id); break;
+    case 'jdel': if(confirm('Delete this journal entry?')){ S.study.journal=S.study.journal.filter(x=>x.id!==id); save(); closeSheet(); render(); } break;
+    case 'todoadd': { const tx=val('todoText').trim(); if(!tx){ document.getElementById('todoText').focus(); toast('Write a to-do first'); break; } S.todos.push({id:uid(), text:tx, date:TODAY(), time:val('todoTime'), alarm:true, done:false, created:TODAY(), createdAt:Date.now()}); save(); render(); setTimeout(()=>{ const i=document.getElementById('todoText'); if(i) i.focus(); },50); toast(val('todoTime')?'Added with alarm':'Added'); break; }
+    case 'tododone': { const x=S.todos.find(z=>z.id===id); x.done=!x.done; x.doneDate=x.done?TODAY():null; if(x.done && x.date<TODAY()) x.date=TODAY(); save(); render(); break; }
+    case 'todotmr': { const x=S.todos.find(z=>z.id===id); x.date=addDays(TODAY(),1); save(); render(); toast('Moved to tomorrow'); break; }
+    case 'todosheet': todoSheet(id, t.dataset.tomorrow); break;
+    case 'deltodo': S.todos=S.todos.filter(z=>z.id!==id); save(); closeSheet(); render(); break;
+    case 'cleardone': S.todos=S.todos.filter(z=>!(z.done && z.date===TODAY())); save(); render(); break;
+    case 'clearmissed': { const fm=firedMap(); Object.keys(fm).forEach(k=>{ if(fm[k]==='missed') fm[k]='seen'; }); save(); render(); break; }
+    case 'alarms': alarmsSheet(); break;
+    case 'remsheet': reminderSheet(id, t.dataset.type); break;
+    case 'rdays': { const set=t.dataset.d==='all'?[0,1,2,3,4,5,6]:t.dataset.d==='wk'?[1,2,3,4,5]:[]; document.querySelectorAll('.days input').forEach(i=>i.checked=set.includes(n(i.value))); break; }
+    case 'testbeep': startBeep(3); break;
+    case 'delrem': S.reminders=S.reminders.filter(z=>z.id!==id); save(); closeSheet(); render(); break;
+    case 'askNotif': if(window.Notification) Notification.requestPermission().then(()=>{ closeSheet(); alarmsSheet(); }); break;
+    case 'diarypast': diaryPastSheet(); break;
+    case 'medsheet': medSheet(id); break;
+    case 'addmt': document.getElementById('mdTimes').insertAdjacentHTML('beforeend', medSheet.timeRow('12:00')); break;
+    case 'delmt': t.closest('.mtrow').remove(); break;
+    case 'delmed': if(confirm('Delete this medicine?')){ S.meds=S.meds.filter(z=>z.id!==id); save(); closeSheet(); render(); } break;
+    case 'medtick': { const m=S.medTaken[TODAY()]||(S.medTaken[TODAY()]={}), k=id+':'+t.dataset.tm; m[k]=!m[k]; save(); render(); if(m[k]) toast('Marked as taken'); break; }
+    case 'foodsheet': foodSheet(); break;
     case 'tstart': timerStart(); break;
     case 'tpause': timerPause(); break;
     case 'tend': if(T().running && !confirm('End the session? The time so far will be added to your hours.')) break; timerEnd(); break;
@@ -1340,6 +1769,7 @@ document.addEventListener('click', e => {
       break;
     }
     case 'faithtab': faithTab=t.dataset.k; render(); break;
+    case 'gostudy': tab='faith'; faithTab='study'; render(); window.scrollTo(0,0); break;
     case 'gostudents': tab='faith'; faithTab='students'; render(); window.scrollTo(0,0); break;
     case 'studentsheet': studentSheet(id); break;
     case 'studysheet': studySheet(id); break;
@@ -1381,6 +1811,10 @@ document.addEventListener('change', e => {
   const t=e.target;
   if(t.dataset.f){ const d=day(); if(t.value==='') delete d[t.dataset.f]; else d[t.dataset.f]=n(t.value); save(); toast('Saved'); }
   if(t.id==='moneyMonth'){ moneyMonth=t.value; render(); }
+  if(t.id==='stMat'){ const bib=t.value==='Bible chapter'; document.getElementById('stBibleRow').hidden=!bib; document.getElementById('stTitleRow').hidden=bib; if(!bib) document.getElementById('stTitle').focus(); }
+  if(t.id==='stBook'){ const c=document.getElementById('stCh'); c.innerHTML=Array.from({length:BOOKS[n(t.value)-1][1]},(_,i)=>`<option>${i+1}</option>`).join(''); }
+  if(t.dataset.remon){ const r=S.reminders.find(z=>z.id===t.dataset.remon); r.on=t.checked; save(); toast(t.checked?'Alarm on':'Alarm off'); if(!document.getElementById('sheet').innerHTML) render(); }
+  if(t.dataset.meal){ const d=day(); d.meals=d.meals||{}; d.meals[t.dataset.meal]=t.value; save(); toast('Saved'); }
   if(t.id==='bBook'){ S.bible.book=n(t.value); const r=S.bible.read[S.bible.book]||[]; let c=1; while(r.includes(c)&&c<BOOKS[S.bible.book-1][1]) c++; S.bible.chapter=c; save(); render(); }
   if(t.id==='bCh'){ S.bible.chapter=n(t.value); save(); render(); }
   if(t.id==='bTick'){ S.bible.tick=t.checked; save(); render(); }
@@ -1389,11 +1823,15 @@ document.addEventListener('change', e => {
   if(t.id==='sLangTest'){ document.getElementById('sLangTestBtn').href=jwlib('01001001', t.value); }
   if(t.id==='restoreFile' && t.files[0]) restore(t.files[0]);
 });
+document.addEventListener('keydown', e => { if(e.key==='Enter' && e.target.id==='todoText'){ e.preventDefault(); const b=document.querySelector('[data-a=todoadd]'); if(b) b.click(); } });
 document.addEventListener('input', e => {
   const t=e.target;
   if(t.dataset.rv){ const m=MONTH(); S.reviews[m]=S.reviews[m]||{}; S.reviews[m][t.dataset.rv]=t.value; save(); }
   if(t.classList.contains('bp')) updBk();
   if(t.dataset.ans){ S.answers[t.dataset.ans]=t.value; save(); }
+  if(t.dataset.diary){ S.diary[t.dataset.diary]=t.value; save(); }
+  if(t.dataset.st && SA()){ SA()[t.dataset.st]=t.value; save(); }
+  if(t.id==='jSearch'){ const q=t.value.toLowerCase(); document.querySelectorAll('.jentry').forEach(el=>el.hidden=q&&!el.dataset.text.includes(q)); }
 });
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && !document.getElementById('sheet').innerHTML) render(); });
 
@@ -1453,6 +1891,7 @@ function personSheet(){
 }
 
 if(needsLock()) showLock(); else render();
+setTimeout(checkAlarms, 1500);
 if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>
