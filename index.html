@@ -1,0 +1,888 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Life Compass</title>
+<meta name="theme-color" content="#0C3C78">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Life Compass">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+:root{
+  --navy:#0C3C78;--blue:#1565C0;--sky:#E8F0FB;--sky2:#D3E3F8;--bg:#F4F7FC;--card:#fff;
+  --ink:#0F1E33;--muted:#5F7A99;--line:#E1E8F2;--ok:#1E8E5A;--warn:#B26A00;--bad:#C0392B;
+  --r:14px;color-scheme:light;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Arial,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:5;background:var(--navy);color:#fff;padding:calc(env(safe-area-inset-top) + 12px) 16px 12px;display:flex;align-items:center;gap:10px}
+header img{width:32px;height:32px;border-radius:8px;background:#fff}
+header h1{font-size:18px;font-weight:600;margin:0;flex:1}
+header button{background:none;border:0;color:#fff;padding:6px;border-radius:10px;display:flex}
+main{padding:14px 14px calc(96px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:5;background:#fff;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(6,1fr);padding:4px 2px calc(4px + env(safe-area-inset-bottom))}
+nav button{background:none;border:0;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--muted);padding:6px 0;border-radius:10px}
+nav button svg{width:22px;height:22px}
+nav button.on{color:var(--navy);font-weight:600}
+nav button.on svg{stroke:var(--navy)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.card h2{font-size:15px;margin:0 0 10px;display:flex;align-items:center;gap:8px;color:var(--navy)}
+.card h2 .sp{flex:1}
+.hello{background:var(--navy);color:#fff;border:0}
+.hello .big{font-size:20px;font-weight:600}
+.hello .sub{opacity:.8;font-size:14px}
+.row{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0}
+.row .lbl{flex:1}
+.row .lbl small{display:block;color:var(--muted);font-size:12.5px}
+.check{width:30px;height:30px;border-radius:9px;border:2px solid var(--sky2);background:#fff;display:flex;align-items:center;justify-content:center;flex:none}
+.check.on{background:var(--navy);border-color:var(--navy)}
+.check svg{width:18px;height:18px;stroke:#fff;opacity:0}
+.check.on svg{opacity:1}
+.step{display:flex;align-items:center;gap:6px}
+.step button{width:34px;height:34px;border-radius:10px;border:1px solid var(--sky2);background:var(--sky);color:var(--navy);font-size:20px;line-height:1}
+.step b{min-width:34px;text-align:center}
+input[type=number],input[type=text],input[type=date],input[type=month],select,textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 10px;background:#fff;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--sky)}
+.mini{width:84px!important;text-align:center}
+.btn{border:0;border-radius:11px;padding:11px 14px;background:var(--navy);color:#fff;font-weight:600;width:100%}
+.btn.ghost{background:var(--sky);color:var(--navy)}
+.btn.sm{width:auto;padding:7px 12px;font-size:14px}
+.btn.danger{background:#FBEAEA;color:var(--bad)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;padding:3px 9px;border-radius:999px;background:var(--sky);color:var(--navy)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.hello .chip{background:rgba(255,255,255,.15);color:#fff}
+.bar{height:8px;background:var(--sky);border-radius:99px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--blue);border-radius:99px}
+.bar.done i{background:var(--ok)}
+.stat{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat div{background:var(--sky);border-radius:12px;padding:10px 12px}
+.stat small{display:block;color:var(--muted);font-size:12.5px}
+.stat b{font-size:20px;color:var(--navy)}
+.seg{display:flex;background:var(--sky);border-radius:12px;padding:3px;margin-bottom:12px}
+.seg button{flex:1;border:0;background:none;padding:8px 4px;border-radius:9px;font-size:14px;color:var(--navy)}
+.seg button.on{background:#fff;font-weight:600;box-shadow:0 1px 2px rgba(12,60,120,.12)}
+.muted{color:var(--muted);font-size:13.5px}
+.empty{color:var(--muted);font-size:14px;padding:6px 0}
+.area{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:14px 0 4px}
+.goal{padding:10px 0;border-top:1px solid var(--line)}
+.goal:first-child{border-top:0}
+.goal .t{display:flex;gap:8px;align-items:flex-start}
+.goal .t span{flex:1}
+.goal.done .t span{text-decoration:line-through;color:var(--muted)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:12px}
+.cal .h{color:var(--muted)}
+.cal .d{aspect-ratio:1;border-radius:8px;background:var(--sky);display:flex;align-items:center;justify-content:center;position:relative;color:var(--navy)}
+.cal .d.on{background:var(--navy);color:#fff}
+.cal .d.today{outline:2px solid var(--blue);outline-offset:1px}
+.cal .d.m::after{content:"";position:absolute;bottom:3px;width:5px;height:5px;border-radius:50%;background:#F5B700}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.list .it{display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--line);align-items:flex-start}
+.list .it:first-child{border-top:0}
+.list .it .x{flex:1}
+.list .it .x small{display:block;color:var(--muted);font-size:12.5px}
+.amt{font-weight:600;white-space:nowrap}
+.amt.neg{color:var(--bad)}
+.icon-btn{background:none;border:0;color:var(--muted);padding:4px;display:flex}
+.chart svg{width:100%;height:auto;display:block}
+.sheet-bg{position:fixed;inset:0;background:rgba(15,30,51,.45);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:#fff;width:100%;max-width:640px;border-radius:18px 18px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom));max-height:88vh;overflow:auto}
+.sheet h3{margin:0 0 12px;color:var(--navy);font-size:17px}
+.f{margin-bottom:11px}
+.f label{display:block;font-size:13px;color:var(--muted);margin-bottom:4px}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.err{color:var(--bad);font-size:13px;margin-top:4px}
+.banner{background:#FFF6E0;border:1px solid #F3DDA6;color:#6B4A00;border-radius:12px;padding:10px 12px;font-size:14px;margin-bottom:12px;display:flex;gap:8px;align-items:center}
+.banner .btn{width:auto}
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 16px;border-radius:999px;font-size:14px;z-index:30;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+textarea{min-height:76px;resize:vertical}
+.vision{white-space:pre-wrap;font-size:14.5px}
+a.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+.enc .blk{padding:12px 0;border-top:1px solid var(--line)}
+.enc .blk:first-of-type{border-top:0;padding-top:0}
+.kicker{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--blue);font-weight:600;margin-bottom:4px}
+.enc .ref{font-size:18px;font-weight:700;color:var(--navy)}
+.enc .theme{font-size:15px}
+.enc .q{font-weight:600;margin-bottom:8px}
+.enc .quote{font-size:16px;font-style:italic}
+.enc textarea{min-height:64px}
+.scripture{background:var(--sky);border-radius:12px;padding:12px!important;border:0!important;margin-bottom:4px}
+.vid video{width:100%;border-radius:12px;background:#000;display:block;aspect-ratio:16/9}
+.chgrid{display:grid;grid-template-columns:repeat(10,1fr);gap:3px;margin-top:8px}
+.chgrid span{aspect-ratio:1;border-radius:4px;background:var(--sky);font-size:10px;display:flex;align-items:center;justify-content:center;color:var(--navy)}
+.chgrid span.r{background:var(--navy);color:#fff}
+.chgrid span.cur{outline:2px solid #F5B700}
+</style>
+</head>
+<body>
+<header>
+  <img src="icons/icon.svg" alt="">
+  <h1 id="title">Life Compass</h1>
+  <button data-a="settings" aria-label="Settings"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+</header>
+<main id="main"></main>
+<nav id="nav"></nav>
+<div id="sheet"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- storage ---------- */
+const KEY = 'lifecompass.v1';
+const AREAS = {
+  faith:  {label:'Faith',  color:'#0C3C78'},
+  health: {label:'Health', color:'#1E8E5A'},
+  goals:  {label:'Life goals', color:'#1565C0'},
+  money:  {label:'Money', color:'#B26A00'},
+  others: {label:'Helping others', color:'#7A4FB5'}
+};
+const HORIZONS = {'5y':'5 years','1y':'This year','1m':'This month'};
+function fresh(){
+  return {
+    settings:{
+      name:'', currency:'GH₵', ministryTarget:50, waterTarget:8, sleepTarget:7, exerciseTarget:30,
+      buckets:[
+        {name:'Living costs',pct:50},{name:'Savings',pct:20},{name:'Donations',pct:10},
+        {name:'Helping others',pct:10},{name:'Business and growth',pct:10}
+      ],
+      started:ymd(new Date()), lastBackup:null
+    },
+    days:{}, ministry:[], goals:[], vision:{faith:'',health:'',goals:'',money:'',others:''},
+    money:[], helps:[], reviews:{},
+    bible:{book:1, chapter:1, read:{}, log:[]}, answers:{}
+  };
+}
+
+/* ---------- Bible data ---------- */
+const BOOKS = [
+['Genesis',50,'Creation, the start of sin, and Jehovah\'s promise of a rescuing offspring'],['Exodus',40,'Jehovah frees Israel from Egypt and gives the Law'],['Leviticus',27,'Holiness, sacrifices and the priesthood'],['Numbers',36,'Forty years in the wilderness — lessons in obedience'],['Deuteronomy',34,'Moses urges Israel to love and obey Jehovah'],
+['Joshua',24,'Israel enters the Promised Land; Jehovah keeps his word'],['Judges',21,'Cycles of unfaithfulness and rescue by the judges'],['Ruth',4,'Loyal love rewarded'],['1 Samuel',31,'Samuel, King Saul and young David'],['2 Samuel',24,'David\'s reign, his mistakes and his repentance'],
+['1 Kings',22,'Solomon\'s wisdom and the kingdom divided'],['2 Kings',25,'Elijah, Elisha and the fall of Israel and Judah'],['1 Chronicles',29,'David\'s line and preparations for the temple'],['2 Chronicles',36,'The kings of Judah and true worship'],['Ezra',10,'Return from exile and rebuilding the temple'],
+['Nehemiah',13,'Rebuilding Jerusalem\'s walls with prayer and hard work'],['Esther',10,'Courage, and Jehovah protecting his people'],['Job',42,'Keeping integrity under trial'],['Psalms',150,'Songs of praise, prayer and trust in Jehovah'],['Proverbs',31,'Practical wisdom for daily life'],
+['Ecclesiastes',12,'What gives life real meaning'],['Song of Solomon',8,'Loyal, unbreakable love'],['Isaiah',66,'Salvation by Jehovah and the coming Messiah'],['Jeremiah',52,'A courageous warning to an unfaithful nation'],['Lamentations',5,'Grief over Jerusalem, and hope in Jehovah\'s mercy'],
+['Ezekiel',48,'Visions of Jehovah\'s glory and restored worship'],['Daniel',12,'Faithfulness in Babylon and prophecies about God\'s Kingdom'],['Hosea',14,'Jehovah\'s loyal love for an unfaithful people'],['Joel',3,'The great day of Jehovah — call on his name'],['Amos',9,'Jehovah requires justice'],
+['Obadiah',1,'Judgment on proud Edom'],['Jonah',4,'Jehovah\'s mercy, and a lesson for a reluctant prophet'],['Micah',7,'Exercise justice, love loyalty, walk modestly with God'],['Nahum',3,'The fall of Nineveh'],['Habakkuk',3,'Waiting on Jehovah with faith'],
+['Zephaniah',3,'Seek Jehovah before his day comes'],['Haggai',2,'Put Jehovah\'s house first'],['Zechariah',14,'Encouragement to finish the temple; visions of the Messiah'],['Malachi',4,'Give Jehovah your best'],['Matthew',28,'Jesus the promised King and his teachings'],
+['Mark',16,'Jesus\' fast-moving ministry'],['Luke',24,'Jesus\' compassion for all kinds of people'],['John',21,'Jesus\' love, and the Father who sent him'],['Acts',28,'The good news spreads through the early Christians'],['Romans',16,'Faith, undeserved kindness and right living'],
+['1 Corinthians',16,'Unity, love and Christian conduct'],['2 Corinthians',13,'Comfort, the ministry and generosity'],['Galatians',6,'Freedom in Christ and the fruitage of the spirit'],['Ephesians',6,'Unity, the new personality and spiritual armor'],['Philippians',4,'Joy and contentment in every situation'],
+['Colossians',4,'Christ\'s role, and putting on the new personality'],['1 Thessalonians',5,'Keep encouraging one another'],['2 Thessalonians',3,'Stay steady before the day of Jehovah'],['1 Timothy',6,'Guidance for overseers and the congregation'],['2 Timothy',4,'Endure and keep preaching the word'],
+['Titus',3,'Fine works and sound teaching'],['Philemon',1,'Forgiveness and Christian brotherhood'],['Hebrews',13,'Faith, and the better covenant through Christ'],['James',5,'Faith shown by works'],['1 Peter',5,'Endure suffering with fine conduct'],
+['2 Peter',3,'Remember Jehovah\'s promises; avoid false teachers'],['1 John',5,'God is love — love one another'],['2 John',1,'Keep walking in the truth'],['3 John',1,'Hospitality to faithful brothers'],['Jude',1,'Put up a hard fight for the faith'],
+['Revelation',22,'God\'s Kingdom triumphs; a new heaven and a new earth']];
+const TOTAL_CH = BOOKS.reduce((a,b)=>a+b[1],0);
+/* scripture of the day: reference, JW Library code (book/chapter/verse), theme in our own words, question */
+const VERSES = [
+['Proverbs 3:5, 6','20003005','Trust in Jehovah with all your heart, not in your own understanding.','In which decision this week can I lean on Jehovah instead of my own thinking?'],
+['Psalm 55:22','19055022','Throw your burden on Jehovah, and he will sustain you.','What burden can I tell Jehovah about in prayer today?'],
+['Isaiah 41:10','23041010','Do not be afraid — Jehovah is with you and will strengthen you.','What am I worried about, and how has Jehovah helped me before?'],
+['Matthew 6:33','40006033','Keep seeking first the Kingdom, and the other things will be added.','What does my schedule this week show about what comes first?'],
+['Philippians 4:6, 7','50004006','Pray about everything, and God\'s peace will guard your heart.','What specific thing can I pray about today, with thanks?'],
+['James 4:8','59004008','Draw close to God, and he will draw close to you.','What one thing can I do today to draw closer to Jehovah?'],
+['Galatians 6:9','48006009','Do not give up doing what is fine; you will reap if you don\'t tire out.','Where am I tempted to give up, and why is it worth continuing?'],
+['Hebrews 6:10','58006010','God does not forget your work and the love you show for his name.','What work for Jehovah am I glad he remembers?'],
+['1 Peter 5:7','60005007','Throw all your anxiety on Jehovah, because he cares for you.','Which anxiety do I need to hand over to Jehovah?'],
+['Psalm 37:5','19037005','Commit your way to Jehovah; rely on him and he will act.','What plan can I commit to Jehovah this month?'],
+['Joshua 1:8','06001008','Reading God\'s word daily leads to real success.','How can I make my Bible reading more meaningful this week?'],
+['Psalm 1:2, 3','19001002','The one who delights in God\'s law is like a tree that bears fruit.','How can I enjoy my Bible reading more?'],
+['Matthew 11:28-30','40011028','Come to Jesus and find refreshment.','What in my life feels heavy, and how does Jesus\' example refresh me?'],
+['2 Corinthians 4:16','47004016','Do not give up; the inner person is renewed day by day.','What renews me spiritually each day?'],
+['Ecclesiastes 4:9, 10','21004009','Two are better than one — when one falls, the other lifts him up.','Who can I lift up or encourage this week?'],
+['Acts 20:35','44020035','There is more happiness in giving than in receiving.','How can I give of my time or things to someone this week?'],
+['Proverbs 21:5','20021005','The plans of the diligent lead to success.','What money plan do I need to think through carefully?'],
+['Luke 14:28','42014028','Calculate the cost before you build.','Before my next big spending decision, have I counted the cost?'],
+['1 Timothy 4:8','54004008','Physical training benefits a little, but godly devotion benefits all things.','How can I balance caring for my body and my spiritual health?'],
+['Proverbs 17:22','20017022','A joyful heart is good medicine.','What gives me joy that I can make more time for?'],
+['Romans 12:11','45012011','Be industrious, aglow with the spirit, slaving for Jehovah.','Where can I show more zeal this week?'],
+['Colossians 3:23','51003023','Work whole-souled, as for Jehovah, not for men.','How would my daily work change if I did it all for Jehovah?'],
+['Psalm 34:18','19034018','Jehovah is close to the brokenhearted.','Who do I know that is hurting, and how can I comfort them?'],
+['Isaiah 40:29-31','23040029','Jehovah gives power to the tired; those hoping in him regain strength.','When I feel tired, what helps me rely on Jehovah\'s strength?'],
+['John 13:35','43013035','Love among yourselves identifies Jesus\' disciples.','How can I show love to a brother or sister this week?'],
+['Galatians 6:10','48006010','Work what is good toward all, especially those related in the faith.','What good thing can I do for someone in my congregation?'],
+['Proverbs 16:3','20016003','Commit your works to Jehovah, and your plans will succeed.','Which of my goals have I really committed to Jehovah in prayer?'],
+['Ephesians 5:15, 16','49005015','Watch how you walk; make the best use of your time.','What time-waster can I cut this week?'],
+['Matthew 24:14','40024014','The good news of the Kingdom will be preached in all the earth.','How can I expand my share in the ministry this month?'],
+['2 Timothy 4:2','55004002','Preach the word, and do it with urgency.','Who can I share a thought from the Bible with this week?'],
+['Psalm 119:105','19119105','God\'s word is a lamp for your foot and a light for your path.','What decision can the Bible light up for me right now?'],
+['Proverbs 22:3','20022003','The shrewd one sees danger and hides.','What danger, to my health, money or spirituality, should I avoid?'],
+['Hebrews 10:24, 25','58010024','Encourage one another and do not miss meeting together.','How can I prepare better for the next meeting?'],
+['Philippians 4:13','50004013','You have strength for all things through the one who gives power.','What hard task can I face with Jehovah\'s help?'],
+['Lamentations 3:22, 23','25003022','Jehovah\'s mercies are new every morning.','What fresh start do I need today?'],
+['Micah 6:8','33006008','Exercise justice, love loyalty, and walk with modesty with your God.','Which of these three can I work on this week?'],
+['Proverbs 11:25','20011025','The generous person will prosper.','How can I be generous this week, even in a small way?'],
+['1 Thessalonians 5:11','52005011','Keep encouraging one another and building one another up.','Who will I encourage today, and how?'],
+['Isaiah 30:21','23030021','"This is the way. Walk in it."','Where do I need Jehovah\'s direction right now?'],
+['Psalm 16:8','19016008','With Jehovah always before me, I will never be shaken.','How can I keep Jehovah before me throughout the day?']];
+const QUOTES = [
+['Well done is better than well said.','Benjamin Franklin'],['Lost time is never found again.','Benjamin Franklin'],
+['Early to bed and early to rise makes a man healthy, wealthy, and wise.','Benjamin Franklin'],['Beware of little expenses; a small leak will sink a great ship.','Benjamin Franklin'],
+['Energy and persistence conquer all things.','Benjamin Franklin'],['The journey of a thousand miles begins with a single step.','Lao Tzu'],
+['We are what we repeatedly do. Excellence, then, is not an act, but a habit.','Will Durant'],['If you want to go fast, go alone. If you want to go far, go together.','African proverb'],
+['When the roots are deep, there is no reason to fear the wind.','African proverb'],['Knowledge is like a baobab tree; no one person can embrace it.','Ghanaian proverb'],
+['It is not wrong to go back for that which you have forgotten.','Akan proverb (Sankofa)'],['Rain does not fall on one roof alone.','Cameroonian proverb'],
+['He who has health has hope, and he who has hope has everything.','Arabian proverb'],['No act of kindness, no matter how small, is ever wasted.','Aesop'],
+['Slow and steady wins the race.','Aesop'],['Little by little, a little becomes a lot.','Tanzanian proverb'],
+['Smooth seas do not make skillful sailors.','African proverb'],['However long the night, the dawn will break.','African proverb'],
+['He who learns, teaches.','Ethiopian proverb'],['The man who moves a mountain begins by carrying away small stones.','Chinese proverb'],
+['Work keeps away three great evils: boredom, vice, and need.','Voltaire'],['Do what you can, with what you have, where you are.','Theodore Roosevelt']];
+const TIPS = [
+'Drink a glass of water as soon as you wake up — your body has gone hours without any.',
+'Walk briskly for 20–30 minutes today. Walking to field service counts too.',
+'Aim for 7–8 hours of sleep. Try going to bed at the same time each night.',
+'Fill half your plate with vegetables or kontomire, garden eggs and other greens.',
+'Cut back on sugary drinks — swap one soft drink for water today.',
+'Eat fruit you can find locally: pawpaw, oranges, pineapple, banana.',
+'Take a short break every hour if you sit a lot. Stand up and stretch for 2 minutes.',
+'Go easy on salt and seasoning cubes — too much raises blood pressure.',
+'Wash your hands with soap before eating and after using the toilet.',
+'Check your blood pressure at least once every few months.',
+'Get some morning sunlight — it helps your body clock and your mood.',
+'Choose grilled, boiled or steamed food over fried food today.',
+'Put your phone away 30 minutes before bed for deeper sleep.',
+'Breathe slowly: in for 4 seconds, hold for 4, out for 6. Repeat 5 times when stressed.',
+'Do 10 squats and 10 push-ups (or wall push-ups) today. Small habits add up.',
+'Eat slowly and stop when you are comfortably full, not stuffed.',
+'Carry a water bottle in the ministry, especially in the hot sun.',
+'Wear a hat or use shade in the midday heat to avoid heat exhaustion.',
+'Sleep under a treated mosquito net, and clear standing water around your home.',
+'Choose whole grains: brown rice, oats or wheat bread instead of white sometimes.',
+'Include beans, eggs, fish or groundnuts for protein to keep you strong.',
+'Laugh with friends — good company is good for your heart and mind.',
+'Rest one day a week from heavy work. Your body repairs itself when you rest.',
+'Stretch your back and neck after long hours of physical work.',
+'Visit the dentist and brush twice a day; healthy teeth help healthy eating.',
+'Keep a regular eating time; skipping meals often leads to overeating later.',
+'Limit late-night heavy meals — eat dinner at least 2–3 hours before sleep.',
+'If you feel unwell for more than a few days, see a doctor early.',
+'Write down three things you are thankful for — gratitude lowers stress.',
+'Climb stairs instead of waiting, and take the longer walk when you can.'];
+const CHQ = [
+'What does this chapter teach me about Jehovah\'s qualities?',
+'How can I apply one point from this chapter this week?',
+'Which person in this chapter is a fine example, and why?',
+'What warning example do I see here, and how can I avoid it?',
+'How could I use something from this chapter in the ministry?',
+'What verse from this chapter would I like to remember?',
+'How does this chapter help me trust Jehovah\'s promises?'];
+function dayNum(s=TODAY()){ const d=parse(s); return Math.floor(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/864e5); }
+function bcode(b,c,v=1){ return String(b).padStart(2,'0')+String(c).padStart(3,'0')+String(v).padStart(3,'0'); }
+const jwlib = code => 'jwlibrary:///finder?bible='+code;
+const jworg = code => 'https://www.jw.org/finder?wtlocale=E&bible='+code;
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(!raw) return fresh();
+    const d = JSON.parse(raw), f = fresh();
+    return {...f, ...d, settings:{...f.settings, ...(d.settings||{})}, vision:{...f.vision, ...(d.vision||{})}, bible:{...f.bible, ...(d.bible||{})}, answers:d.answers||{}};
+  }catch(e){ return fresh(); }
+}
+let S = load();
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast('Could not save — storage full?'); } }
+
+/* ---------- helpers ---------- */
+function ymd(d){ const z=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate()); }
+function parse(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d||1); }
+function addDays(s,n){ const d=parse(s); d.setDate(d.getDate()+n); return ymd(d); }
+const TODAY = () => ymd(new Date());
+const MONTH = (s=TODAY()) => s.slice(0,7);
+const YEAR = (s=TODAY()) => s.slice(0,4);
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function n(v){ const x=parseFloat(v); return isFinite(x)?x:0; }
+function r1(x){ return Math.round(x*10)/10; }
+function money(x){ return S.settings.currency+' '+(Math.round(x*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function day(s=TODAY()){ return S.days[s] || (S.days[s]={}); }
+function nice(s){ return parse(s).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'}); }
+function monthName(m){ return parse(m+'-01').toLocaleDateString(undefined,{month:'long',year:'numeric'}); }
+function pct(a,b){ return b>0?Math.max(0,Math.min(100,Math.round(a/b*100))):0; }
+function toast(t){ const el=document.getElementById('toast'); el.textContent=t; el.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('show'),1800); }
+function streak(test){
+  let s=TODAY(), c=0;
+  if(!test(S.days[s]||{})) s=addDays(s,-1);
+  while(test(S.days[s]||{})){ c++; s=addDays(s,-1); }
+  return c;
+}
+/* service year runs September to August */
+function serviceYear(s=TODAY()){
+  const d=parse(s), y=d.getMonth()>=8?d.getFullYear():d.getFullYear()-1;
+  return {start:y+'-09-01', end:(y+1)+'-08-31', label:'Sept '+y+' – Aug '+(y+1)};
+}
+function ministryHours(from,to){ return S.ministry.filter(e=>e.date>=from&&e.date<=to).reduce((a,e)=>a+n(e.hours),0); }
+function ministryMonth(m=MONTH()){ return S.ministry.filter(e=>e.date.slice(0,7)===m).reduce((a,e)=>a+n(e.hours),0); }
+function goalPct(g){ if(g.done) return 100; return g.target>0?pct(g.progress||0,g.target):0; }
+function currentGoals(h){
+  return S.goals.filter(g=>{
+    if(g.horizon!==h) return false;
+    if(h==='1m') return g.period===MONTH();
+    if(h==='1y') return g.period===YEAR();
+    return true;
+  });
+}
+
+/* ---------- icons ---------- */
+const I = {
+  today:'<path d="M3 10h18M8 3v4M16 3v4"/><rect x="3" y="5" width="18" height="16" rx="3"/><path d="m9 15 2 2 4-4"/>',
+  goals:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  faith:'<path d="M12 6C9 4 5.5 4 3 5v14c2.5-1 6-1 9 1 3-2 6.5-2 9-1V5c-2.5-1-6-1-9 1z"/><path d="M12 6v14"/>',
+  health:'<path d="M20.8 5.6a5.5 5.5 0 0 0-7.8 0L12 6.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 22l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/>',
+  money:'<rect x="2" y="6" width="20" height="13" rx="3"/><circle cx="12" cy="12.5" r="2.5"/><path d="M6 10v.01M18 15v.01"/>',
+  others:'<circle cx="9" cy="7" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/>',
+  check:'<path d="m5 12 5 5 9-10"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  edit:'<path d="M4 20h4L19 9l-4-4L4 16v4z"/>'
+};
+function svg(name,size=22){ return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${I[name]}</svg>`; }
+function checkBox(on,a,extra=''){ return `<button class="check ${on?'on':''}" data-a="${a}" ${extra} aria-pressed="${!!on}"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">${I.check}</svg></button>`; }
+function bar(p,done){ return `<div class="bar ${done||p>=100?'done':''}"><i style="width:${p}%"></i></div>`; }
+
+/* ---------- navigation ---------- */
+const TABS = [['today','Today'],['goals','Goals'],['faith','Faith'],['health','Health'],['money','Money'],['others','Others']];
+let tab = 'today', goalH = '1m', moneyMonth = MONTH();
+function renderNav(){
+  document.getElementById('nav').innerHTML = TABS.map(([k,l])=>`<button class="${k===tab?'on':''}" data-tab="${k}">${svg(k)}<span>${l}</span></button>`).join('');
+}
+function render(){
+  renderNav();
+  document.getElementById('title').textContent = tab==='today'?'Life Compass':TABS.find(t=>t[0]===tab)[1];
+  document.getElementById('main').innerHTML = V[tab]();
+  if(tab==='faith') loadVideo();
+}
+
+/* ---------- views ---------- */
+const V = {};
+
+V.today = () => {
+  const t=TODAY(), d=day(t), st=S.settings, h=new Date().getHours();
+  const greet = h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+  const bStreak = streak(x=>x.bible);
+  const mm = ministryMonth(), todayMin = S.ministry.filter(e=>e.date===t).reduce((a,e)=>a+n(e.hours),0);
+  const monthGoals = currentGoals('1m');
+  const hasData = S.ministry.length||S.goals.length||Object.keys(S.days).length>2;
+  const sinceBackup = st.lastBackup ? Math.floor((Date.now()-st.lastBackup)/864e5) : null;
+  const followups = S.helps.filter(x=>x.follow && !x.followDone && x.follow<=t);
+  let html = `<div class="card hello">
+    <div class="big">${greet}${st.name?', '+esc(st.name):''}</div>
+    <div class="sub">${parse(t).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
+    <div class="chips">
+      <span class="chip">Bible reading streak: ${bStreak} day${bStreak===1?'':'s'}</span>
+      <span class="chip">Ministry this month: ${r1(mm)} / ${st.ministryTarget} h</span>
+    </div></div>`;
+  if(hasData && (sinceBackup===null || sinceBackup>=14))
+    html += `<div class="banner"><span style="flex:1">${sinceBackup===null?'You haven\'t made a backup yet.':'Last backup was '+sinceBackup+' days ago.'} Your data lives only on this phone.</span><button class="btn sm" data-a="backup">Back up</button></div>`;
+  html += encouragement(t);
+  html += `<div class="card"><h2>${svg('faith',18)} Faith today</h2>
+    ${[['bible','Daily Bible reading',''],['study','Personal study',''],['prayer','Prayer and meditation',''],['meeting','Meeting preparation','']].map(([k,l])=>`
+    <div class="row"><div class="lbl">${l}</div>${checkBox(d[k],'tick','data-k="'+k+'"')}</div>`).join('')}
+    <div class="row"><div class="lbl">Ministry today<small>${r1(todayMin)} h logged</small></div>
+      <div class="btns"><button class="btn sm ghost" data-a="addmin" data-h="0.5">+30 min</button><button class="btn sm ghost" data-a="addmin" data-h="1">+1 h</button><button class="btn sm ghost" data-a="minsheet">More</button></div></div>
+  </div>`;
+  html += `<div class="card"><h2>${svg('health',18)} Health today</h2>
+    <div class="row"><div class="lbl">Water<small>Target ${st.waterTarget} glasses</small></div>
+      <div class="step"><button data-a="water" data-d="-1">−</button><b>${d.water||0}</b><button data-a="water" data-d="1">+</button></div></div>
+    <div class="row"><div class="lbl">Sleep last night (hours)</div><input class="mini" type="number" inputmode="decimal" step="0.5" min="0" max="24" data-f="sleep" value="${d.sleep??''}" placeholder="${st.sleepTarget}"></div>
+    <div class="row"><div class="lbl">Exercise (minutes)</div><input class="mini" type="number" inputmode="numeric" min="0" data-f="exercise" value="${d.exercise??''}" placeholder="${st.exerciseTarget}"></div>
+    <div class="row"><div class="lbl">Weight (kg)<small>Optional</small></div><input class="mini" type="number" inputmode="decimal" step="0.1" min="0" data-f="weight" value="${d.weight??''}"></div>
+  </div>`;
+  html += `<div class="card"><h2>${svg('others',18)} Helping others</h2>
+    ${followups.length?`<div class="list">${followups.map(x=>`<div class="it"><div class="x"><b>Follow up: ${esc(x.person)}</b><small>${esc(x.how)}</small></div>${checkBox(false,'followdone','data-id="'+x.id+'"')}</div>`).join('')}</div>`:''}
+    <button class="btn ghost" data-a="helpsheet" style="margin-top:${followups.length?10:0}px">I helped someone today</button></div>`;
+  html += `<div class="card"><h2>${svg('goals',18)} This month's goals<span class="sp"></span><button class="btn sm ghost" data-a="go" data-t="goals">See all</button></h2>
+    ${monthGoals.length?monthGoals.slice(0,6).map(goalRow).join(''):`<div class="empty">No goals for ${monthName(MONTH())} yet.</div><button class="btn" data-a="goalsheet" data-h="1m">Set a goal for this month</button>`}
+  </div>`;
+  return html;
+};
+
+function encouragement(t){
+  const dn = dayNum(t);
+  const [ref,code,theme,q] = VERSES[dn % VERSES.length];
+  const [quote,who] = QUOTES[(dn*7+3) % QUOTES.length];
+  const tip = TIPS[(dn*11+5) % TIPS.length];
+  return `<div class="card enc"><h2>Today's encouragement</h2>
+    <div class="blk scripture"><div class="kicker">Scripture for today</div>
+      <div class="ref">${esc(ref)}</div><div class="theme">${esc(theme)}</div>
+      <div class="btns" style="margin-top:8px"><a class="btn sm" href="${jwlib(code)}">Read in JW Library</a><a class="btn sm ghost" href="${jworg(code)}" target="_blank" rel="noopener">JW.org</a><a class="btn sm ghost" href="https://wol.jw.org/en/wol/h/r1/lp-e" target="_blank" rel="noopener">Daily text</a></div></div>
+    <div class="blk"><div class="kicker">Question to think about</div><div class="q">${esc(q)}</div>
+      <textarea data-ans="${t}" placeholder="Write your answer here…">${esc(S.answers[t]||'')}</textarea></div>
+    <div class="blk"><div class="kicker">Encouraging words</div><div class="quote">“${esc(quote)}”</div><div class="muted">— ${esc(who)}</div></div>
+    <div class="blk"><div class="kicker">Health tip</div><div>${esc(tip)}</div></div>
+  </div>`;
+}
+
+function goalRow(g){
+  const p = goalPct(g);
+  const prog = g.target>0 ? `${r1(g.progress||0)} / ${g.target}${g.unit?' '+esc(g.unit):''}` : (g.done?'Done':'Not done yet');
+  return `<div class="goal ${g.done?'done':''}"><div class="t">${checkBox(g.done,'goaldone','data-id="'+g.id+'"')}<span data-a="goalsheet" data-id="${g.id}">${esc(g.title)}<br><small class="muted">${AREAS[g.area].label} · ${prog}</small></span></div>${g.target>0?bar(p,g.done):''}</div>`;
+}
+
+V.goals = () => {
+  const list = currentGoals(goalH);
+  const label = goalH==='1m'?monthName(MONTH()):goalH==='1y'?YEAR():'Your 5-year plan (to '+(n(S.settings.started.slice(0,4))+5)+')';
+  let html = `<div class="seg">${Object.entries(HORIZONS).map(([k,l])=>`<button class="${k===goalH?'on':''}" data-a="horizon" data-h="${k}">${l}</button>`).join('')}</div>`;
+  if(goalH==='5y'){
+    html += `<div class="card"><h2>My vision<span class="sp"></span><button class="btn sm ghost" data-a="visionsheet">Edit</button></h2>
+      ${Object.entries(AREAS).map(([k,a])=>`<div class="area">${a.label}</div><div class="vision">${S.vision[k]?esc(S.vision[k]):'<span class="muted">Where do you want to be in 5 years?</span>'}</div>`).join('')}</div>`;
+  }
+  const done = list.filter(g=>g.done).length;
+  html += `<div class="card"><h2>${esc(label)}<span class="sp"></span><span class="chip">${done}/${list.length} done</span></h2>`;
+  if(!list.length) html += `<div class="empty">No goals here yet.</div>`;
+  Object.keys(AREAS).forEach(a=>{
+    const gs = list.filter(g=>g.area===a);
+    if(gs.length) html += `<div class="area">${AREAS[a].label}</div>`+gs.map(goalRow).join('');
+  });
+  html += `<button class="btn" data-a="goalsheet" data-h="${goalH}" style="margin-top:12px">Add a goal</button></div>`;
+  if(goalH==='1m'){
+    const rv = S.reviews[MONTH()]||{};
+    html += `<div class="card"><h2>Monthly review</h2>
+      <div class="f"><label>What went well this month?</label><textarea data-rv="well">${esc(rv.well)}</textarea></div>
+      <div class="f"><label>What do I want to improve?</label><textarea data-rv="improve">${esc(rv.improve)}</textarea></div>
+      <div class="f"><label>My main focus for next month</label><textarea data-rv="focus">${esc(rv.focus)}</textarea></div>
+      <div class="muted">Saves as you type.</div></div>`;
+    const prev = Object.keys(S.reviews).filter(m=>m<MONTH()).sort().reverse().slice(0,3);
+    if(prev.length) html += `<div class="card"><h2>Past reviews</h2>${prev.map(m=>`<div class="area">${monthName(m)}</div><div class="vision">${['well','improve','focus'].map(k=>S.reviews[m][k]?'• '+esc(S.reviews[m][k]):'').filter(Boolean).join('\n')||'<span class="muted">Empty</span>'}</div>`).join('')}</div>`;
+  }
+  return html;
+};
+
+V.faith = () => {
+  const st=S.settings, m=MONTH(), mm=ministryMonth(m), sy=serviceYear(), syh=ministryHours(sy.start,sy.end);
+  const syTarget = st.ministryTarget*12;
+  const thisMonthEntries = S.ministry.filter(e=>e.date.slice(0,7)===m).sort((a,b)=>b.date.localeCompare(a.date));
+  const studies = thisMonthEntries.reduce((a,e)=>a+n(e.studies),0);
+  const daysIn = new Date(parse(m+'-01').getFullYear(), parse(m+'-01').getMonth()+1, 0).getDate();
+  const dayOfMonth = parse(TODAY()).getDate();
+  const left = Math.max(0, st.ministryTarget-mm), daysLeft = daysIn-dayOfMonth+1;
+  const readDays = Object.keys(S.days).filter(k=>k.slice(0,7)===m && S.days[k].bible).length;
+  let html = bibleCard();
+  html += `<div class="card"><h2>Ministry · ${monthName(m)}</h2>
+    <div class="stat"><div><small>This month</small><b>${r1(mm)} h</b></div><div><small>Monthly target</small><b>${st.ministryTarget} h</b></div></div>
+    ${bar(pct(mm,st.ministryTarget))}
+    <p class="muted" style="margin:8px 0 0">${left>0?`${r1(left)} h to go — about ${r1(left/daysLeft)} h a day for the ${daysLeft} day${daysLeft===1?'':'s'} left.`:'Monthly target reached. Well done.'}</p>
+    <div class="stat" style="margin-top:10px"><div><small>Service year (${sy.label})</small><b>${r1(syh)} h</b></div><div><small>Bible studies this month</small><b>${studies}</b></div></div>
+    ${bar(pct(syh,syTarget))}<p class="muted" style="margin:6px 0 0">Service-year target ${syTarget} h (your monthly target × 12). Change it in settings.</p>
+    <button class="btn" data-a="minsheet" style="margin-top:12px">Log ministry</button></div>`;
+  html += `<div class="card"><h2>Bible reading · ${readDays}/${dayOfMonth} days</h2>${calendar(m)}
+    <div class="legend"><span><i style="background:var(--navy)"></i>Read</span><span><i style="background:#F5B700;border-radius:50%"></i>Ministry</span></div></div>`;
+  html += `<div class="card"><h2>Ministry log</h2>${thisMonthEntries.length?`<div class="list">${thisMonthEntries.map(e=>`<div class="it"><div class="x"><b>${nice(e.date)} · ${r1(n(e.hours))} h</b><small>${[e.studies?e.studies+' stud'+(e.studies==1?'y':'ies'):'',e.notes?esc(e.notes):''].filter(Boolean).join(' · ')||'—'}</small></div><button class="icon-btn" data-a="minsheet" data-id="${e.id}" aria-label="Edit">${svg('edit',18)}</button></div>`).join('')}</div>`:'<div class="empty">Nothing logged this month yet.</div>'}</div>`;
+  html += areaGoals('faith');
+  return html;
+};
+
+function bibleCard(){
+  const B=S.bible, [name,chs,theme]=BOOKS[B.book-1], code=bcode(B.book,B.chapter);
+  const readSet = new Set(B.read[B.book]||[]);
+  const total = Object.values(B.read).reduce((a,x)=>a+x.length,0);
+  const q = CHQ[(B.book*3+B.chapter) % CHQ.length];
+  const doneToday = B.log.filter(x=>x.date===TODAY());
+  let grid=''; for(let i=1;i<=chs;i++) grid+=`<span class="${readSet.has(i)?'r':''} ${i===B.chapter?'cur':''}" data-a="pickch" data-c="${i}">${i}</span>`;
+  return `<div class="card"><h2>${svg('faith',18)} My Bible reading</h2>
+    <div class="f2"><div class="f"><label>Book</label><select id="bBook">${BOOKS.map((b,i)=>`<option value="${i+1}" ${i+1===B.book?'selected':''}>${b[0]}</option>`).join('')}</select></div>
+    <div class="f"><label>Chapter</label><select id="bCh">${Array.from({length:chs},(_,i)=>`<option ${i+1===B.chapter?'selected':''}>${i+1}</option>`).join('')}</select></div></div>
+    <div class="scripture" style="margin-bottom:10px"><div class="kicker">${esc(name)}</div><div>${esc(theme)}</div></div>
+    <div class="btns"><a class="btn sm" href="${jwlib(code)}">Read ${esc(name)} ${B.chapter} in JW Library</a><a class="btn sm ghost" href="${jworg(code)}" target="_blank" rel="noopener">Read on JW.org</a></div>
+    <div class="f" style="margin-top:12px"><label>${esc(q)}</label><textarea id="bNote" placeholder="Your thoughts on ${esc(name)} ${B.chapter}…"></textarea></div>
+    <button class="btn" data-a="readch">I read ${esc(name)} ${B.chapter}</button>
+    ${doneToday.length?`<p class="muted" style="margin:8px 0 0">Read today: ${doneToday.map(x=>esc(BOOKS[x.book-1][0])+' '+x.chapter).join(', ')}</p>`:''}
+    <div class="area">${esc(name)}: ${readSet.size} of ${chs} chapters · Whole Bible: ${total} of ${TOTAL_CH} (${pct(total,TOTAL_CH)}%)</div>
+    ${bar(pct(total,TOTAL_CH))}
+    <div class="chgrid">${grid}</div>
+  </div>
+  <div class="card vid"><h2>Video: Introduction to ${esc(name)}</h2><div id="vidBox"><div class="muted">Loading video…</div></div></div>
+  ${notesCard()}`;
+}
+function notesCard(){
+  const notes = S.bible.log.filter(x=>x.note).slice(-5).reverse();
+  if(!notes.length) return '';
+  return `<div class="card"><h2>My recent Bible thoughts</h2><div class="list">${notes.map(x=>`<div class="it"><div class="x"><b>${esc(BOOKS[x.book-1][0])} ${x.chapter}</b><small>${nice(x.date)}</small><div style="font-size:14.5px;margin-top:2px">${esc(x.note)}</div></div></div>`).join('')}</div></div>`;
+}
+const vidCache = {};
+function videoFallback(b){
+  const url = `https://b.jw-cdn.org/apis/pub-media/GETPUBMEDIALINKS?output=html&pub=nwtsv&fileformat=MP4&alllangs=0&langwritten=E&booknum=${b}`;
+  return `<p class="muted" style="margin:0 0 8px">The video couldn't play inside the app on this phone.</p>
+    <div class="btns"><a class="btn sm" href="${url}" target="_blank" rel="noopener">Watch on JW.org</a><a class="btn sm ghost" href="https://www.jw.org/en/search/?q=${encodeURIComponent(BOOKS[b-1][0])}" target="_blank" rel="noopener">More about ${esc(BOOKS[b-1][0])}</a></div>`;
+}
+async function loadVideo(){
+  const box = document.getElementById('vidBox'); if(!box) return;
+  const b = S.bible.book;
+  if(!navigator.onLine){ box.innerHTML = '<div class="muted">Connect to the internet to watch the video for this book.</div>'; return; }
+  if(vidCache[b]===undefined){
+    try{
+      const ctl = new AbortController(); setTimeout(()=>ctl.abort(), 9000);
+      const r = await fetch(`https://b.jw-cdn.org/apis/pub-media/GETPUBMEDIALINKS?output=json&pub=nwtsv&fileformat=MP4&alllangs=0&langwritten=E&booknum=${b}`, {signal:ctl.signal});
+      const j = await r.json();
+      const items = ((j.files||{}).E||{}).MP4||[];
+      const pick = items.filter(x=>x.file&&x.file.url).sort((x,y)=>Math.abs((x.frameHeight||360)-480)-Math.abs((y.frameHeight||360)-480))[0];
+      vidCache[b] = pick ? {url:pick.file.url, title:pick.title||''} : null;
+    }catch(e){ vidCache[b] = null; }
+  }
+  if(S.bible.book!==b || !document.getElementById('vidBox')) return;
+  const v = vidCache[b];
+  document.getElementById('vidBox').innerHTML = v
+    ? `<video controls playsinline preload="metadata" src="${esc(v.url)}"></video>${v.title?`<p class="muted" style="margin:6px 0 0">${esc(v.title)}</p>`:''}`
+    : videoFallback(b);
+}
+
+function calendar(m){
+  const first = parse(m+'-01'), days = new Date(first.getFullYear(), first.getMonth()+1, 0).getDate();
+  const offset = (first.getDay()+6)%7;
+  let c = ['M','T','W','T','F','S','S'].map(x=>`<div class="h">${x}</div>`).join('');
+  for(let i=0;i<offset;i++) c+='<div></div>';
+  for(let i=1;i<=days;i++){
+    const s = m+'-'+String(i).padStart(2,'0'), d=S.days[s]||{};
+    const min = S.ministry.some(e=>e.date===s && n(e.hours)>0);
+    c += `<div class="d ${d.bible?'on':''} ${min?'m':''} ${s===TODAY()?'today':''}">${i}</div>`;
+  }
+  return `<div class="cal">${c}</div>`;
+}
+
+function areaGoals(a){
+  const gs = S.goals.filter(g=>g.area===a && ((g.horizon==='1m'&&g.period===MONTH())||(g.horizon==='1y'&&g.period===YEAR())||g.horizon==='5y'));
+  return `<div class="card"><h2>${AREAS[a].label} goals</h2>${gs.length?gs.map(goalRow).join(''):'<div class="empty">No goals in this area yet.</div>'}
+    <button class="btn ghost" data-a="goalsheet" data-h="1m" data-area="${a}" style="margin-top:10px">Add a ${AREAS[a].label.toLowerCase()} goal</button></div>`;
+}
+
+function bars(vals, labels, target, color){
+  const W=320,H=120,pad=18, bw=(W-pad)/vals.length;
+  const max = Math.max(target||0, ...vals, 1)*1.1;
+  let g = '';
+  if(target){ const y=H-pad-(target/max)*(H-pad-6); g+=`<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="#9DB6D6" stroke-dasharray="4 4"/>`; }
+  vals.forEach((v,i)=>{
+    const h=(v/max)*(H-pad-6), x=pad/2+i*bw+bw*0.18;
+    g+=`<rect x="${x}" y="${H-pad-h}" width="${bw*0.64}" height="${Math.max(h,v?2:0)}" rx="3" fill="${color}"/>`;
+    if(labels[i]) g+=`<text x="${x+bw*0.32}" y="${H-4}" font-size="10" fill="#5F7A99" text-anchor="middle">${labels[i]}</text>`;
+  });
+  return `<div class="chart"><svg viewBox="0 0 ${W} ${H}">${g}</svg></div>`;
+}
+function last(nDays){ const out=[]; for(let i=nDays-1;i>=0;i--) out.push(addDays(TODAY(),-i)); return out; }
+
+V.health = () => {
+  const st=S.settings, ds=last(14);
+  const lab = ds.map((s,i)=> i%2===1||i===13 ? String(parse(s).getDate()) : '');
+  const sl = ds.map(s=>n((S.days[s]||{}).sleep)), wa=ds.map(s=>n((S.days[s]||{}).water)), ex=ds.map(s=>n((S.days[s]||{}).exercise));
+  const avg = a=>{ const f=a.filter(x=>x>0); return f.length?r1(f.reduce((x,y)=>x+y,0)/f.length):0; };
+  const exStreak = streak(x=>n(x.exercise)>0), waStreak = streak(x=>n(x.water)>=st.waterTarget);
+  const weights = Object.keys(S.days).filter(k=>n(S.days[k].weight)>0).sort();
+  const wLast = weights.length?n(S.days[weights[weights.length-1]].weight):null, wFirst = weights.length?n(S.days[weights[0]].weight):null;
+  let html = `<div class="card"><h2>Last 14 days</h2>
+    <div class="stat"><div><small>Exercise streak</small><b>${exStreak} day${exStreak===1?'':'s'}</b></div><div><small>Water target streak</small><b>${waStreak} day${waStreak===1?'':'s'}</b></div></div></div>`;
+  html += `<div class="card"><h2>Sleep · average ${avg(sl)} h</h2>${bars(sl,lab,st.sleepTarget,'#0C3C78')}<div class="muted">Dashed line = your target of ${st.sleepTarget} h</div></div>`;
+  html += `<div class="card"><h2>Water · average ${avg(wa)} glasses</h2>${bars(wa,lab,st.waterTarget,'#2E86DE')}</div>`;
+  html += `<div class="card"><h2>Exercise · average ${avg(ex)} min</h2>${bars(ex,lab,st.exerciseTarget,'#1E8E5A')}</div>`;
+  html += `<div class="card"><h2>Weight</h2>${wLast!==null?`<div class="stat"><div><small>Latest (${nice(weights[weights.length-1])})</small><b>${wLast} kg</b></div><div><small>Change since first entry</small><b>${wLast-wFirst>0?'+':''}${r1(wLast-wFirst)} kg</b></div></div>`:'<div class="empty">Add your weight on the Today page when you weigh yourself.</div>'}</div>`;
+  html += `<div class="card"><h2>Edit a past day</h2><div class="f2"><input type="date" id="pastDay" max="${TODAY()}" value="${addDays(TODAY(),-1)}"><button class="btn ghost" data-a="pastday">Open day</button></div></div>`;
+  html += areaGoals('health');
+  return html;
+};
+
+function bucketBalances(){
+  const b = {}; S.settings.buckets.forEach(x=>b[x.name]=0);
+  S.money.forEach(e=>{
+    if(e.type==='pay'){ (e.split||[]).forEach(s=>{ b[s.name]=(b[s.name]||0)+n(s.amount); }); }
+    else if(e.type==='spend'){ b[e.bucket]=(b[e.bucket]||0)-n(e.amount); }
+  });
+  return b;
+}
+V.money = () => {
+  const m = moneyMonth, cur=S.settings.currency;
+  const entries = S.money.filter(e=>e.date.slice(0,7)===m).sort((a,b)=>b.date.localeCompare(a.date)||(b.ts||0)-(a.ts||0));
+  const paid = entries.filter(e=>e.type==='pay').reduce((a,e)=>a+n(e.amount),0);
+  const spent = entries.filter(e=>e.type==='spend').reduce((a,e)=>a+n(e.amount),0);
+  const bal = bucketBalances();
+  const months = [...new Set([MONTH(), ...S.money.map(e=>e.date.slice(0,7))])].sort().reverse();
+  let html = `<div class="card"><h2>${svg('money',18)} Pay yourself</h2>
+    <p class="muted" style="margin:0 0 10px">When you pay yourself, enter it once and it's split into your buckets automatically.</p>
+    <div class="btns"><button class="btn" style="flex:1" data-a="paysheet">I paid myself</button><button class="btn ghost" style="flex:1" data-a="spendsheet">Record spending</button></div></div>`;
+  html += `<div class="card"><h2>Bucket balances</h2>${S.settings.buckets.map(b=>{
+      const v=bal[b.name]||0; return `<div class="row"><div class="lbl">${esc(b.name)}<small>${b.pct}% of each pay</small></div><span class="amt ${v<0?'neg':''}">${money(v)}</span></div>`;}).join('')}
+    <div class="muted" style="margin-top:6px">Change bucket names and percentages in settings.</div></div>`;
+  html += `<div class="card"><h2>Month<span class="sp"></span><select id="moneyMonth" style="width:auto">${months.map(x=>`<option value="${x}" ${x===m?'selected':''}>${monthName(x)}</option>`).join('')}</select></h2>
+    <div class="stat"><div><small>Paid to myself</small><b style="font-size:17px">${money(paid)}</b></div><div><small>Spent</small><b style="font-size:17px">${money(spent)}</b></div></div>
+    <div class="list" style="margin-top:10px">${entries.length?entries.map(e=>`<div class="it"><div class="x"><b>${e.type==='pay'?'Paid myself':esc(e.bucket)}</b><small>${nice(e.date)}${e.note?' · '+esc(e.note):''}</small></div><span class="amt ${e.type==='spend'?'neg':''}">${e.type==='spend'?'−':'+'}${money(n(e.amount))}</span><button class="icon-btn" data-a="delmoney" data-id="${e.id}" aria-label="Delete">${svg('trash',17)}</button></div>`).join(''):'<div class="empty">No money entries this month.</div>'}</div></div>`;
+  html += areaGoals('money');
+  return html;
+};
+
+V.others = () => {
+  const m = MONTH(), t=TODAY();
+  const thisMonth = S.helps.filter(x=>x.date.slice(0,7)===m);
+  const people = new Set(S.helps.map(x=>x.person.trim().toLowerCase())).size;
+  const due = S.helps.filter(x=>x.follow && !x.followDone).sort((a,b)=>a.follow.localeCompare(b.follow));
+  const all = [...S.helps].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,40);
+  let html = `<div class="card"><div class="stat"><div><small>Times helped this month</small><b>${thisMonth.length}</b></div><div><small>People helped overall</small><b>${people}</b></div></div>
+    <button class="btn" data-a="helpsheet" style="margin-top:12px">I helped someone</button></div>`;
+  html += `<div class="card"><h2>Follow-ups</h2>${due.length?`<div class="list">${due.map(x=>`<div class="it"><div class="x"><b>${esc(x.person)}</b><small>${x.follow<t?'Overdue · ':x.follow===t?'Today · ':''}${nice(x.follow)} · ${esc(x.how)}</small></div>${checkBox(false,'followdone','data-id="'+x.id+'"')}</div>`).join('')}</div>`:'<div class="empty">No follow-ups waiting.</div>'}</div>`;
+  html += `<div class="card"><h2>History</h2>${all.length?`<div class="list">${all.map(x=>`<div class="it"><div class="x"><b>${esc(x.person)}</b><small>${nice(x.date)} · ${esc(x.how)}</small></div><button class="icon-btn" data-a="helpsheet" data-id="${x.id}" aria-label="Edit">${svg('edit',18)}</button></div>`).join('')}</div>`:'<div class="empty">Each time you visit, call, encourage or give practical help, note it here.</div>'}</div>`;
+  html += areaGoals('others');
+  return html;
+};
+
+/* ---------- sheets (forms) ---------- */
+function openSheet(html, onSave){
+  const el = document.getElementById('sheet');
+  el.innerHTML = `<div class="sheet-bg" data-a="closebg"><div class="sheet" role="dialog">${html}</div></div>`;
+  openSheet.save = onSave;
+  const f = el.querySelector('input,select,textarea'); if(f && f.type!=='date') setTimeout(()=>f.focus(),60);
+}
+function closeSheet(){ document.getElementById('sheet').innerHTML=''; openSheet.save=null; }
+function val(id){ const e=document.getElementById(id); return e?e.value:''; }
+function fail(id,msg){ const e=document.getElementById(id); e.insertAdjacentHTML('afterend',`<div class="err">${msg}</div>`); e.addEventListener('input',()=>{ const n=e.nextElementSibling; if(n&&n.classList.contains('err')) n.remove(); },{once:true}); e.focus(); return false; }
+const actions = `<div class="btns" style="margin-top:6px"><button class="btn ghost" style="flex:1" data-a="close">Cancel</button><button class="btn" style="flex:1" data-a="save">Save</button></div>`;
+
+function goalSheet(id, h, area){
+  const g = id ? S.goals.find(x=>x.id===id) : {horizon:h||'1m', area:area||'goals', title:'', target:'', unit:'', progress:0};
+  openSheet(`<h3>${id?'Edit goal':'New goal'}</h3>
+    <div class="f"><label>Goal</label><input type="text" id="gTitle" value="${esc(g.title)}" placeholder="Read the whole Bible this year"></div>
+    <div class="f2"><div class="f"><label>Area</label><select id="gArea">${Object.entries(AREAS).map(([k,a])=>`<option value="${k}" ${k===g.area?'selected':''}>${a.label}</option>`).join('')}</select></div>
+    <div class="f"><label>Timeframe</label><select id="gH">${Object.entries(HORIZONS).map(([k,l])=>`<option value="${k}" ${k===g.horizon?'selected':''}>${l}</option>`).join('')}</select></div></div>
+    <div class="f2"><div class="f"><label>Target number (optional)</label><input type="number" inputmode="decimal" id="gTarget" value="${g.target||''}" placeholder="66"></div>
+    <div class="f"><label>Unit</label><input type="text" id="gUnit" value="${esc(g.unit)}" placeholder="books"></div></div>
+    ${id&&g.target>0?`<div class="f"><label>Progress so far</label><input type="number" inputmode="decimal" id="gProg" value="${g.progress||0}"></div>`:''}
+    <p class="muted" style="margin:0 0 10px">Add a target number if you can count it (hours, kg, cedis, books). Leave it empty for yes/no goals.</p>
+    ${actions}${id?`<button class="btn danger" data-a="delgoal" data-id="${id}" style="margin-top:8px">Delete goal</button>`:''}`, ()=>{
+      const title = val('gTitle').trim(); if(!title) return fail('gTitle','Enter the goal first');
+      const hz = val('gH');
+      const rec = id ? g : {id:uid(), created:TODAY(), progress:0, done:false};
+      rec.title=title; rec.area=val('gArea'); rec.target=n(val('gTarget'))||0; rec.unit=val('gUnit').trim();
+      if(!id || rec.horizon!==hz) rec.period = hz==='1m'?MONTH():hz==='1y'?YEAR():null;
+      rec.horizon=hz;
+      if(id && document.getElementById('gProg')) rec.progress=n(val('gProg'));
+      if(rec.target>0) rec.done = rec.progress>=rec.target;
+      if(!id) S.goals.push(rec);
+      return true;
+    });
+}
+function minSheet(id){
+  const e = id ? S.ministry.find(x=>x.id===id) : {date:TODAY(), hours:'', studies:'', notes:''};
+  openSheet(`<h3>${id?'Edit ministry':'Log ministry'}</h3>
+    <div class="f2"><div class="f"><label>Date</label><input type="date" id="mDate" value="${e.date}" max="${TODAY()}"></div>
+    <div class="f"><label>Hours</label><input type="number" inputmode="decimal" step="0.25" min="0" id="mHours" value="${e.hours}" placeholder="2"></div></div>
+    <div class="f"><label>Bible studies conducted</label><input type="number" inputmode="numeric" min="0" id="mStudies" value="${e.studies||''}" placeholder="0"></div>
+    <div class="f"><label>Notes (return visits, who to call back)</label><textarea id="mNotes">${esc(e.notes)}</textarea></div>
+    ${actions}${id?`<button class="btn danger" data-a="delmin" data-id="${id}" style="margin-top:8px">Delete entry</button>`:''}`, ()=>{
+      const h=n(val('mHours')); if(h<=0 && !n(val('mStudies')) && !val('mNotes').trim()) return fail('mHours','Enter the hours');
+      const rec = id ? e : {id:uid()};
+      rec.date=val('mDate')||TODAY(); rec.hours=h; rec.studies=n(val('mStudies')); rec.notes=val('mNotes').trim();
+      if(!id) S.ministry.push(rec);
+      return true;
+    });
+}
+function helpSheet(id){
+  const x = id ? S.helps.find(h=>h.id===id) : {date:TODAY(), person:'', how:'', follow:''};
+  openSheet(`<h3>${id?'Edit':'I helped someone'}</h3>
+    <div class="f"><label>Who?</label><input type="text" id="hP" value="${esc(x.person)}" placeholder="Brother Mensah"></div>
+    <div class="f"><label>What did you do?</label><textarea id="hHow" placeholder="Visited him at home, took him to the meeting">${esc(x.how)}</textarea></div>
+    <div class="f2"><div class="f"><label>Date</label><input type="date" id="hDate" value="${x.date}" max="${TODAY()}"></div>
+    <div class="f"><label>Follow up on (optional)</label><input type="date" id="hF" value="${x.follow||''}"></div></div>
+    ${actions}${id?`<button class="btn danger" data-a="delhelp" data-id="${id}" style="margin-top:8px">Delete</button>`:''}`, ()=>{
+      const p=val('hP').trim(); if(!p) return fail('hP','Enter a name');
+      const rec = id ? x : {id:uid()};
+      rec.person=p; rec.how=val('hHow').trim(); rec.date=val('hDate')||TODAY();
+      if(rec.follow!==val('hF')) rec.followDone=false;
+      rec.follow=val('hF')||'';
+      if(!id) S.helps.push(rec);
+      return true;
+    });
+}
+function paySheet(){
+  const bs=S.settings.buckets;
+  openSheet(`<h3>I paid myself</h3>
+    <div class="f2"><div class="f"><label>Amount (${esc(S.settings.currency)})</label><input type="number" inputmode="decimal" min="0" step="0.01" id="pAmt" placeholder="1500"></div>
+    <div class="f"><label>Date</label><input type="date" id="pDate" value="${TODAY()}" max="${TODAY()}"></div></div>
+    <div class="f"><label>From (optional)</label><input type="text" id="pNote" placeholder="K-gabs job, farm sales"></div>
+    <div class="card" style="background:var(--bg)" id="pSplit">${bs.map(b=>`<div class="row"><div class="lbl">${esc(b.name)}<small>${b.pct}%</small></div><span class="amt">${money(0)}</span></div>`).join('')}</div>
+    ${actions}`, ()=>{
+      const a=n(val('pAmt')); if(a<=0) return fail('pAmt','Enter the amount you paid yourself');
+      const tot = bs.reduce((s,b)=>s+n(b.pct),0)||100;
+      const split = bs.map(b=>({name:b.name, amount:Math.round(a*n(b.pct)/tot*100)/100}));
+      S.money.push({id:uid(), ts:Date.now(), type:'pay', date:val('pDate')||TODAY(), amount:a, note:val('pNote').trim(), split});
+      return true;
+    });
+  document.getElementById('pAmt').addEventListener('input',e=>{
+    const a=n(e.target.value), tot=bs.reduce((s,b)=>s+n(b.pct),0)||100;
+    document.getElementById('pSplit').innerHTML = bs.map(b=>`<div class="row"><div class="lbl">${esc(b.name)}<small>${b.pct}%</small></div><span class="amt">${money(a*n(b.pct)/tot)}</span></div>`).join('');
+  });
+}
+function spendSheet(){
+  const bal=bucketBalances();
+  openSheet(`<h3>Record spending</h3>
+    <div class="f2"><div class="f"><label>Amount (${esc(S.settings.currency)})</label><input type="number" inputmode="decimal" min="0" step="0.01" id="sAmt" placeholder="200"></div>
+    <div class="f"><label>Date</label><input type="date" id="sDate" value="${TODAY()}" max="${TODAY()}"></div></div>
+    <div class="f"><label>From which bucket?</label><select id="sB">${S.settings.buckets.map(b=>`<option value="${esc(b.name)}">${esc(b.name)} (${money(bal[b.name]||0)})</option>`).join('')}</select></div>
+    <div class="f"><label>What for?</label><input type="text" id="sNote" placeholder="Transport, foodstuff"></div>
+    ${actions}`, ()=>{
+      const a=n(val('sAmt')); if(a<=0) return fail('sAmt','Enter the amount');
+      S.money.push({id:uid(), ts:Date.now(), type:'spend', date:val('sDate')||TODAY(), amount:a, bucket:val('sB'), note:val('sNote').trim()});
+      return true;
+    });
+}
+function visionSheet(){
+  openSheet(`<h3>My 5-year vision</h3><p class="muted" style="margin:0 0 10px">Describe where you want to be by ${n(S.settings.started.slice(0,4))+5} in each part of your life.</p>
+    ${Object.entries(AREAS).map(([k,a])=>`<div class="f"><label>${a.label}</label><textarea id="v_${k}">${esc(S.vision[k])}</textarea></div>`).join('')}${actions}`, ()=>{
+      Object.keys(AREAS).forEach(k=>S.vision[k]=val('v_'+k).trim()); return true;
+    });
+}
+function daySheet(s){
+  const d=S.days[s]||{};
+  openSheet(`<h3>${nice(s)}</h3>
+    ${[['bible','Daily Bible reading'],['study','Personal study'],['prayer','Prayer and meditation'],['meeting','Meeting preparation']].map(([k,l])=>`<label class="row" style="cursor:pointer"><span class="lbl">${l}</span><input type="checkbox" id="d_${k}" ${d[k]?'checked':''} style="width:22px;height:22px"></label>`).join('')}
+    <div class="f2" style="margin-top:8px"><div class="f"><label>Water (glasses)</label><input type="number" id="d_water" value="${d.water??''}"></div><div class="f"><label>Sleep (hours)</label><input type="number" step="0.5" id="d_sleep" value="${d.sleep??''}"></div></div>
+    <div class="f2"><div class="f"><label>Exercise (min)</label><input type="number" id="d_exercise" value="${d.exercise??''}"></div><div class="f"><label>Weight (kg)</label><input type="number" step="0.1" id="d_weight" value="${d.weight??''}"></div></div>
+    ${actions}`, ()=>{
+      const r = S.days[s] || (S.days[s]={});
+      ['bible','study','prayer','meeting'].forEach(k=>r[k]=document.getElementById('d_'+k).checked);
+      ['water','sleep','exercise','weight'].forEach(k=>{ const v=val('d_'+k); if(v==='') delete r[k]; else r[k]=n(v); });
+      return true;
+    });
+}
+function settingsSheet(){
+  const st=S.settings;
+  openSheet(`<h3>Settings</h3>
+    <div class="f2"><div class="f"><label>Your name</label><input type="text" id="sName" value="${esc(st.name)}" placeholder="Gideon"></div>
+    <div class="f"><label>Currency</label><input type="text" id="sCur" value="${esc(st.currency)}"></div></div>
+    <div class="f2"><div class="f"><label>Monthly ministry target (h)</label><input type="number" id="sMin" value="${st.ministryTarget}"></div>
+    <div class="f"><label>Water target (glasses)</label><input type="number" id="sWat" value="${st.waterTarget}"></div></div>
+    <div class="f2"><div class="f"><label>Sleep target (h)</label><input type="number" step="0.5" id="sSl" value="${st.sleepTarget}"></div>
+    <div class="f"><label>Exercise target (min)</label><input type="number" id="sEx" value="${st.exerciseTarget}"></div></div>
+    <div class="f"><label>Start of my 5-year plan</label><input type="date" id="sStart" value="${st.started}"></div>
+    <div class="area">Money buckets (percent of each pay)</div>
+    <div id="bk">${st.buckets.map((b,i)=>bucketRow(b,i)).join('')}</div>
+    <button class="btn sm ghost" data-a="addbucket" style="margin:4px 0 6px">${svg('plus',16)} Add bucket</button>
+    <div class="muted" id="bkTot"></div>
+    ${actions}
+    <div class="area" style="margin-top:20px">Backup</div>
+    <p class="muted" style="margin:0 0 8px">Your data is saved only on this phone. Download a backup file regularly and keep it in Google Drive or WhatsApp to yourself. ${st.lastBackup?'Last backup: '+new Date(st.lastBackup).toLocaleDateString()+'.':'No backup made yet.'}</p>
+    <div class="btns"><button class="btn ghost" style="flex:1" data-a="backup">Download backup</button><button class="btn ghost" style="flex:1" data-a="restore">Restore backup</button></div>
+    <input type="file" id="restoreFile" accept=".json,application/json" hidden>
+    <div class="area" style="margin-top:20px">Put it on your home screen</div>
+    <p class="muted" style="margin:0">Android (Chrome): menu ⋮ → Add to Home screen / Install app. iPhone (Safari): Share → Add to Home Screen. It then opens like an app and works offline.</p>
+    <div class="area" style="margin-top:20px">Start fresh</div>
+    <p class="muted" style="margin:0 0 8px">Clear all entries, goals and logs and begin again from today.</p>
+    <button class="btn danger" data-a="freshsheet">Start fresh</button>`, ()=>{
+      const rows=[...document.querySelectorAll('#bk .bkrow')].map(r=>({name:r.querySelector('.bn').value.trim(), pct:n(r.querySelector('.bp').value)})).filter(b=>b.name);
+      const tot=rows.reduce((a,b)=>a+b.pct,0);
+      if(rows.length && Math.round(tot)!==100) return fail('bkTot','Bucket percentages must add up to 100 (now '+r1(tot)+')');
+      Object.assign(st,{name:val('sName').trim(), currency:val('sCur').trim()||'GH₵', ministryTarget:n(val('sMin'))||0, waterTarget:n(val('sWat'))||8, sleepTarget:n(val('sSl'))||7, exerciseTarget:n(val('sEx'))||30, started:val('sStart')||st.started});
+      if(rows.length) st.buckets=rows;
+      return true;
+    });
+  updBk();
+}
+function bucketRow(b,i){ return `<div class="bkrow f2" style="grid-template-columns:1fr 80px 34px;align-items:center;margin-bottom:6px"><input type="text" class="bn" value="${esc(b.name)}" placeholder="Bucket name"><input type="number" class="bp mini" value="${b.pct}" style="width:80px!important"><button class="icon-btn" data-a="delbucket" aria-label="Remove">${svg('trash',17)}</button></div>`; }
+function updBk(){ const el=document.getElementById('bkTot'); if(!el) return; const t=[...document.querySelectorAll('#bk .bp')].reduce((a,e)=>a+n(e.value),0); el.textContent='Total: '+r1(t)+'%'+(Math.round(t)===100?'':' — must be 100%'); }
+
+function freshSheet(){
+  openSheet(`<h3>Start fresh?</h3>
+    <p style="margin:0 0 10px">This clears everything on this phone: daily ticks, ministry hours, goals, money, helping-others log and Bible reading progress. The app starts again from today.</p>
+    <label class="row" style="cursor:pointer;border:0"><span class="lbl">Keep my settings<small>Name, targets and money buckets</small></span><input type="checkbox" id="keepSet" checked style="width:22px;height:22px"></label>
+    <div class="btns" style="flex-direction:column;margin-top:8px">
+      <button class="btn" data-a="dofresh" data-b="1">Back up first, then start fresh</button>
+      <button class="btn danger" data-a="dofresh" data-b="0">Start fresh without a backup</button>
+      <button class="btn ghost" data-a="close">Cancel</button></div>`, null);
+}
+function startFresh(withBackup){
+  const keep = document.getElementById('keepSet').checked;
+  if(withBackup) backup();
+  const old = S.settings, f = fresh();
+  if(keep){ f.settings = {...old, started:TODAY()}; }
+  S = f; save(); closeSheet(); tab='today'; render(); window.scrollTo(0,0);
+  toast('Fresh start — welcome!');
+}
+
+/* ---------- backup ---------- */
+function backup(){
+  S.settings.lastBackup = Date.now(); save();
+  const blob = new Blob([JSON.stringify(S,null,1)],{type:'application/json'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='life-compass-backup-'+TODAY()+'.json';
+  document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},500);
+  toast('Backup downloaded'); render();
+}
+function restore(file){
+  const r = new FileReader();
+  r.onload = () => {
+    try{
+      const d = JSON.parse(r.result);
+      if(!d || !d.settings || !d.days) throw 0;
+      if(!confirm('Replace everything on this phone with this backup?')) return;
+      localStorage.setItem(KEY, JSON.stringify(d)); S = load(); closeSheet(); render(); toast('Backup restored');
+    }catch(e){ alert('That file is not a Life Compass backup.'); }
+  };
+  r.readAsText(file);
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-tab],[data-a]'); if(!t) return;
+  if(t.dataset.tab){ tab=t.dataset.tab; render(); window.scrollTo(0,0); return; }
+  const a = t.dataset.a, id = t.dataset.id;
+  if(a==='closebg' && e.target!==t) return;
+  switch(a){
+    case 'go': tab=t.dataset.t; render(); window.scrollTo(0,0); break;
+    case 'tick': { const d=day(), k=t.dataset.k; d[k]=!d[k]; save(); render(); if(d[k]&&k==='bible') toast('Bible reading done — streak '+streak(x=>x.bible)); break; }
+    case 'water': { const d=day(); d.water=Math.max(0,(d.water||0)+n(t.dataset.d)); save(); render(); break; }
+    case 'addmin': {
+      let en = S.ministry.find(x=>x.date===TODAY());
+      if(!en){ en={id:uid(),date:TODAY(),hours:0,studies:0,notes:''}; S.ministry.push(en); }
+      en.hours = r1(n(en.hours)+n(t.dataset.h)); save(); render(); toast('+'+(t.dataset.h==='0.5'?'30 min':'1 h')+' ministry'); break;
+    }
+    case 'minsheet': minSheet(id); break;
+    case 'helpsheet': helpSheet(id); break;
+    case 'goalsheet': goalSheet(id, t.dataset.h, t.dataset.area); break;
+    case 'visionsheet': visionSheet(); break;
+    case 'paysheet': paySheet(); break;
+    case 'spendsheet': spendSheet(); break;
+    case 'settings': settingsSheet(); break;
+    case 'horizon': goalH=t.dataset.h; render(); break;
+    case 'goaldone': { const g=S.goals.find(x=>x.id===id); g.done=!g.done; if(g.done&&g.target>0&&n(g.progress)<g.target) g.progress=g.target; save(); render(); if(g.done) toast('Goal completed'); break; }
+    case 'followdone': { const x=S.helps.find(h=>h.id===id); x.followDone=true; save(); render(); toast('Follow-up done'); break; }
+    case 'pastday': { const s=val('pastDay'); if(s) daySheet(s); break; }
+    case 'delgoal': if(confirm('Delete this goal?')){ S.goals=S.goals.filter(x=>x.id!==id); save(); closeSheet(); render(); } break;
+    case 'delmin': if(confirm('Delete this entry?')){ S.ministry=S.ministry.filter(x=>x.id!==id); save(); closeSheet(); render(); } break;
+    case 'delhelp': if(confirm('Delete this entry?')){ S.helps=S.helps.filter(x=>x.id!==id); save(); closeSheet(); render(); } break;
+    case 'delmoney': if(confirm('Delete this money entry?')){ S.money=S.money.filter(x=>x.id!==id); save(); render(); } break;
+    case 'addbucket': document.getElementById('bk').insertAdjacentHTML('beforeend', bucketRow({name:'',pct:0})); updBk(); break;
+    case 'delbucket': t.closest('.bkrow').remove(); updBk(); break;
+    case 'backup': backup(); break;
+    case 'restore': document.getElementById('restoreFile').click(); break;
+    case 'freshsheet': freshSheet(); break;
+    case 'dofresh': if(t.dataset.b==='1' || confirm('Erase everything without a backup? This cannot be undone.')) startFresh(t.dataset.b==='1'); break;
+    case 'pickch': S.bible.chapter=n(t.dataset.c); save(); render(); break;
+    case 'readch': {
+      const B=S.bible, note=val('bNote').trim();
+      const set=new Set(B.read[B.book]||[]); set.add(B.chapter); B.read[B.book]=[...set].sort((a,b)=>a-b);
+      B.log.push({date:TODAY(), book:B.book, chapter:B.chapter, note});
+      if(B.log.length>2000) B.log=B.log.slice(-2000);
+      day().bible=true;
+      const done=BOOKS[B.book-1][0]+' '+B.chapter;
+      if(B.chapter<BOOKS[B.book-1][1]) B.chapter++; else { B.book = B.book%66+1; B.chapter=1; }
+      save(); render(); toast(done+' read — well done'); break;
+    }
+    case 'close': case 'closebg': closeSheet(); break;
+    case 'save': if(openSheet.save && openSheet.save()!==false){ save(); closeSheet(); render(); toast('Saved'); } break;
+  }
+});
+document.addEventListener('change', e => {
+  const t=e.target;
+  if(t.dataset.f){ const d=day(); if(t.value==='') delete d[t.dataset.f]; else d[t.dataset.f]=n(t.value); save(); toast('Saved'); }
+  if(t.id==='moneyMonth'){ moneyMonth=t.value; render(); }
+  if(t.id==='bBook'){ S.bible.book=n(t.value); const r=S.bible.read[S.bible.book]||[]; let c=1; while(r.includes(c)&&c<BOOKS[S.bible.book-1][1]) c++; S.bible.chapter=c; save(); render(); }
+  if(t.id==='bCh'){ S.bible.chapter=n(t.value); save(); render(); }
+  if(t.id==='restoreFile' && t.files[0]) restore(t.files[0]);
+});
+document.addEventListener('input', e => {
+  const t=e.target;
+  if(t.dataset.rv){ const m=MONTH(); S.reviews[m]=S.reviews[m]||{}; S.reviews[m][t.dataset.rv]=t.value; save(); }
+  if(t.classList.contains('bp')) updBk();
+  if(t.dataset.ans){ S.answers[t.dataset.ans]=t.value; save(); }
+});
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && !document.getElementById('sheet').innerHTML) render(); });
+
+render();
+if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
