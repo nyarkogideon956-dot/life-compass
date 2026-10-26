@@ -122,6 +122,9 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .wkmini{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:14px;color:var(--muted)}
 .wkmini b{color:var(--navy);font-size:16px}
 .up{color:var(--ok);font-size:12.5px}
+.timer .clock{font-size:46px;font-weight:700;text-align:center;color:var(--navy);font-variant-numeric:tabular-nums;letter-spacing:.02em;margin:4px 0}
+.timer.on{border:2px solid var(--blue)}
+.timer.on .chip{background:#E3F4EB;color:#1E7F52}
 #lock{position:fixed;inset:0;z-index:50;background:var(--navy);display:flex;align-items:center;justify-content:center;padding:24px}
 #lock[hidden]{display:none}
 .lockbox{background:#fff;border-radius:20px;padding:24px 20px;width:100%;max-width:340px;text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center}
@@ -413,11 +416,12 @@ V.today = () => {
   if(hasData && (sinceBackup===null || sinceBackup>=7))
     html += `<div class="banner"><span style="flex:1">${sinceBackup===null?'You haven\'t made a backup yet.':'Last backup was '+sinceBackup+' days ago.'} Your data lives only on this phone.</span><button class="btn sm" data-a="backup">Back up</button></div>`;
   html += weekCard(t);
+  html += timerCard();
   html += encouragement(t);
   html += `<div class="card"><h2>${svg('faith',18)} Faith today</h2>
     ${[['bible','Daily Bible reading',''],['study','Personal study',''],['prayer','Prayer and meditation',''],['meeting','Meeting preparation','']].map(([k,l])=>`
     <div class="row"><div class="lbl">${l}</div>${checkBox(d[k],'tick','data-k="'+k+'"')}</div>`).join('')}
-    <div class="row"><div class="lbl">Ministry today<small>${r1(todayMin)} h logged</small></div>
+    <div class="row"><div class="lbl">Ministry today<small>${hoursText(todayMin)} logged</small></div>
       <div class="btns"><button class="btn sm ghost" data-a="addmin" data-h="0.5">+30 min</button><button class="btn sm ghost" data-a="addmin" data-h="1">+1 h</button><button class="btn sm ghost" data-a="minsheet">More</button></div></div>
   </div>`;
   html += `<div class="card"><h2>${svg('health',18)} Health today</h2>
@@ -528,6 +532,44 @@ function weekSheet(ws){
   weekSheet.open = ws;
 }
 
+/* ---------- field service timer (uses the phone's clock; works offline) ---------- */
+function T(){ return S.timer || (S.timer={running:false, startedAt:null, sessionMs:0, segments:0}); }
+function hm(ms){ const m=Math.round(ms/60000); return Math.floor(m/60)+' h '+String(m%60).padStart(2,'0')+' min'; }
+function clock(ms){ const s=Math.floor(ms/1000); return Math.floor(s/3600)+':'+String(Math.floor(s/60)%60).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
+function hoursText(h){ const m=Math.round(n(h)*60); return m<60? m+' min' : Math.floor(m/60)+' h'+(m%60?' '+(m%60)+' min':''); }
+function timerNow(){ const t=T(); return t.sessionMs + (t.running ? Date.now()-t.startedAt : 0); }
+function addMinistryMs(ms, date){
+  if(ms<30000) return 0;                             // ignore taps under 30 seconds
+  let en=S.ministry.find(x=>x.date===date && !x.manual);
+  if(!en){ en={id:uid(), date, hours:0, studies:0, notes:'Field service timer'}; S.ministry.push(en); }
+  en.hours = Math.round((n(en.hours)+ms/3.6e6)*100)/100;
+  return ms;
+}
+function timerStart(){ const t=T(); t.running=true; t.startedAt=Date.now(); if(!t.sessionMs) t.segments=0; save(); render(); toast('Field service started'); }
+function timerPause(){
+  const t=T(); if(!t.running) return;
+  const ms=Date.now()-t.startedAt, date=ymd(new Date(t.startedAt));
+  const added=addMinistryMs(ms, date);
+  t.sessionMs+=ms; t.segments++; t.running=false; t.startedAt=null; save(); render();
+  toast(added? hm(ms)+' added to your hours' : 'Paused');
+}
+function timerEnd(){
+  const t=T(); if(t.running) timerPause();
+  const total=t.sessionMs; t.sessionMs=0; t.segments=0; save(); render();
+  if(total>=30000) toast('Session saved: '+hm(total));
+}
+function timerCard(){
+  const t=T(), now=timerNow(), today=S.ministry.filter(e=>e.date===TODAY()).reduce((a,e)=>a+n(e.hours),0), long=t.running && Date.now()-t.startedAt>8*3.6e6;
+  return `<div class="card timer ${t.running?'on':''}"><h2>${svg('faith',18)} Field service timer<span class="sp"></span><span class="chip">${t.running?'Running':t.sessionMs?'Paused':'Ready'}</span></h2>
+    <div class="clock" id="tmrClock">${clock(now)}</div>
+    <p class="muted" style="text-align:center;margin:0 0 12px">${t.running?'Started '+new Date(t.startedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})+' · keeps counting even if you close the app':t.sessionMs?'Paused · time so far is already in your hours':'Tap Start when you begin field service'}</p>
+    ${long?`<div class="banner"><span style="flex:1">The timer has been running for over 8 hours. Did you forget to pause? Pause it, then correct today's hours in the Ministry log if needed.</span></div>`:''}
+    <div class="btns">${t.running?`<button class="btn" style="flex:1" data-a="tpause">Pause</button>`:`<button class="btn" style="flex:1" data-a="tstart">${t.sessionMs?'Resume':'Start'}</button>`}
+      ${t.running||t.sessionMs?`<button class="btn ghost" style="flex:1" data-a="tend">End session</button>`:''}</div>
+    <p class="muted" style="margin:10px 0 0;text-align:center">Today's hours: <b>${hoursText(today)}</b> · This month: <b>${hoursText(ministryMonth())}</b></p></div>`;
+}
+setInterval(()=>{ const el=document.getElementById('tmrClock'); if(el && S.timer && S.timer.running) el.textContent=clock(timerNow()); }, 1000);
+
 function encouragement(t){
   const dn = dayNum(t);
   const [ref,code,theme,q] = VERSES[dn % VERSES.length];
@@ -601,7 +643,7 @@ function ministryView(){
   const daysIn = new Date(parse(m+'-01').getFullYear(), parse(m+'-01').getMonth()+1, 0).getDate();
   const dayOfMonth = parse(TODAY()).getDate();
   const left = Math.max(0, st.ministryTarget-mm), daysLeft = daysIn-dayOfMonth+1;
-  let html = reportCard();
+  let html = timerCard() + reportCard();
   html += `<div class="card"><h2>Ministry · ${monthName(m)}</h2>
     <div class="stat"><div><small>This month</small><b>${r1(mm)} h</b></div><div><small>Monthly target</small><b>${st.ministryTarget} h</b></div></div>
     ${bar(pct(mm,st.ministryTarget))}
@@ -754,7 +796,7 @@ function bibleCard(){
     <div class="f"><label>Chapter</label><select id="bCh">${Array.from({length:chs},(_,i)=>`<option ${i+1===B.chapter?'selected':''}>${i+1}</option>`).join('')}</select></div></div>
     <div class="f"><label>Bible language</label>${langSelect('bLang')}</div>
     <div class="scripture" style="margin-bottom:10px"><div class="kicker">${esc(name)}</div><div>${esc(theme)}</div></div>
-    <div class="btns"><a class="btn sm" href="${jwlib(code)}">Read ${esc(name)} ${B.chapter} in JW Library</a><a class="btn sm ghost" href="${jworg(code)}" target="_blank" rel="noopener">Read on JW.org</a></div>
+    <div class="btns"><a class="btn sm" href="${jwlib(code)}">Read ${esc(name)} ${B.chapter} in JW Library${LANG()?' ('+esc(langName())+')':''}</a><a class="btn sm ghost" href="${jworg(code)}" target="_blank" rel="noopener">Read on JW.org</a></div>
     <div class="f" style="margin-top:12px"><label>${esc(q)}</label><textarea id="bNote" placeholder="Your thoughts on ${esc(name)} ${B.chapter}…"></textarea></div>
     <button class="btn" data-a="readch">I read ${esc(name)} ${B.chapter}</button>
     ${doneToday.length?`<p class="muted" style="margin:8px 0 0">Read today: ${doneToday.map(x=>esc(BOOKS[x.book-1][0])+' '+x.chapter).join(', ')}</p>`:''}
@@ -778,27 +820,63 @@ function videoFallback(b){
   return `<p class="muted" style="margin:0 0 8px">The video couldn't play inside the app on this phone.</p>
     <div class="btns"><a class="btn sm" href="${url}" target="_blank" rel="noopener">Watch on JW.org</a><a class="btn sm ghost" href="https://www.jw.org/en/search/?q=${encodeURIComponent(BOOKS[b-1][0])}" target="_blank" rel="noopener">More about ${esc(BOOKS[b-1][0])}</a></div>`;
 }
+const API = (lang,b,all=0) => `https://b.jw-cdn.org/apis/pub-media/GETPUBMEDIALINKS?output=json&pub=nwtsv&fileformat=MP4&alllangs=${all}&langwritten=${encodeURIComponent(lang)}&booknum=${b}`;
+async function getJSON(url){ const ctl=new AbortController(); setTimeout(()=>ctl.abort(), 10000); const r=await fetch(url,{signal:ctl.signal}); return r.json(); }
+/* pick the introduction video that belongs to book b (the server may send every book) */
+function pickFor(items, b){
+  const ok = items.filter(x=>x && x.file && x.file.url);
+  let m = ok.filter(x=>n(x.booknum)===b);
+  if(!m.length){ const nm=BOOKS[b-1][0].toLowerCase(); m = ok.filter(x=>(x.title||'').toLowerCase().includes(nm)); }
+  if(!m.length && new Set(ok.map(x=>x.title)).size===1) m = ok;
+  if(!m.length && ok.length>=66) m = ok.filter(x=>n(x.track)===b);
+  m.sort((x,y)=>Math.abs((x.frameHeight||360)-480)-Math.abs((y.frameHeight||360)-480));
+  return m[0] ? {url:m[0].file.url, title:m[0].title||''} : null;
+}
 async function loadVideo(){
   const box = document.getElementById('vidBox'); if(!box) return;
   const b = S.bible.book, L = vidLang(), key = L+'_'+b;
   if(!navigator.onLine){ box.innerHTML = '<div class="muted">Connect to the internet to watch the video for this book.</div>'; return; }
+  box.innerHTML = '<div class="muted">Loading video…</div>';
+  discoverLangs();
   if(vidCache[key]===undefined){
-    const get = async lang => {
-      const ctl = new AbortController(); setTimeout(()=>ctl.abort(), 9000);
-      const r = await fetch(`https://b.jw-cdn.org/apis/pub-media/GETPUBMEDIALINKS?output=json&pub=nwtsv&fileformat=MP4&alllangs=0&langwritten=${encodeURIComponent(lang)}&booknum=${b}`, {signal:ctl.signal});
-      const j = await r.json();
-      const items = ((j.files||{})[lang]||{}).MP4||[];
-      const pick = items.filter(x=>x.file&&x.file.url).sort((x,y)=>Math.abs((x.frameHeight||360)-480)-Math.abs((y.frameHeight||360)-480))[0];
-      return pick ? {url:pick.file.url, title:pick.title||''} : null;
-    };
-    try{ vidCache[key] = await get(L); }catch(e){ vidCache[key] = null; }
-    if(!vidCache[key] && L!=='E'){ try{ vidCache[key] = await get('E'); }catch(e){} }
+    let v=null, used=L;
+    try{ const j=await getJSON(API(L,b)); v=pickFor(((j.files||{})[L]||{}).MP4||[], b); }catch(e){}
+    if(!v && L!=='E'){ try{ const j=await getJSON(API('E',b)); v=pickFor(((j.files||{}).E||{}).MP4||[], b); used='E'; }catch(e){} }
+    vidCache[key] = v ? {...v, used} : null;
   }
   if(S.bible.book!==b || vidLang()!==L || !document.getElementById('vidBox')) return;
   const v = vidCache[key];
+  const note = !v ? '' : v.used===L ? (L==='E'?'':`<p class="muted" style="margin:6px 0 0">In ${esc(langName(L))}</p>`) : `<p class="muted" style="margin:6px 0 0">Not available in ${esc(langName(L))} yet — showing the English video.</p>`;
   document.getElementById('vidBox').innerHTML = v
-    ? `<video controls playsinline preload="metadata" src="${esc(v.url)}"></video>${v.title?`<p class="muted" style="margin:6px 0 0">${esc(v.title)}</p>`:''}`
+    ? `<video controls playsinline preload="metadata" src="${esc(v.url)}"></video>${v.title?`<p style="margin:8px 0 0;font-weight:600">${esc(v.title)}</p>`:''}${note}`
     : videoFallback(b);
+}
+/* ask JW.org for the real language codes once a month and correct the list */
+let langCheckRunning=false;
+async function discoverLangs(force){
+  const st=S.settings;
+  if(langCheckRunning || !navigator.onLine) return;
+  if(!force && st.langsChecked && (Date.now()-st.langsChecked)<30*864e5) return;
+  langCheckRunning=true;
+  try{
+    const j = await getJSON(API('E',1,1));
+    const langs = j.languages || {};
+    const api = Object.entries(langs).map(([c,o])=>[c, String((o&&(o.name||o.vernacular))||'').toLowerCase()]).filter(a=>a[1]);
+    if(api.length<5) throw 0;
+    let changed=0;
+    st.langs = st.langs.map(([code,name])=>{
+      const full=name.toLowerCase(), base=full.split(' (')[0].trim(), variant=(full.match(/\(([^)]+)\)/)||[])[1];
+      const hit = api.find(a=>a[1]===full)
+        || (variant && api.find(a=>a[1].includes(base) && a[1].includes(variant)))
+        || ((!variant || variant==='asante') && api.find(a=>a[1]===base));
+      if(hit && hit[0]!==code){ changed++; if(st.bibleLang===code) st.bibleLang=hit[0]; return [hit[0],name]; }
+      return [code,name];
+    });
+    st.langsChecked = Date.now(); st.langsFound = api.length;
+    save();
+    if(changed){ Object.keys(vidCache).forEach(k=>delete vidCache[k]); toast('Bible language codes corrected from JW.org'); if(tab==='faith') render(); }
+  }catch(e){}
+  langCheckRunning=false;
 }
 
 function calendar(m){
@@ -1004,7 +1082,7 @@ function minSheet(id){
     <div class="f"><label>Notes (return visits, who to call back)</label><textarea id="mNotes">${esc(e.notes)}</textarea></div>
     ${actions}${id?`<button class="btn danger" data-a="delmin" data-id="${id}" style="margin-top:8px">Delete entry</button>`:''}`, ()=>{
       const h=n(val('mHours')); if(h<=0) return fail('mHours','Enter the hours');
-      const rec = id ? e : {id:uid()};
+      const rec = id ? e : {id:uid(), manual:true};
       rec.date=val('mDate')||TODAY(); rec.hours=h; rec.studies=n(rec.studies); rec.notes=val('mNotes').trim();
       if(!id) S.ministry.push(rec);
       return true;
@@ -1127,6 +1205,8 @@ function settingsSheet(){
     <div class="area">Bible languages</div>
     <p class="muted" style="margin:0 0 8px">One per line as CODE = Name. Tap Test to check a language opens correctly in JW Library. If it opens the wrong language, change its code. Download the Bible in that language in JW Library first.</p>
     <textarea id="sLangs" style="min-height:150px;font-family:ui-monospace,Menlo,monospace;font-size:14px">${esc(st.langs.map(l=>l[0]+' = '+l[1]).join('\n'))}</textarea>
+    <p class="muted" style="margin:6px 0 0">${st.langsChecked?'Codes checked with JW.org on '+new Date(st.langsChecked).toLocaleDateString()+' ✓':'Codes not checked with JW.org yet.'}</p>
+    <button class="btn sm ghost" data-a="checklangs" style="margin-top:6px">Check codes with JW.org now</button>
     <div class="f2" style="margin:8px 0 12px"><select id="sLangTest">${st.langs.map(l=>`<option value="${esc(l[0])}">${esc(l[1])}</option>`).join('')}</select><a class="btn ghost" id="sLangTestBtn" href="${jwlib('01001001', (st.langs[0]||[''])[0])}">Test in JW Library</a></div>
     <div class="f"><label>Start of my 5-year plan</label><input type="date" id="sStart" value="${st.started}"></div>
     <div class="area">Money buckets (percent of each pay)</div>
@@ -1243,6 +1323,10 @@ document.addEventListener('click', e => {
     case 'backup': { const ws=weekSheet.open; backup(); if(ws) weekSheet(ws); break; }
     case 'restore': document.getElementById('restoreFile').click(); break;
     case 'freshsheet': freshSheet(); break;
+    case 'tstart': timerStart(); break;
+    case 'tpause': timerPause(); break;
+    case 'tend': if(T().running && !confirm('End the session? The time so far will be added to your hours.')) break; timerEnd(); break;
+    case 'checklangs': { toast('Checking with JW.org…'); const before=JSON.stringify(S.settings.langs); discoverLangs(true).then(()=>{ closeSheet(); settingsSheet(); toast(S.settings.langsChecked&&Date.now()-S.settings.langsChecked<60000?(JSON.stringify(S.settings.langs)===before?'Codes checked — all correct':'Codes corrected'):'Could not reach JW.org. Check your data and try again.'); }); break; }
     case 'pinsheet': pinSheet(); break;
     case 'personsheet': personSheet(); break;
     case 'locknow': lockNow(); break;
