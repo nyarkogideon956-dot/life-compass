@@ -119,6 +119,10 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .chgrid span{aspect-ratio:1;border-radius:4px;background:var(--sky);font-size:10px;display:flex;align-items:center;justify-content:center;color:var(--navy)}
 .chgrid span.r{background:var(--navy);color:#fff}
 .chgrid span.cur{outline:2px solid #F5B700}
+.wkmini{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:14px;color:var(--muted)}
+.wkmini b{color:var(--navy);font-size:16px}
+.up{color:var(--ok);font-size:12.5px}
+.down{color:var(--warn);font-size:12.5px}
 </style>
 </head>
 <body>
@@ -151,11 +155,14 @@ function fresh(){
         {name:'Living costs',pct:50},{name:'Savings',pct:20},{name:'Donations',pct:10},
         {name:'Helping others',pct:10},{name:'Business and growth',pct:10}
       ],
-      started:ymd(new Date()), lastBackup:null
+      started:ymd(new Date()), lastBackup:null,
+      categories:['Food and groceries','Transport','Airtime and data','Rent, light and water','Household items','Health and medicine','Clothing','Family support','Donations','Ministry and meetings','Business costs','Personal care','Gifts and helping others','Education and books','Other'],
+      dailyBudget:0
     },
     days:{}, ministry:[], goals:[], vision:{faith:'',health:'',goals:'',money:'',others:''},
     money:[], helps:[], reviews:{},
-    bible:{book:1, chapter:1, read:{}, log:[]}, answers:{}
+    bible:{book:1, chapter:1, read:{}, log:[]}, answers:{},
+    savings:[]
   };
 }
 
@@ -339,6 +346,7 @@ const I = {
 };
 function svg(name,size=22){ return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${I[name]}</svg>`; }
 function checkBox(on,a,extra=''){ return `<button class="check ${on?'on':''}" data-a="${a}" ${extra} aria-pressed="${!!on}"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">${I.check}</svg></button>`; }
+function barPlain(p,color){ return `<div class="bar"><i style="width:${Math.max(0,Math.min(100,p))}%;background:${color}"></i></div>`; }
 function bar(p,done){ return `<div class="bar ${done||p>=100?'done':''}"><i style="width:${p}%"></i></div>`; }
 
 /* ---------- navigation ---------- */
@@ -373,8 +381,9 @@ V.today = () => {
       <span class="chip">Bible reading streak: ${bStreak} day${bStreak===1?'':'s'}</span>
       <span class="chip">Ministry this month: ${r1(mm)} / ${st.ministryTarget} h</span>
     </div></div>`;
-  if(hasData && (sinceBackup===null || sinceBackup>=14))
+  if(hasData && (sinceBackup===null || sinceBackup>=7))
     html += `<div class="banner"><span style="flex:1">${sinceBackup===null?'You haven\'t made a backup yet.':'Last backup was '+sinceBackup+' days ago.'} Your data lives only on this phone.</span><button class="btn sm" data-a="backup">Back up</button></div>`;
+  html += weekCard(t);
   html += encouragement(t);
   html += `<div class="card"><h2>${svg('faith',18)} Faith today</h2>
     ${[['bible','Daily Bible reading',''],['study','Personal study',''],['prayer','Prayer and meditation',''],['meeting','Meeting preparation','']].map(([k,l])=>`
@@ -389,6 +398,7 @@ V.today = () => {
     <div class="row"><div class="lbl">Exercise (minutes)</div><input class="mini" type="number" inputmode="numeric" min="0" data-f="exercise" value="${d.exercise??''}" placeholder="${st.exerciseTarget}"></div>
     <div class="row"><div class="lbl">Weight (kg)<small>Optional</small></div><input class="mini" type="number" inputmode="decimal" step="0.1" min="0" data-f="weight" value="${d.weight??''}"></div>
   </div>`;
+  html += todayMoneyCard(t);
   html += `<div class="card"><h2>${svg('others',18)} Helping others</h2>
     ${followups.length?`<div class="list">${followups.map(x=>`<div class="it"><div class="x"><b>Follow up: ${esc(x.person)}</b><small>${esc(x.how)}</small></div>${checkBox(false,'followdone','data-id="'+x.id+'"')}</div>`).join('')}</div>`:''}
     <button class="btn ghost" data-a="helpsheet" style="margin-top:${followups.length?10:0}px">I helped someone today</button></div>`;
@@ -397,6 +407,90 @@ V.today = () => {
   </div>`;
   return html;
 };
+
+/* ---------- weekly summary (weeks run Monday to Sunday) ---------- */
+function weekStart(s=TODAY()){ return addDays(s, -((parse(s).getDay()+6)%7)); }
+function weekStats(ws, maxDays=7){
+  const we = addDays(ws,6); let end = we<TODAY()?we:TODAY(); const cap=addDays(ws,maxDays-1); if(cap<end) end=cap; const days=[];
+  for(let s=ws; s<=end; s=addDays(s,1)) days.push(s);
+  const D = s=>S.days[s]||{};
+  const inW = d=>d>=ws && d<=end;
+  const sleeps = days.map(s=>n(D(s).sleep)).filter(x=>x>0);
+  const weights = days.filter(s=>n(D(s).weight)>0);
+  return {
+    ws, we, count:days.length,
+    bible: days.filter(s=>D(s).bible).length,
+    study: days.filter(s=>D(s).study).length,
+    prayer: days.filter(s=>D(s).prayer).length,
+    meeting: days.filter(s=>D(s).meeting).length,
+    chapters: S.bible.log.filter(x=>inW(x.date)).length,
+    answers: days.filter(s=>(S.answers[s]||'').trim()).length,
+    minHours: r1(ministryHours(ws,end)),
+    studies: S.ministry.filter(e=>inW(e.date)).reduce((a,e)=>a+n(e.studies),0),
+    sleepAvg: sleeps.length? r1(sleeps.reduce((a,b)=>a+b,0)/sleeps.length) : null,
+    waterDays: days.filter(s=>n(D(s).water)>=S.settings.waterTarget).length,
+    exDays: days.filter(s=>n(D(s).exercise)>0).length,
+    exMin: days.reduce((a,s)=>a+n(D(s).exercise),0),
+    wStart: weights.length? n(D(weights[0]).weight):null, wEnd: weights.length? n(D(weights[weights.length-1]).weight):null,
+    paid: S.money.filter(e=>e.type==='pay'&&inW(e.date)).reduce((a,e)=>a+n(e.amount),0),
+    spent: S.money.filter(e=>e.type==='spend'&&inW(e.date)).reduce((a,e)=>a+n(e.amount),0),
+    saved: S.money.filter(e=>(e.type==='save'||e.type==='withdraw')&&inW(e.date)).reduce((a,e)=>a+(e.type==='save'?1:-1)*n(e.amount),0),
+    topCat: (()=>{ const c={}; S.money.filter(e=>e.type==='spend'&&inW(e.date)).forEach(e=>c[catOf(e)]=(c[catOf(e)]||0)+n(e.amount)); const k=Object.keys(c).sort((a,b)=>c[b]-c[a])[0]; return k?[k,c[k]]:null; })(),
+    helped: S.helps.filter(x=>inW(x.date)).length,
+    goalsDone: S.goals.filter(g=>g.done && g.doneDate && inW(g.doneDate)).map(g=>g.title)
+  };
+}
+function weekLabel(ws){ const a=parse(ws), b=parse(addDays(ws,6)); const o={day:'numeric',month:'short'}; return a.toLocaleDateString(undefined,o)+' – '+b.toLocaleDateString(undefined,o); }
+function weekCard(t){
+  const w = weekStats(weekStart(t)), sunday = parse(t).getDay()===0;
+  return `<div class="card"><h2>${sunday?'Your week is ending':'This week so far'}<span class="sp"></span><span class="chip">${weekLabel(w.ws)}</span></h2>
+    <div class="wkmini"><span><b>${w.bible}/${w.count}</b> Bible days</span><span><b>${w.minHours} h</b> ministry</span><span><b>${w.exDays}</b> exercise days</span><span><b>${w.helped}</b> helped</span></div>
+    <button class="btn ghost" data-a="weeksheet" style="margin-top:10px">${sunday?'Review my week and back up':'See weekly summary'}</button></div>`;
+}
+function delta(a,b,unit='',lessIsBetter=false){ if(b===null||b===undefined) return ''; const d=r1(a-b); const good=(d>0)!==lessIsBetter; if(!d) return '<small class="muted"> same as '+(delta.vs||'last week')+'</small>'; return `<small class="${good?'up':'down'}"> ${d>0?'▲ +':'▼ '}${d}${unit} vs ${delta.vs||'last week'}</small>`; }
+function weekSheet(ws){
+  const w = weekStats(ws), p = weekStats(addDays(ws,-7), weekStats(ws).count), cur = ws===weekStart();
+  delta.vs = w.count<7 ? 'same days last week' : 'last week';
+  const st=S.settings, wk=x=>`${x}/${w.count}`;
+  const line=(label,val,extra='')=>`<div class="row"><div class="lbl">${label}</div><div style="text-align:right"><b>${val}</b>${extra?'<br>'+extra:''}</div></div>`;
+  let best=[];
+  if(w.bible===w.count && w.count>=5) best.push('You read the Bible every day');
+  if(w.minHours>=st.ministryTarget/4.3) best.push('You kept up with your ministry target');
+  if(w.exDays>=4) best.push('You exercised '+w.exDays+' days');
+  if(w.helped) best.push('You helped others '+w.helped+' time'+(w.helped>1?'s':''));
+  if(w.goalsDone.length) best.push('You completed '+w.goalsDone.length+' goal'+(w.goalsDone.length>1?'s':''));
+  const sinceBackup = st.lastBackup ? Math.floor((Date.now()-st.lastBackup)/864e5) : null;
+  openSheet(`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <button class="btn sm ghost" data-a="weeknav" data-w="${addDays(ws,-7)}" aria-label="Previous week">‹</button>
+      <h3 style="margin:0;flex:1;text-align:center">${cur?'This week':'Week'} · ${weekLabel(ws)}</h3>
+      <button class="btn sm ghost" data-a="weeknav" data-w="${addDays(ws,7)}" ${cur?'disabled style="opacity:.35"':''} aria-label="Next week">›</button></div>
+    ${best.length?`<div class="banner" style="background:var(--sky);border-color:var(--sky2);color:var(--navy)"><span>${best.join(' · ')}. Well done!</span></div>`:''}
+    <div class="area">Faith</div>
+    ${line('Bible reading days', wk(w.bible), delta(w.bible,p.bible,' days'))}
+    ${line('Chapters read', w.chapters)}
+    ${line('Personal study / prayer / meeting prep', `${w.study} / ${w.prayer} / ${w.meeting} days`)}
+    ${line('Ministry', w.minHours+' h', delta(w.minHours,p.minHours,' h'))}
+    ${line('Bible studies conducted', w.studies)}
+    ${line('Daily questions answered', wk(w.answers))}
+    <div class="area">Health</div>
+    ${line('Average sleep', w.sleepAvg!==null?w.sleepAvg+' h':'—', w.sleepAvg!==null&&p.sleepAvg!==null?delta(w.sleepAvg,p.sleepAvg,' h'):'')}
+    ${line('Water target reached', wk(w.waterDays)+' days')}
+    ${line('Exercise', w.exDays+' days · '+w.exMin+' min', delta(w.exMin,p.exMin,' min'))}
+    ${w.wEnd!==null?line('Weight', w.wEnd+' kg', w.wStart!==w.wEnd?`<small class="muted">${r1(w.wEnd-w.wStart)>0?'+':''}${r1(w.wEnd-w.wStart)} kg this week</small>`:''):''}
+    <div class="area">Money</div>
+    ${line('Paid to myself', money(w.paid))}
+    ${line('Spent', money(w.spent), delta(w.spent,p.spent,'',true))}
+    ${w.topCat?line('Biggest expense', esc(w.topCat[0]), '<small class="muted">'+money(w.topCat[1])+'</small>'):''}
+    ${line('Saved', money(w.saved))}
+    <div class="area">Helping others and goals</div>
+    ${line('Times I helped someone', w.helped, delta(w.helped,p.helped))}
+    ${line('Goals completed', w.goalsDone.length)}
+    ${w.goalsDone.length?`<div class="muted" style="padding:0 0 8px">${w.goalsDone.map(esc).join(' · ')}</div>`:''}
+    <div class="area">Weekly backup</div>
+    <p class="muted" style="margin:0 0 8px">${sinceBackup===null?'No backup made yet.':sinceBackup===0?'Backed up today. ✓':'Last backup '+sinceBackup+' day'+(sinceBackup===1?'':'s')+' ago.'}</p>
+    <div class="btns"><button class="btn" style="flex:1" data-a="backup">Back up now</button><button class="btn ghost" style="flex:1" data-a="close">Close</button></div>`, null);
+  weekSheet.open = ws;
+}
 
 function encouragement(t){
   const dn = dayNum(t);
@@ -583,27 +677,91 @@ function bucketBalances(){
   const b = {}; S.settings.buckets.forEach(x=>b[x.name]=0);
   S.money.forEach(e=>{
     if(e.type==='pay'){ (e.split||[]).forEach(s=>{ b[s.name]=(b[s.name]||0)+n(s.amount); }); }
-    else if(e.type==='spend'){ b[e.bucket]=(b[e.bucket]||0)-n(e.amount); }
+    else if((e.type==='spend'||e.type==='save') && e.bucket){ b[e.bucket]=(b[e.bucket]||0)-n(e.amount); }
   });
   return b;
 }
+const spends = (from,to) => S.money.filter(e=>e.type==='spend' && e.date>=from && e.date<=to);
+const sum = arr => arr.reduce((a,e)=>a+n(e.amount),0);
+function savedIn(goalId){ return S.money.filter(e=>(e.type==='save'||e.type==='withdraw') && (!goalId||e.goal===goalId)).reduce((a,e)=>a+(e.type==='save'?1:-1)*n(e.amount),0); }
+function savedBetween(from,to){ return S.money.filter(e=>(e.type==='save'||e.type==='withdraw') && e.date>=from && e.date<=to).reduce((a,e)=>a+(e.type==='save'?1:-1)*n(e.amount),0); }
+function catOf(e){ return e.category || e.note || e.bucket || 'Other'; }
+function quickCats(){
+  const cnt={}; S.money.filter(e=>e.type==='spend'&&e.category).slice(-200).forEach(e=>cnt[e.category]=(cnt[e.category]||0)+1);
+  const top=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
+  const base=['Food and groceries','Transport','Airtime and data','Household items'];
+  return [...new Set([...top,...base])].filter(c=>S.settings.categories.includes(c)).slice(0,4);
+}
+function moneyEntryRow(e){
+  const label = e.type==='pay'?'Paid myself':e.type==='spend'?esc(catOf(e)):e.type==='save'?'Saved · '+esc(goalName(e.goal)):'Took from savings · '+esc(goalName(e.goal));
+  const neg = e.type==='spend'||e.type==='withdraw';
+  const sub = [e.type==='spend'&&e.category&&e.note?esc(e.note):e.type!=='spend'&&e.note?esc(e.note):'', e.bucket&&e.type!=='pay'?'from '+esc(e.bucket):''].filter(Boolean).join(' · ');
+  return `<div class="it"><div class="x"><b>${label}</b><small>${nice(e.date)}${sub?' · '+sub:''}</small></div><span class="amt ${neg?'neg':''}">${neg?'−':'+'}${money(n(e.amount))}</span><button class="icon-btn" data-a="delmoney" data-id="${e.id}" aria-label="Delete">${svg('trash',17)}</button></div>`;
+}
+function goalName(id){ const g=S.savings.find(x=>x.id===id); return g?g.name:'Savings'; }
+function todayMoneyCard(t){
+  const list = spends(t,t), total=sum(list), bud=n(S.settings.dailyBudget);
+  return `<div class="card"><h2>${svg('money',18)} Money today<span class="sp"></span><span class="amt ${bud&&total>bud?'neg':''}">${money(total)}</span></h2>
+    ${bud?`${barPlain(pct(total,bud), total>bud?'var(--bad)':total>bud*0.8?'var(--warn)':'var(--blue)')}<p class="muted" style="margin:6px 0 8px">${total>bud?'Over your daily limit by '+money(total-bud):money(bud-total)+' left of your '+money(bud)+' daily limit'}</p>`:''}
+    <div class="btns">${quickCats().map(c=>`<button class="btn sm ghost" data-a="spendsheet" data-cat="${esc(c)}">+ ${esc(c.split(' ')[0])}</button>`).join('')}<button class="btn sm" data-a="spendsheet">Add expense</button></div>
+    ${list.length?`<div class="list" style="margin-top:8px">${list.sort((a,b)=>(b.ts||0)-(a.ts||0)).map(moneyEntryRow).join('')}</div>`:''}
+  </div>`;
+}
+let moneyTab='overview';
 V.money = () => {
-  const m = moneyMonth, cur=S.settings.currency;
-  const entries = S.money.filter(e=>e.date.slice(0,7)===m).sort((a,b)=>b.date.localeCompare(a.date)||(b.ts||0)-(a.ts||0));
-  const paid = entries.filter(e=>e.type==='pay').reduce((a,e)=>a+n(e.amount),0);
-  const spent = entries.filter(e=>e.type==='spend').reduce((a,e)=>a+n(e.amount),0);
-  const bal = bucketBalances();
-  const months = [...new Set([MONTH(), ...S.money.map(e=>e.date.slice(0,7))])].sort().reverse();
-  let html = `<div class="card"><h2>${svg('money',18)} Pay yourself</h2>
-    <p class="muted" style="margin:0 0 10px">When you pay yourself, enter it once and it's split into your buckets automatically.</p>
-    <div class="btns"><button class="btn" style="flex:1" data-a="paysheet">I paid myself</button><button class="btn ghost" style="flex:1" data-a="spendsheet">Record spending</button></div></div>`;
-  html += `<div class="card"><h2>Bucket balances</h2>${S.settings.buckets.map(b=>{
-      const v=bal[b.name]||0; return `<div class="row"><div class="lbl">${esc(b.name)}<small>${b.pct}% of each pay</small></div><span class="amt ${v<0?'neg':''}">${money(v)}</span></div>`;}).join('')}
-    <div class="muted" style="margin-top:6px">Change bucket names and percentages in settings.</div></div>`;
-  html += `<div class="card"><h2>Month<span class="sp"></span><select id="moneyMonth" style="width:auto">${months.map(x=>`<option value="${x}" ${x===m?'selected':''}>${monthName(x)}</option>`).join('')}</select></h2>
-    <div class="stat"><div><small>Paid to myself</small><b style="font-size:17px">${money(paid)}</b></div><div><small>Spent</small><b style="font-size:17px">${money(spent)}</b></div></div>
-    <div class="list" style="margin-top:10px">${entries.length?entries.map(e=>`<div class="it"><div class="x"><b>${e.type==='pay'?'Paid myself':esc(e.bucket)}</b><small>${nice(e.date)}${e.note?' · '+esc(e.note):''}</small></div><span class="amt ${e.type==='spend'?'neg':''}">${e.type==='spend'?'−':'+'}${money(n(e.amount))}</span><button class="icon-btn" data-a="delmoney" data-id="${e.id}" aria-label="Delete">${svg('trash',17)}</button></div>`).join(''):'<div class="empty">No money entries this month.</div>'}</div></div>`;
-  html += areaGoals('money');
+  const t=TODAY(), ws=weekStart(t), m=moneyMonth;
+  let html = `<div class="seg">${[['overview','Overview'],['expenses','Expenses'],['savings','Savings']].map(([k,l])=>`<button class="${k===moneyTab?'on':''}" data-a="moneytab" data-k="${k}">${l}</button>`).join('')}</div>`;
+  if(moneyTab==='overview'){
+    const bal = bucketBalances(), mStart=MONTH()+'-01';
+    const paidM = sum(S.money.filter(e=>e.type==='pay'&&e.date.slice(0,7)===MONTH()));
+    html += `<div class="card"><div class="btns"><button class="btn" style="flex:1" data-a="paysheet">I paid myself</button><button class="btn ghost" style="flex:1" data-a="spendsheet">Add expense</button></div>
+      <button class="btn ghost" style="margin-top:8px" data-a="savesheet">Put money in savings</button></div>`;
+    html += `<div class="card"><h2>At a glance</h2><div class="stat">
+      <div><small>Spent today</small><b style="font-size:17px">${money(sum(spends(t,t)))}</b></div>
+      <div><small>Spent this week</small><b style="font-size:17px">${money(sum(spends(ws,t)))}</b></div>
+      <div><small>Spent this month</small><b style="font-size:17px">${money(sum(spends(mStart,t)))}</b></div>
+      <div><small>Paid myself this month</small><b style="font-size:17px">${money(paidM)}</b></div>
+      <div><small>Total savings</small><b style="font-size:17px">${money(savedIn())}</b></div>
+      <div><small>Saved this month</small><b style="font-size:17px">${money(savedBetween(mStart,t))}</b></div></div></div>`;
+    html += `<div class="card"><h2>Bucket balances</h2>${S.settings.buckets.map(b=>{
+        const v=bal[b.name]||0; return `<div class="row"><div class="lbl">${esc(b.name)}<small>${b.pct}% of each pay</small></div><span class="amt ${v<0?'neg':''}">${money(v)}</span></div>`;}).join('')}
+      <div class="muted" style="margin-top:6px">Each pay is split into these buckets. Expenses and savings take money out of the bucket you choose.</div></div>`;
+    const recent=[...S.money].sort((a,b)=>b.date.localeCompare(a.date)||(b.ts||0)-(a.ts||0)).slice(0,8);
+    html += `<div class="card"><h2>Recent</h2><div class="list">${recent.length?recent.map(moneyEntryRow).join(''):'<div class="empty">Nothing recorded yet. Start with "I paid myself" or "Add expense".</div>'}</div></div>`;
+    html += areaGoals('money');
+  }
+  if(moneyTab==='expenses'){
+    const ds=last(14), lab=ds.map((s,i)=>i%2===1||i===13?String(parse(s).getDate()):'');
+    const vals=ds.map(s=>r1(sum(spends(s,s)))), bud=n(S.settings.dailyBudget);
+    const avg = vals.filter(v=>v>0).length ? vals.reduce((a,b)=>a+b,0)/14 : 0;
+    const mEnt = S.money.filter(e=>e.type==='spend'&&e.date.slice(0,7)===m);
+    const byCat={}; mEnt.forEach(e=>byCat[catOf(e)]=(byCat[catOf(e)]||0)+n(e.amount));
+    const cats=Object.keys(byCat).sort((a,b)=>byCat[b]-byCat[a]), mTotal=sum(mEnt), maxC=cats.length?byCat[cats[0]]:1;
+    const months=[...new Set([MONTH(),...S.money.map(e=>e.date.slice(0,7))])].sort().reverse();
+    const byDay={}; mEnt.forEach(e=>(byDay[e.date]=byDay[e.date]||[]).push(e));
+    html += `<div class="card"><button class="btn" data-a="spendsheet">Add expense</button></div>`;
+    html += `<div class="card"><h2>Daily spending · last 14 days</h2>${bars(vals,lab,bud||0,'#B26A00')}
+      <div class="muted">Average ${money(avg)} a day${bud?' · dashed line = your daily limit':''}</div></div>`;
+    html += `<div class="card"><h2>By category<span class="sp"></span><select id="moneyMonth" style="width:auto">${months.map(x=>`<option value="${x}" ${x===m?'selected':''}>${monthName(x)}</option>`).join('')}</select></h2>
+      <div class="stat" style="grid-template-columns:1fr"><div><small>Total spent in ${monthName(m)}</small><b>${money(mTotal)}</b></div></div>
+      ${cats.length?cats.map(c=>`<div style="margin-top:10px"><div style="display:flex;justify-content:space-between;gap:8px;font-size:14.5px"><span>${esc(c)}</span><span class="amt">${money(byCat[c])} <small class="muted">${pct(byCat[c],mTotal)}%</small></span></div>${barPlain(Math.round(byCat[c]/maxC*100),'#B26A00')}</div>`).join(''):'<div class="empty">No expenses this month.</div>'}</div>`;
+    html += `<div class="card"><h2>Day by day</h2>${Object.keys(byDay).sort().reverse().map(d=>`<div class="area" style="display:flex;justify-content:space-between"><span>${nice(d)}</span><span>${money(sum(byDay[d]))}</span></div><div class="list">${byDay[d].map(moneyEntryRow).join('')}</div>`).join('')||'<div class="empty">No expenses this month.</div>'}</div>`;
+  }
+  if(moneyTab==='savings'){
+    html += `<div class="card"><div class="stat" style="grid-template-columns:1fr 1fr"><div><small>Total savings</small><b>${money(savedIn())}</b></div><div><small>Saved this month</small><b>${money(savedBetween(MONTH()+'-01',t))}</b></div></div>
+      <div class="btns" style="margin-top:10px"><button class="btn" style="flex:1" data-a="savesheet">Add to savings</button><button class="btn ghost" style="flex:1" data-a="savegoalsheet">New savings goal</button></div></div>`;
+    html += `<div class="card"><h2>Savings goals</h2>${S.savings.length?S.savings.map(g=>{
+        const have=savedIn(g.id), p=pct(have,g.target);
+        let pace='';
+        if(g.deadline && have<g.target){ const months=Math.max(1,(parse(g.deadline).getFullYear()-parse(t).getFullYear())*12+parse(g.deadline).getMonth()-parse(t).getMonth()); pace=`Save about ${money((g.target-have)/months)} a month to reach it by ${parse(g.deadline).toLocaleDateString(undefined,{month:'short',year:'numeric'})}.`; }
+        if(!g.target) return `<div class="goal"><div class="t"><span data-a="savegoalsheet" data-id="${g.id}"><b>${esc(g.name)}</b><br><small class="muted">${money(have)} saved · tap to set a target</small></span></div>
+          <div class="btns" style="margin-top:8px"><button class="btn sm ghost" data-a="savesheet" data-goal="${g.id}">+ Add</button><button class="btn sm ghost" data-a="withdrawsheet" data-goal="${g.id}">Take out</button></div></div>`;
+        return `<div class="goal"><div class="t"><span data-a="savegoalsheet" data-id="${g.id}"><b>${esc(g.name)}</b><br><small class="muted">${money(have)} of ${money(g.target)} · ${p}%</small></span></div>${bar(p)}
+          ${pace?`<p class="muted" style="margin:6px 0 0">${pace}</p>`:have>=g.target?'<p class="muted" style="margin:6px 0 0">Goal reached. Well done!</p>':''}
+          <div class="btns" style="margin-top:8px"><button class="btn sm ghost" data-a="savesheet" data-goal="${g.id}">+ Add</button><button class="btn sm ghost" data-a="withdrawsheet" data-goal="${g.id}">Take out</button></div></div>`;}).join(''):'<div class="empty">Create a goal like "Emergency fund", "New phone" or "Convention trip".</div>'}</div>`;
+    const hist=S.money.filter(e=>e.type==='save'||e.type==='withdraw').sort((a,b)=>b.date.localeCompare(a.date)).slice(0,30);
+    html += `<div class="card"><h2>Savings history</h2><div class="list">${hist.length?hist.map(moneyEntryRow).join(''):'<div class="empty">No savings recorded yet.</div>'}</div></div>`;
+  }
   return html;
 };
 
@@ -623,12 +781,13 @@ V.others = () => {
 
 /* ---------- sheets (forms) ---------- */
 function openSheet(html, onSave){
+  weekSheet.open = null;
   const el = document.getElementById('sheet');
   el.innerHTML = `<div class="sheet-bg" data-a="closebg"><div class="sheet" role="dialog">${html}</div></div>`;
   openSheet.save = onSave;
   const f = el.querySelector('input,select,textarea'); if(f && f.type!=='date') setTimeout(()=>f.focus(),60);
 }
-function closeSheet(){ document.getElementById('sheet').innerHTML=''; openSheet.save=null; }
+function closeSheet(){ document.getElementById('sheet').innerHTML=''; openSheet.save=null; weekSheet.open=null; }
 function val(id){ const e=document.getElementById(id); return e?e.value:''; }
 function fail(id,msg){ const e=document.getElementById(id); e.insertAdjacentHTML('afterend',`<div class="err">${msg}</div>`); e.addEventListener('input',()=>{ const n=e.nextElementSibling; if(n&&n.classList.contains('err')) n.remove(); },{once:true}); e.focus(); return false; }
 const actions = `<div class="btns" style="margin-top:6px"><button class="btn ghost" style="flex:1" data-a="close">Cancel</button><button class="btn" style="flex:1" data-a="save">Save</button></div>`;
@@ -651,7 +810,7 @@ function goalSheet(id, h, area){
       if(!id || rec.horizon!==hz) rec.period = hz==='1m'?MONTH():hz==='1y'?YEAR():null;
       rec.horizon=hz;
       if(id && document.getElementById('gProg')) rec.progress=n(val('gProg'));
-      if(rec.target>0) rec.done = rec.progress>=rec.target;
+      if(rec.target>0){ const was=rec.done; rec.done = rec.progress>=rec.target; if(rec.done&&!was) rec.doneDate=TODAY(); if(!rec.done) rec.doneDate=null; }
       if(!id) S.goals.push(rec);
       return true;
     });
@@ -707,17 +866,52 @@ function paySheet(){
     document.getElementById('pSplit').innerHTML = bs.map(b=>`<div class="row"><div class="lbl">${esc(b.name)}<small>${b.pct}%</small></div><span class="amt">${money(a*n(b.pct)/tot)}</span></div>`).join('');
   });
 }
-function spendSheet(){
-  const bal=bucketBalances();
-  openSheet(`<h3>Record spending</h3>
-    <div class="f2"><div class="f"><label>Amount (${esc(S.settings.currency)})</label><input type="number" inputmode="decimal" min="0" step="0.01" id="sAmt" placeholder="200"></div>
+function bucketSelect(id, preferred){
+  const bal=bucketBalances(), bs=S.settings.buckets;
+  const def = bs.find(b=>b.name===preferred) ? preferred : (bs[0]||{}).name;
+  return `<select id="${id}"><option value="">Not from a bucket</option>${bs.map(b=>`<option value="${esc(b.name)}" ${b.name===def?'selected':''}>${esc(b.name)} (${money(bal[b.name]||0)})</option>`).join('')}</select>`;
+}
+function spendSheet(cat){
+  openSheet(`<h3>Add expense</h3>
+    <div class="f2"><div class="f"><label>Amount (${esc(S.settings.currency)})</label><input type="number" inputmode="decimal" min="0" step="0.01" id="sAmt" placeholder="20"></div>
     <div class="f"><label>Date</label><input type="date" id="sDate" value="${TODAY()}" max="${TODAY()}"></div></div>
-    <div class="f"><label>From which bucket?</label><select id="sB">${S.settings.buckets.map(b=>`<option value="${esc(b.name)}">${esc(b.name)} (${money(bal[b.name]||0)})</option>`).join('')}</select></div>
-    <div class="f"><label>What for?</label><input type="text" id="sNote" placeholder="Transport, foodstuff"></div>
+    <div class="f"><label>Category</label><select id="sCat">${S.settings.categories.map(c=>`<option ${c===cat?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
+    <div class="f"><label>What for? (optional)</label><input type="text" id="sNote" placeholder="Trotro to work, kenkey"></div>
+    <div class="f"><label>Paid from which bucket?</label>${bucketSelect('sB','Living costs')}</div>
     ${actions}`, ()=>{
       const a=n(val('sAmt')); if(a<=0) return fail('sAmt','Enter the amount');
-      S.money.push({id:uid(), ts:Date.now(), type:'spend', date:val('sDate')||TODAY(), amount:a, bucket:val('sB'), note:val('sNote').trim()});
+      S.money.push({id:uid(), ts:Date.now(), type:'spend', date:val('sDate')||TODAY(), amount:a, category:val('sCat'), bucket:val('sB'), note:val('sNote').trim()});
       return true;
+    });
+}
+function saveSheet(goalId, withdraw){
+  if(!S.savings.length){ S.savings.push({id:uid(), name:'General savings', target:0}); save(); }
+  const gid = goalId || S.savings[0].id;
+  openSheet(`<h3>${withdraw?'Take money out of savings':'Add to savings'}</h3>
+    <div class="f2"><div class="f"><label>Amount (${esc(S.settings.currency)})</label><input type="number" inputmode="decimal" min="0" step="0.01" id="vAmt" placeholder="100"></div>
+    <div class="f"><label>Date</label><input type="date" id="vDate" value="${TODAY()}" max="${TODAY()}"></div></div>
+    <div class="f"><label>Savings goal</label><select id="vGoal">${S.savings.map(g=>`<option value="${g.id}" ${g.id===gid?'selected':''}>${esc(g.name)} (${money(savedIn(g.id))})</option>`).join('')}</select></div>
+    ${withdraw?'':`<div class="f"><label>Taken from which bucket?</label>${bucketSelect('vB','Savings')}</div>`}
+    <div class="f"><label>Note (optional)</label><input type="text" id="vNote" placeholder="${withdraw?'Paid hospital bill':'Susu, mobile money savings'}"></div>
+    ${actions}`, ()=>{
+      const a=n(val('vAmt')); if(a<=0) return fail('vAmt','Enter the amount');
+      const g=val('vGoal');
+      if(withdraw && a>savedIn(g)+0.001) return fail('vAmt','You only have '+money(savedIn(g))+' in this goal');
+      S.money.push({id:uid(), ts:Date.now(), type:withdraw?'withdraw':'save', date:val('vDate')||TODAY(), amount:a, goal:g, bucket:withdraw?'':val('vB'), note:val('vNote').trim()});
+      return true;
+    });
+}
+function saveGoalSheet(id){
+  const g = id ? S.savings.find(x=>x.id===id) : {name:'', target:'', deadline:''};
+  openSheet(`<h3>${id?'Edit savings goal':'New savings goal'}</h3>
+    <div class="f"><label>Name</label><input type="text" id="gsName" value="${esc(g.name)}" placeholder="Emergency fund"></div>
+    <div class="f2"><div class="f"><label>Target (${esc(S.settings.currency)})</label><input type="number" inputmode="decimal" id="gsT" value="${g.target||''}" placeholder="5000"></div>
+    <div class="f"><label>Reach it by (optional)</label><input type="date" id="gsD" value="${g.deadline||''}"></div></div>
+    ${actions}${id?`<button class="btn danger" data-a="delsavegoal" data-id="${id}" style="margin-top:8px">Delete goal</button>`:''}`, ()=>{
+      const nm=val('gsName').trim(); if(!nm) return fail('gsName','Enter a name');
+      const t=n(val('gsT')); if(t<=0) return fail('gsT','Enter the amount you want to save');
+      const rec = id ? g : {id:uid()}; rec.name=nm; rec.target=t; rec.deadline=val('gsD')||'';
+      if(!id) S.savings.push(rec); return true;
     });
 }
 function visionSheet(){
@@ -748,6 +942,8 @@ function settingsSheet(){
     <div class="f"><label>Water target (glasses)</label><input type="number" id="sWat" value="${st.waterTarget}"></div></div>
     <div class="f2"><div class="f"><label>Sleep target (h)</label><input type="number" step="0.5" id="sSl" value="${st.sleepTarget}"></div>
     <div class="f"><label>Exercise target (min)</label><input type="number" id="sEx" value="${st.exerciseTarget}"></div></div>
+    <div class="f"><label>Daily spending limit (${esc(st.currency)}, 0 = none)</label><input type="number" inputmode="decimal" id="sBud" value="${st.dailyBudget||0}"></div>
+    <div class="f"><label>Expense categories (one per line)</label><textarea id="sCats" style="min-height:150px">${esc(st.categories.join('\n'))}</textarea></div>
     <div class="f"><label>Start of my 5-year plan</label><input type="date" id="sStart" value="${st.started}"></div>
     <div class="area">Money buckets (percent of each pay)</div>
     <div id="bk">${st.buckets.map((b,i)=>bucketRow(b,i)).join('')}</div>
@@ -768,6 +964,9 @@ function settingsSheet(){
       if(rows.length && Math.round(tot)!==100) return fail('bkTot','Bucket percentages must add up to 100 (now '+r1(tot)+')');
       Object.assign(st,{name:val('sName').trim(), currency:val('sCur').trim()||'GH₵', ministryTarget:n(val('sMin'))||0, waterTarget:n(val('sWat'))||8, sleepTarget:n(val('sSl'))||7, exerciseTarget:n(val('sEx'))||30, started:val('sStart')||st.started});
       if(rows.length) st.buckets=rows;
+      st.dailyBudget = Math.max(0,n(val('sBud')));
+      const cats=[...new Set(val('sCats').split('\n').map(x=>x.trim()).filter(Boolean))];
+      if(cats.length) st.categories=cats;
       return true;
     });
   updBk();
@@ -834,10 +1033,15 @@ document.addEventListener('click', e => {
     case 'goalsheet': goalSheet(id, t.dataset.h, t.dataset.area); break;
     case 'visionsheet': visionSheet(); break;
     case 'paysheet': paySheet(); break;
-    case 'spendsheet': spendSheet(); break;
+    case 'spendsheet': spendSheet(t.dataset.cat); break;
+    case 'savesheet': saveSheet(t.dataset.goal); break;
+    case 'withdrawsheet': saveSheet(t.dataset.goal, true); break;
+    case 'savegoalsheet': saveGoalSheet(id); break;
+    case 'moneytab': moneyTab=t.dataset.k; render(); break;
+    case 'delsavegoal': if(savedIn(id)>0 && !confirm('This goal still has '+money(savedIn(id))+'. Delete it and its history?')) break; S.savings=S.savings.filter(x=>x.id!==id); S.money=S.money.filter(e=>e.goal!==id); save(); closeSheet(); render(); break;
     case 'settings': settingsSheet(); break;
     case 'horizon': goalH=t.dataset.h; render(); break;
-    case 'goaldone': { const g=S.goals.find(x=>x.id===id); g.done=!g.done; if(g.done&&g.target>0&&n(g.progress)<g.target) g.progress=g.target; save(); render(); if(g.done) toast('Goal completed'); break; }
+    case 'goaldone': { const g=S.goals.find(x=>x.id===id); g.done=!g.done; g.doneDate=g.done?TODAY():null; if(g.done&&g.target>0&&n(g.progress)<g.target) g.progress=g.target; save(); render(); if(g.done) toast('Goal completed'); break; }
     case 'followdone': { const x=S.helps.find(h=>h.id===id); x.followDone=true; save(); render(); toast('Follow-up done'); break; }
     case 'pastday': { const s=val('pastDay'); if(s) daySheet(s); break; }
     case 'delgoal': if(confirm('Delete this goal?')){ S.goals=S.goals.filter(x=>x.id!==id); save(); closeSheet(); render(); } break;
@@ -846,9 +1050,11 @@ document.addEventListener('click', e => {
     case 'delmoney': if(confirm('Delete this money entry?')){ S.money=S.money.filter(x=>x.id!==id); save(); render(); } break;
     case 'addbucket': document.getElementById('bk').insertAdjacentHTML('beforeend', bucketRow({name:'',pct:0})); updBk(); break;
     case 'delbucket': t.closest('.bkrow').remove(); updBk(); break;
-    case 'backup': backup(); break;
+    case 'backup': { const ws=weekSheet.open; backup(); if(ws) weekSheet(ws); break; }
     case 'restore': document.getElementById('restoreFile').click(); break;
     case 'freshsheet': freshSheet(); break;
+    case 'weeksheet': weekSheet(weekStart()); break;
+    case 'weeknav': if(t.dataset.w<=weekStart()) weekSheet(t.dataset.w); break;
     case 'dofresh': if(t.dataset.b==='1' || confirm('Erase everything without a backup? This cannot be undone.')) startFresh(t.dataset.b==='1'); break;
     case 'pickch': S.bible.chapter=n(t.dataset.c); save(); render(); break;
     case 'readch': {
