@@ -150,6 +150,8 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .switch input:checked+span::before{transform:translateX(18px)}
 .chip.good{background:#E3F4EB;color:#1E7F52}.chip.bad{background:#FBEAEA;color:var(--bad)}
 .dentry{padding-bottom:6px}
+.sndrow{display:grid;grid-template-columns:1fr 48px;gap:6px}
+.sndrow .btn{height:40px;padding:0;display:flex;align-items:center;justify-content:center}
 .f2[hidden],.f[hidden],.jentry[hidden]{display:none}
 .timer .clock{font-size:46px;font-weight:700;text-align:center;color:var(--navy);font-variant-numeric:tabular-nums;letter-spacing:.02em;margin:4px 0}
 .timer.on{border:2px solid var(--blue)}
@@ -217,7 +219,7 @@ function fresh(){
       bibleLang:'',
       langs:[['E','English'],['TW','Twi (Asante)'],['TWA','Twi (Akuapem)'],['EW','Ewe'],['GA','Ga'],['FA','Fante'],['DG','Dangme'],['NZ','Nzema'],['HA','Hausa'],['F','French']],
       myTemplates:[],
-      alarm:{beep:30, diaryTime:'21:00', diaryOn:true}
+      alarm:{beep:30, diaryTime:'21:00', diaryOn:true, sound:'marimba', medSound:'chimes', diarySound:'piano'}
     },
     days:{}, ministry:[], goals:[], vision:{faith:'',health:'',goals:'',money:'',others:''},
     money:[], helps:[], reviews:{},
@@ -409,6 +411,7 @@ const I = {
   plus:'<path d="M12 5v14M5 12h14"/>',
   trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   edit:'<path d="M4 20h4L19 9l-4-4L4 16v4z"/>',
+  play:'<path d="M7 5v14l11-7z"/>',
   bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
   arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>'
 };
@@ -591,15 +594,15 @@ const mins = hhmm => { const [h,m]=String(hhmm||'0:0').split(':').map(Number); r
 const nowMins = () => { const d=new Date(); return d.getHours()*60+d.getMinutes(); };
 function fmtTime(hhmm){ const [h,m]=String(hhmm).split(':').map(Number); const d=new Date(); d.setHours(h,m,0,0); return d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}); }
 function daysText(days){ if(!days||days.length===7) return 'Every day'; const set=new Set(days); if(days.length===5&&[1,2,3,4,5].every(x=>set.has(x))) return 'Weekdays'; if(days.length===2&&set.has(0)&&set.has(6)) return 'Weekends'; return WD.filter(([v])=>set.has(v)).map(([v])=>WDN[v]).join(', '); }
-const AL = () => S.settings.alarm || (S.settings.alarm={beep:30,diaryTime:'21:00',diaryOn:true});
+const AL = () => { const a = S.settings.alarm || (S.settings.alarm={beep:30,diaryTime:'21:00',diaryOn:true}); if(!a.sound) a.sound='marimba'; return a; };
 
 /* everything that should ring on a given date */
 function dueOn(date){
   const wd=parse(date).getDay(), out=[];
-  S.reminders.filter(r=>r.on!==false && (r.days||[]).includes(wd)).forEach(r=>out.push({key:'rem:'+r.id, time:r.time, title:r.title, kind:r.type||'other', id:r.id, beep:r.beep, created:r.created||0}));
-  S.meds.filter(m=>m.on!==false && (!m.until || date<=m.until)).forEach(m=>(m.times||[]).forEach(tm=>out.push({key:'med:'+m.id+':'+tm, time:tm, title:'Take '+m.name+(m.dose?' ('+m.dose+')':''), kind:'med', id:m.id, slot:tm, created:m.created||0})));
-  S.todos.filter(x=>x.time && x.alarm!==false && !x.done && x.date===date).forEach(x=>out.push({key:'todo:'+x.id, time:x.time, title:x.text, kind:'todo', id:x.id, created:x.createdAt||0}));
-  if(AL().diaryOn) out.push({key:'diary', time:AL().diaryTime, title:'Write about your day', kind:'diary', created:Date.now(), quietMiss:true});
+  S.reminders.filter(r=>r.on!==false && (r.days||[]).includes(wd)).forEach(r=>out.push({key:'rem:'+r.id, time:r.time, title:r.title, kind:r.type||'other', id:r.id, beep:r.beep, sound:r.sound||'', created:r.created||0}));
+  S.meds.filter(m=>m.on!==false && (!m.until || date<=m.until)).forEach(m=>(m.times||[]).forEach(tm=>out.push({key:'med:'+m.id+':'+tm, time:tm, title:'Take '+m.name+(m.dose?' ('+m.dose+')':''), kind:'med', id:m.id, slot:tm, sound:m.sound||AL().medSound||'', created:m.created||0})));
+  S.todos.filter(x=>x.time && x.alarm!==false && !x.done && x.date===date).forEach(x=>out.push({key:'todo:'+x.id, time:x.time, title:x.text, kind:'todo', id:x.id, sound:x.sound||'', created:x.createdAt||0}));
+  if(AL().diaryOn) out.push({key:'diary', time:AL().diaryTime, title:'Write about your day', kind:'diary', sound:AL().diarySound||'', created:Date.now(), quietMiss:true});
   return out.sort((a,b)=>mins(a.time)-mins(b.time));
 }
 function firedMap(date=TODAY()){ return S.fired[date] || (S.fired[date]={}); }
@@ -609,24 +612,63 @@ let AC=null;
 function audio(){ try{ if(!AC){ const C=window.AudioContext||window.webkitAudioContext; if(C) AC=new C(); } if(AC && AC.state==='suspended') AC.resume(); }catch(e){} return AC; }
 document.addEventListener('pointerdown', ()=>audio(), {passive:true});
 let beepTimer=null, beepStop=0;
-function startBeep(seconds){
-  stopBeep(); beepStop=Date.now()+seconds*1000;
-  const tick=()=>{
+/* ---- alarm sounds: made by the phone itself, so they work offline ---- */
+const m2f = m => 440*Math.pow(2,(m-69)/12);
+function tone(ac, f, t, dur, kind, vol){
+  const g=ac.createGain(); g.connect(ac.destination);
+  const parts = kind==='bell' ? [[1,1],[2.01,.35],[3.01,.18],[4.2,.08]]
+              : kind==='marimba' ? [[1,1],[4,.12],[10,.03]]
+              : kind==='box' ? [[1,1],[2,.25],[3,.06]]
+              : kind==='piano' ? [[1,1],[2,.4],[3,.18],[4,.08]]
+              : [[1,1]];
+  const decay = kind==='bell'?dur:kind==='marimba'?0.45:kind==='box'?0.9:kind==='piano'?1.2:dur;
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(vol, t+(kind==='flat'?0.005:0.01));
+  if(kind==='flat'){ g.gain.setValueAtTime(vol,t+dur-0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+dur); }
+  else g.gain.exponentialRampToValueAtTime(0.0001, t+decay);
+  parts.forEach(([mult,amp])=>{ const o=ac.createOscillator(), og=ac.createGain(); o.type= kind==='flat'?'square': kind==='box'?'triangle':'sine'; o.frequency.value=f*mult; og.gain.value=amp; o.connect(og); og.connect(g); o.start(t); o.stop(t+Math.max(dur,decay)+0.05); });
+}
+function chirp(ac, t, f1, f2, dur, vol){
+  const o=ac.createOscillator(), g=ac.createGain(); o.type='sine';
+  o.frequency.setValueAtTime(f1,t); o.frequency.exponentialRampToValueAtTime(f2,t+dur);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t+dur+0.02);
+}
+const SOUNDS = {
+  marimba:{name:'Morning marimba', loop:1.9, play:(ac,t,v)=>[72,76,79,84,79,76,79,84].forEach((m,i)=>tone(ac,m2f(m),t+i*0.14,0.4,'marimba',0.45*v))},
+  bigben:{name:'Big Ben chimes', loop:5.4, play:(ac,t,v)=>[[64,0],[68,.6],[66,1.2],[59,1.8],[64,2.7],[66,3.3],[68,3.9],[64,4.5]].forEach(([m,o])=>tone(ac,m2f(m),t+o,1.6,'bell',0.32*v))},
+  elise:{name:'Für Elise (music box)', loop:3.2, play:(ac,t,v)=>[[88,0],[87,.2],[88,.4],[87,.6],[88,.8],[83,1],[86,1.2],[84,1.4],[81,1.6],[57,1.6],[64,1.8],[69,2]].forEach(([m,o])=>tone(ac,m2f(m),t+o,0.8,'box',(m<70?0.18:0.3)*v))},
+  chimes:{name:'Gentle chimes', loop:2.6, play:(ac,t,v)=>[[84,0],[88,.25],[91,.5],[96,.75],[91,1.3],[88,1.55]].forEach(([m,o])=>tone(ac,m2f(m),t+o,1.4,'bell',0.22*v))},
+  birds:{name:'Birds in the morning', loop:2.2, play:(ac,t,v)=>{ [[0,2600,3900],[.12,2800,4200],[.24,3000,4400],[.7,4200,2800],[.8,4000,2600],[1.25,2500,3800],[1.35,2700,4100],[1.45,2900,4300],[1.55,3100,4500]].forEach(([o,a,b])=>chirp(ac,t+o,a,b,0.09,0.42*v)); }},
+  piano:{name:'Rising piano', loop:2.4, play:(ac,t,v)=>[[60,0],[64,.25],[67,.5],[72,.75],[67,1],[72,1.25],[76,1.5]].forEach(([m,o])=>tone(ac,m2f(m),t+o,1.2,'piano',0.3*v))},
+  classic:{name:'Classic alarm clock', loop:1.0, play:(ac,t,v)=>{ for(let i=0;i<4;i++) tone(ac,2000,t+i*0.13,0.08,'flat',0.3*v); }}
+};
+const SOUND_KEYS = Object.keys(SOUNDS);
+let beepLoop=null, beepEnd=null, playsndKey=null;
+function startBeep(seconds, key){
+  stopBeep();
+  const snd = SOUNDS[key] || SOUNDS[AL().sound] || SOUNDS.marimba;
+  const started = Date.now(); beepStop = started + seconds*1000;
+  const once=()=>{
     if(Date.now()>beepStop){ stopBeep(); return; }
-    const ac=audio();
-    if(ac){ [0,0.18].forEach((off,i)=>{ const o=ac.createOscillator(), g=ac.createGain(); o.type='square'; o.frequency.value=i?1175:880; g.gain.setValueAtTime(0.0001,ac.currentTime+off); g.gain.exponentialRampToValueAtTime(0.25,ac.currentTime+off+0.02); g.gain.exponentialRampToValueAtTime(0.0001,ac.currentTime+off+0.15); o.connect(g); g.connect(ac.destination); o.start(ac.currentTime+off); o.stop(ac.currentTime+off+0.16); }); }
+    const ac=audio(); if(!ac) return;
+    const grow = Math.min(1, 0.55 + (Date.now()-started)/20000);   // starts softer, gets louder
+    try{ snd.play(ac, ac.currentTime+0.03, grow); }catch(e){}
     try{ navigator.vibrate && navigator.vibrate([350,150,350]); }catch(e){}
   };
-  tick(); beepTimer=setInterval(tick, 1000);
+  once(); beepTimer=setInterval(once, snd.loop*1000);
 }
 function stopBeep(){ if(beepTimer) clearInterval(beepTimer); beepTimer=null; try{ navigator.vibrate && navigator.vibrate(0); }catch(e){} }
+function soundSelect(id, cur, withDefault){
+  return `<div class="sndrow"><select id="${id}">${withDefault?`<option value="" ${!cur?'selected':''}>Default (${esc(SOUNDS[AL().sound||'marimba'].name)})</option>`:''}${SOUND_KEYS.map(k=>`<option value="${k}" ${k===cur?'selected':''}>${esc(SOUNDS[k].name)}</option>`).join('')}</select><button class="btn ghost" data-a="playsnd" data-for="${id}" aria-label="Play sound">${svg('play',18)}</button></div>`;
+}
 
 /* ---- ringing ---- */
 let ringing=null, wakeLock=null;
 function ring(item){
   ringing=item;
   firedMap()[item.key]='rang'; save();
-  startBeep(n(item.beep)||AL().beep||30);
+  startBeep(n(item.beep)||AL().beep||30, item.sound);
   const el=document.getElementById('alarm');
   const extra = item.kind==='med'?`<button class="btn" data-al="taken">I've taken it</button>`
     : item.kind==='todo'?`<button class="btn" data-al="done">Mark as done</button>`
@@ -700,8 +742,8 @@ function reminderSheet(id, type){
     <div class="f"><label>Name</label><input type="text" id="rTitle" value="${esc(r.title)}" placeholder="Personal study — Watchtower"></div>
     <div class="f"><label>Days</label><div class="days">${WD.map(([v,l])=>`<label><input type="checkbox" value="${v}" ${daysSet.has(v)?'checked':''}><span>${l}</span></label>`).join('')}</div>
       <div class="btns" style="margin-top:6px"><button class="btn sm ghost" data-a="rdays" data-d="all">Every day</button><button class="btn sm ghost" data-a="rdays" data-d="wk">Weekdays</button><button class="btn sm ghost" data-a="rdays" data-d="none">Clear</button></div></div>
-    <div class="f2"><div class="f"><label>Beep for</label><select id="rBeep">${[15,30,60].map(v=>`<option value="${v}" ${v===n(r.beep)?'selected':''}>${v} seconds</option>`).join('')}</select></div>
-    <div class="f"><label>&nbsp;</label><button class="btn ghost" data-a="testbeep" style="width:100%">Test sound</button></div></div>
+    <div class="f"><label>Sound</label>${soundSelect('rSound', r.sound||'', true)}</div>
+    <div class="f"><label>Ring for</label><select id="rBeep">${[15,30,60].map(v=>`<option value="${v}" ${v===n(r.beep||AL().beep)?'selected':''}>${v} seconds</option>`).join('')}</select></div>
     <div class="f"><label>What to do (optional)</label><textarea id="rNote" placeholder="Study the Watchtower for Sunday; prepare comments">${esc(r.note||'')}</textarea></div>
     ${actions}
     ${closedAppHelp(r.time, r.title||'Personal study', r.days, null)}
@@ -710,7 +752,7 @@ function reminderSheet(id, type){
       const days=[...document.querySelectorAll('.days input:checked')].map(x=>n(x.value));
       if(!days.length) return fail('rTime','Choose at least one day');
       const rt=val('rType'), title=val('rTitle').trim()||RTYPES.find(x=>x[0]===rt)[1];
-      const rec = id ? r : {id:uid(), on:true}; if(!id || rec.time!==tm) rec.created=Date.now(); Object.assign(rec,{type:rt, time:tm, title, days, beep:n(val('rBeep')), note:val('rNote').trim()});
+      const rec = id ? r : {id:uid(), on:true}; if(!id || rec.time!==tm) rec.created=Date.now(); Object.assign(rec,{type:rt, time:tm, title, days, beep:n(val('rBeep')), sound:val('rSound'), note:val('rNote').trim()});
       if(!id) S.reminders.push(rec);
       const fm=firedMap(); delete fm['rem:'+rec.id];
       return true;
@@ -723,18 +765,24 @@ function alarmsSheet(){
     <div class="list">${S.reminders.length?S.reminders.slice().sort((x,y)=>mins(x.time)-mins(y.time)).map(r=>`<div class="it"><div class="x" data-a="remsheet" data-id="${r.id}" style="cursor:pointer"><b>${fmtTime(r.time)} · ${esc(r.title)}</b><small>${daysText(r.days)} · beeps ${r.beep||a.beep} s</small></div>
       <label class="switch"><input type="checkbox" data-remon="${r.id}" ${r.on!==false?'checked':''}><span></span></label></div>`).join(''):'<div class="empty">No alarms yet.</div>'}</div>
     <button class="btn" data-a="remsheet" style="margin-top:10px">Add an alarm</button>
+    <div class="area">Choose your sounds</div>
+    <p class="muted" style="margin:0 0 8px">Tap ▶ to listen. Each alarm can also have its own sound.</p>
+    <div class="sndlist">${SOUND_KEYS.map(k=>`<div class="row" style="padding:6px 0"><div class="lbl">${esc(SOUNDS[k].name)}</div><button class="btn sm ghost" data-a="playsnd" data-k="${k}" aria-label="Play ${esc(SOUNDS[k].name)}">${svg('play',16)} Play</button></div>`).join('')}</div>
+    <div class="f" style="margin-top:8px"><label>Default sound for study and other alarms</label>${soundSelect('aSound', a.sound, false)}</div>
+    <div class="f"><label>Sound for medicine</label>${soundSelect('aMedSound', a.medSound||'chimes', false)}</div>
+    <div class="f"><label>Sound for the diary reminder</label>${soundSelect('aDiarySound', a.diarySound||'piano', false)}</div>
     <div class="area">Diary reminder</div>
     <div class="row" style="border:0"><div class="lbl">Remind me to write about my day</div><label class="switch"><input type="checkbox" id="aDiaryOn" ${a.diaryOn?'checked':''}><span></span></label></div>
     <div class="f2"><div class="f"><label>At</label><input type="time" id="aDiaryTime" value="${a.diaryTime}"></div>
-    <div class="f"><label>Usual beep length</label><select id="aBeep">${[15,30,60].map(v=>`<option value="${v}" ${v===a.beep?'selected':''}>${v} seconds</option>`).join('')}</select></div></div>
+    <div class="f"><label>Ring for</label><select id="aBeep">${[15,30,60].map(v=>`<option value="${v}" ${v===a.beep?'selected':''}>${v} seconds</option>`).join('')}</select></div></div>
     <div class="area">Notifications</div>
     <p class="muted" style="margin:0 0 8px">${perm==='granted'?'Notifications are on. If the app is open in the background, you also get a pop-up.':perm==='denied'?'Notifications are blocked for this app in Chrome settings.':perm==='unsupported'?'This browser does not support notifications.':'Allow notifications so a pop-up appears when the app is open in the background.'}</p>
     ${perm==='default'?`<button class="btn ghost" data-a="askNotif">Allow notifications</button>`:''}
     <div class="area">Important</div>
     <p class="muted" style="margin:0">The beep works offline, but only while Life Compass is open (on screen or recently used). Phones stop web apps that are fully closed. For alarms you must not miss, use <b>Set phone alarm</b> or <b>Add to Google Calendar</b> inside each alarm.</p>
     <button class="btn ghost" data-a="close" style="margin-top:14px">Close</button>`, null);
-  const upd=()=>{ a.diaryOn=document.getElementById('aDiaryOn').checked; a.diaryTime=val('aDiaryTime')||'21:00'; a.beep=n(val('aBeep'))||30; delete firedMap().diary; save(); };
-  ['aDiaryOn','aDiaryTime','aBeep'].forEach(i=>document.getElementById(i).addEventListener('change',upd));
+  const upd=()=>{ a.diaryOn=document.getElementById('aDiaryOn').checked; a.diaryTime=val('aDiaryTime')||'21:00'; a.beep=n(val('aBeep'))||30; a.sound=val('aSound')||'marimba'; a.medSound=val('aMedSound'); a.diarySound=val('aDiarySound'); delete firedMap().diary; save(); };
+  ['aDiaryOn','aDiaryTime','aBeep','aSound','aMedSound','aDiarySound'].forEach(i=>document.getElementById(i).addEventListener('change',upd));
 }
 
 /* ---- to-do list with automatic carry-forward ---- */
@@ -814,6 +862,7 @@ function medSheet(id){
     <div class="f"><label>Times each day (each one beeps)</label><div id="mdTimes">${(m.times||[]).map(timeRow).join('')}</div><button class="btn sm ghost" data-a="addmt">${svg('plus',15)} Add a time</button></div>
     <div class="f2"><div class="f"><label>Take until (optional)</label><input type="date" id="mdUntil" value="${m.until||''}"></div>
     <div class="f"><label>Status</label><select id="mdOn"><option value="1" ${m.on!==false?'selected':''}>Active</option><option value="0" ${m.on===false?'selected':''}>Paused</option></select></div></div>
+    <div class="f"><label>Sound</label>${soundSelect('mdSound', m.sound||'', true)}</div>
     <div class="f"><label>Notes (doctor, refill date)</label><textarea id="mdNote">${esc(m.note||'')}</textarea></div>
     ${actions}
     ${(m.times||[])[0]?closedAppHelp(m.times[0], 'Take '+(m.name||'medicine'), [0,1,2,3,4,5,6], null):''}
@@ -821,7 +870,7 @@ function medSheet(id){
       const nm=val('mdName').trim(); if(!nm) return fail('mdName','Enter the medicine name');
       const times=[...new Set([...document.querySelectorAll('#mdTimes .mt')].map(x=>x.value).filter(Boolean))].sort();
       if(!times.length) return fail('mdName','Add at least one time');
-      const rec = id ? m : {id:uid()}; rec.created=rec.created&&id&&String(rec.times)===String(times)?rec.created:Date.now(); Object.assign(rec,{name:nm, dose:val('mdDose').trim(), food:val('mdFood'), times, until:val('mdUntil'), on:val('mdOn')==='1', note:val('mdNote').trim()});
+      const rec = id ? m : {id:uid()}; rec.created=rec.created&&id&&String(rec.times)===String(times)?rec.created:Date.now(); Object.assign(rec,{name:nm, dose:val('mdDose').trim(), food:val('mdFood'), times, until:val('mdUntil'), on:val('mdOn')==='1', sound:val('mdSound'), note:val('mdNote').trim()});
       if(!id) S.meds.push(rec); return true;
     });
   medSheet.timeRow=timeRow;
@@ -1447,7 +1496,7 @@ function openSheet(html, onSave){
   openSheet.save = onSave;
   const f = el.querySelector('input,select,textarea'); if(f && f.type!=='date') setTimeout(()=>f.focus(),60);
 }
-function closeSheet(){ document.getElementById('sheet').innerHTML=''; openSheet.save=null; weekSheet.open=null; }
+function closeSheet(){ if(!ringing) stopBeep(); document.getElementById('sheet').innerHTML=''; openSheet.save=null; weekSheet.open=null; }
 function val(id){ const e=document.getElementById(id); return e?e.value:''; }
 function fail(id,msg){ const e=document.getElementById(id); e.insertAdjacentHTML('afterend',`<div class="err">${msg}</div>`); e.addEventListener('input',()=>{ const n=e.nextElementSibling; if(n&&n.classList.contains('err')) n.remove(); },{once:true}); e.focus(); return false; }
 const actions = `<div class="btns" style="margin-top:6px"><button class="btn ghost" style="flex:1" data-a="close">Cancel</button><button class="btn" style="flex:1" data-a="save">Save</button></div>`;
@@ -1742,7 +1791,8 @@ document.addEventListener('click', e => {
     case 'alarms': alarmsSheet(); break;
     case 'remsheet': reminderSheet(id, t.dataset.type); break;
     case 'rdays': { const set=t.dataset.d==='all'?[0,1,2,3,4,5,6]:t.dataset.d==='wk'?[1,2,3,4,5]:[]; document.querySelectorAll('.days input').forEach(i=>i.checked=set.includes(n(i.value))); break; }
-    case 'testbeep': startBeep(3); break;
+    case 'testbeep': startBeep(4); break;
+    case 'playsnd': { const k=t.dataset.k || val(t.dataset.for) || AL().sound; if(beepTimer && playsndKey===k){ stopBeep(); playsndKey=null; break; } playsndKey=k; startBeep(SOUNDS[k]?Math.max(4,SOUNDS[k].loop+0.3):4, k); toast('Playing: '+(SOUNDS[k]||SOUNDS[AL().sound]).name); break; }
     case 'delrem': S.reminders=S.reminders.filter(z=>z.id!==id); save(); closeSheet(); render(); break;
     case 'askNotif': if(window.Notification) Notification.requestPermission().then(()=>{ closeSheet(); alarmsSheet(); }); break;
     case 'diarypast': diaryPastSheet(); break;
