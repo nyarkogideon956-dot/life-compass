@@ -190,7 +190,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 13;
+const APP_VERSION = 15;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -228,7 +228,7 @@ function fresh(){
     bible:{book:1, chapter:1, read:{}, log:[]}, answers:{},
     savings:[], students:[],
     todos:[], reminders:[], meds:[], medTaken:{}, food:{eat:[],avoid:[]}, diary:{}, fired:{}, snooze:[],
-    study:{active:null, journal:[]}
+    study:{active:null, journal:[]}, routineDone:{}
   };
 }
 
@@ -524,6 +524,7 @@ function weekStats(ws, maxDays=7){
     topCat: (()=>{ const c={}; S.money.filter(e=>e.type==='spend'&&inW(e.date)).forEach(e=>c[catOf(e)]=(c[catOf(e)]||0)+n(e.amount)); const k=Object.keys(c).sort((a,b)=>c[b]-c[a])[0]; return k?[k,c[k]]:null; })(),
     helped: S.helps.filter(x=>inW(x.date)).length,
     studyMins: S.study.journal.filter(j=>inW(j.date)).reduce((a,j)=>a+n(j.mins),0),
+    routinePct: (()=>{ let due=0,dn=0; days.forEach(s=>routinesOn(s).forEach(r=>{ due++; if(routineDone(s,r.id)) dn++; })); return due?Math.round(dn/due*100):null; })(),
     todosDone: S.todos.filter(x=>x.done && x.doneDate && inW(x.doneDate)).length,
     todosLeft: S.todos.filter(x=>!x.done && x.date<=end).length,
     diaryDays: days.filter(s=>(S.diary[s]||'').trim()).length,
@@ -580,6 +581,7 @@ function weekSheet(ws){
     <div class="area">Helping others and goals</div>
     ${line('Times I helped someone', w.helped, delta(w.helped,p.helped))}
     ${line('Goals completed', w.goalsDone.length)}
+    ${w.routinePct!==null?line('Routine kept', w.routinePct+'%'):''}
     ${line('To-do items done', w.todosDone, w.todosLeft?'<small class="muted">'+w.todosLeft+' still open</small>':'')}
     ${line('Diary entries', wk(w.diaryDays))}
     ${w.goalsDone.length?`<div class="muted" style="padding:0 0 8px">${w.goalsDone.map(esc).join(' · ')}</div>`:''}
@@ -592,7 +594,16 @@ function weekSheet(ws){
 /* ================= PLANNER: to-do, alarms, medicine, food, diary ================= */
 const WD = [[1,'M'],[2,'T'],[3,'W'],[4,'T'],[5,'F'],[6,'S'],[0,'S']];
 const WDN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const RTYPES = [['study','Personal study'],['meeting','Meeting preparation'],['family','Family worship'],['task','Task'],['other','Other']];
+const RTYPES = [['bible','Daily Bible reading'],['study','Personal study'],['prayer','Prayer'],['meeting','Meeting preparation'],['family','Family worship'],['service','Field service'],['exercise','Exercise'],['task','Task'],['other','Other']];
+const RFLAG = {bible:'bible', study:'study', prayer:'prayer', meeting:'meeting'};   // ticking these also ticks the matching box under "Faith today"
+function routinesOn(date){ const wd=parse(date).getDay(); return S.reminders.filter(r=>r.on!==false && (r.days||[]).includes(wd)).sort((a,b)=>mins(a.time)-mins(b.time)); }
+function routineDone(date, id){ return !!((S.routineDone||{})[date]||{})[id]; }
+function setRoutineDone(date, r, on){
+  S.routineDone = S.routineDone || {}; const m = S.routineDone[date] || (S.routineDone[date]={});
+  if(on) m[r.id]=true; else delete m[r.id];
+  if(RFLAG[r.type]) day(date)[RFLAG[r.type]] = on || undefined;
+  if(on){ const fm=firedMap(date); if(!fm['rem:'+r.id]) fm['rem:'+r.id]='seen'; }   // done early: no need to ring
+}
 const mins = hhmm => { const [h,m]=String(hhmm||'0:0').split(':').map(Number); return h*60+m; };
 const nowMins = () => { const d=new Date(); return d.getHours()*60+d.getMinutes(); };
 function fmtTime(hhmm){ const [h,m]=String(hhmm).split(':').map(Number); const d=new Date(); d.setHours(h,m,0,0); return d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}); }
@@ -602,9 +613,9 @@ const AL = () => { const a = S.settings.alarm || (S.settings.alarm={beep:30,diar
 /* everything that should ring on a given date */
 function dueOn(date){
   const wd=parse(date).getDay(), out=[];
-  S.reminders.filter(r=>r.on!==false && (r.days||[]).includes(wd)).forEach(r=>out.push({key:'rem:'+r.id, time:r.time, title:r.title, kind:r.type||'other', id:r.id, beep:r.beep, sound:r.sound||'', created:r.created||0}));
+  S.reminders.filter(r=>r.on!==false && r.ring!==false && (r.days||[]).includes(wd) && !routineDone(date,r.id)).forEach(r=>out.push({key:'rem:'+r.id, time:r.time, title:r.title, kind:r.type||'other', id:r.id, beep:r.beep, sound:r.sound||'', created:r.created||0}));
   S.meds.filter(m=>m.on!==false && (!m.until || date<=m.until)).forEach(m=>(m.times||[]).forEach(tm=>out.push({key:'med:'+m.id+':'+tm, time:tm, title:'Take '+m.name+(m.dose?' ('+m.dose+')':''), kind:'med', id:m.id, slot:tm, sound:m.sound||AL().medSound||'', created:m.created||0})));
-  S.todos.filter(x=>x.time && x.alarm!==false && !x.done && x.date===date).forEach(x=>out.push({key:'todo:'+x.id, time:x.time, title:x.text, kind:'todo', id:x.id, sound:x.sound||'', created:x.createdAt||0}));
+  S.todos.filter(x=>x.time && x.alarm!==false && !x.done && (x.date===date || (x.date<date && date===TODAY()))).forEach(x=>out.push({key:'todo:'+x.id, time:x.time, title:x.text, kind:'todo', id:x.id, sound:x.sound||'', created:x.date<date?0:(x.createdAt||0), quietMiss:x.date<date}));
   if(AL().diaryOn) out.push({key:'diary', time:AL().diaryTime, title:'Write about your day', kind:'diary', sound:AL().diarySound||'', created:Date.now(), quietMiss:true});
   return out.sort((a,b)=>mins(a.time)-mins(b.time));
 }
@@ -676,7 +687,8 @@ function ring(item){
   const extra = item.kind==='med'?`<button class="btn" data-al="taken">I've taken it</button>`
     : item.kind==='todo'?`<button class="btn" data-al="done">Mark as done</button>`
     : item.kind==='diary'?`<button class="btn" data-al="diary">Write now</button>`
-    : (item.kind==='study'||item.kind==='meeting'||item.kind==='family')?`<button class="btn" data-al="studied">OK, I'm starting</button>`:'';
+    : item.kind==='study'?`<button class="btn" data-al="studied">OK, I'm starting</button>`
+    : item.key && item.key.startsWith('rem:')?`<button class="btn" data-al="rdone">Mark as done</button>`:'';
   el.innerHTML=`<div class="alarmbox"><div class="bell">${svg('bell',40)}</div><div class="atime">${fmtTime(item.time)}</div><div class="atitle">${esc(item.title)}</div>
     <div class="btns" style="flex-direction:column;width:100%">${extra}<button class="btn ghost" data-al="snooze">Snooze 10 minutes</button><button class="btn ghost" data-al="stop">Stop</button></div></div>`;
   el.hidden=false;
@@ -691,8 +703,9 @@ document.addEventListener('click', e=>{
   if(a==='snooze'){ S.snooze.push({key:it.key+':s'+Date.now(), at:Date.now()+10*60000, item:it}); save(); toast('Snoozed for 10 minutes'); }
   if(a==='taken'){ const m=S.medTaken[TODAY()]||(S.medTaken[TODAY()]={}); m[it.id+':'+it.slot]=true; save(); toast('Marked as taken'); }
   if(a==='done'){ const x=S.todos.find(t=>t.id===it.id); if(x){ x.done=true; x.doneDate=TODAY(); save(); } toast('Done'); }
+  if(a==='rdone'){ const r=S.reminders.find(z=>z.id===it.id); if(r){ setRoutineDone(TODAY(), r, true); save(); toast('Done ✓'); } }
   if(a==='diary'){ tab='today'; setTimeout(()=>{ const d=document.getElementById('diaryBox'); if(d){ d.scrollIntoView({block:'center'}); d.focus(); } },120); }
-  if(a==='studied'){ if(it.kind==='meeting'){ day().meeting=true; save(); toast('Ticked on Today'); } else { tab='faith'; faithTab='study'; if(!SA()) startStudy(true); } }
+  if(a==='studied'){ const r=S.reminders.find(z=>z.id===it.id); if(r) setRoutineDone(TODAY(), r, true); save(); tab='faith'; faithTab='study'; if(!SA()) startStudy(true); }
   closeAlarm();
 });
 
@@ -745,45 +758,51 @@ function phoneAlarmSheet(times, title, days){
       ${list.map(tm=>`<a class="btn" href="${phoneAlarmLink(tm,title)}">${svg('bell',18)}&nbsp; Add ${fmtTime(tm)} to my phone's Clock</a>`).join('')}
       <a class="btn ghost" href="${gcalLink(list[0],title,days,null)}" target="_blank" rel="noopener">Add to Google Calendar instead</a>
       <button class="btn ghost" data-a="close">Not now</button></div>
-    <p class="muted" style="margin:10px 0 0;font-size:12.5px">Your Clock app opens with the time and name filled in. Check the repeat days there (${esc(daysText(days))}), then tap Save. If nothing opens, set the alarm in your Clock app yourself.</p>
+    <p class="muted" style="margin:10px 0 0;font-size:12.5px">Your Clock app opens with the time and name filled in. ${days?'Check the repeat days there ('+esc(daysText(days))+'), then tap Save.':'It is a one-time alarm. Tap Save there.'} If nothing opens, set the alarm in your Clock app yourself.</p>
     <label class="row" style="border:0;cursor:pointer;margin-top:4px"><span class="lbl" style="font-size:14px">Don't show this again</span><input type="checkbox" id="noPhonePrompt" style="width:20px;height:20px"></label>`, null);
   document.getElementById('noPhonePrompt').addEventListener('change',e=>{ AL().noPhonePrompt=e.target.checked; save(); });
 }
 
 /* ---- reminder editor (personal study, tasks, etc.) ---- */
 function reminderSheet(id, type){
-  const r = id ? S.reminders.find(x=>x.id===id) : {title:type==='study'?'Personal study':'', type:type||'study', time:'19:00', days:[0,1,2,3,4,5,6], beep:AL().beep, on:true, note:''};
+  const t0 = type||'bible';
+  const r = id ? S.reminders.find(x=>x.id===id) : {title:(RTYPES.find(x=>x[0]===t0)||['',''])[1], type:t0, time:t0==='bible'?'05:30':'19:00', days:[0,1,2,3,4,5,6], beep:AL().beep, on:true, ring:true, note:''};
   const daysSet=new Set(r.days||[]);
-  openSheet(`<h3>${id?'Edit alarm':'New alarm'}</h3>
+  openSheet(`<h3>${id?'Edit routine':'New routine'}</h3>
+    <p class="muted" style="margin:-4px 0 10px">It shows on Today's plan every day you choose, at its time, with a tick box.</p>
     <div class="f2"><div class="f"><label>Type</label><select id="rType">${RTYPES.map(([k,l])=>`<option value="${k}" ${k===r.type?'selected':''}>${l}</option>`).join('')}</select></div>
     <div class="f"><label>Time</label><input type="time" id="rTime" value="${r.time}"></div></div>
-    <div class="f"><label>Name</label><input type="text" id="rTitle" value="${esc(r.title)}" placeholder="Personal study — Watchtower"></div>
+    <div class="f"><label>Name</label><input type="text" id="rTitle" value="${esc(r.title)}" placeholder="Daily Bible reading"></div>
     <div class="f"><label>Days</label><div class="days">${WD.map(([v,l])=>`<label><input type="checkbox" value="${v}" ${daysSet.has(v)?'checked':''}><span>${l}</span></label>`).join('')}</div>
       <div class="btns" style="margin-top:6px"><button class="btn sm ghost" data-a="rdays" data-d="all">Every day</button><button class="btn sm ghost" data-a="rdays" data-d="wk">Weekdays</button><button class="btn sm ghost" data-a="rdays" data-d="none">Clear</button></div></div>
+    <label class="row" style="border:0;cursor:pointer;padding:4px 0 10px"><span class="lbl">Ring an alarm at this time</span><label class="switch"><input type="checkbox" id="rRing" ${r.ring!==false?'checked':''}><span></span></label></label>
     <div class="f"><label>Sound</label>${soundSelect('rSound', r.sound||'', true)}</div>
     <div class="f"><label>Ring for</label><select id="rBeep">${[15,30,60].map(v=>`<option value="${v}" ${v===n(r.beep||AL().beep)?'selected':''}>${v} seconds</option>`).join('')}</select></div>
     <div class="f"><label>What to do (optional)</label><textarea id="rNote" placeholder="Study the Watchtower for Sunday; prepare comments">${esc(r.note||'')}</textarea></div>
     ${actions}
     ${closedAppHelp(r.time, r.title||'Personal study', r.days, null)}
-    ${id?`<button class="btn danger" data-a="delrem" data-id="${id}" style="margin-top:12px">Delete alarm</button>`:''}`, ()=>{
+    ${id?`<button class="btn danger" data-a="delrem" data-id="${id}" style="margin-top:12px">Delete routine</button>`:''}`, ()=>{
       const tm=val('rTime'); if(!tm) return fail('rTime','Choose a time');
       const days=[...document.querySelectorAll('.days input:checked')].map(x=>n(x.value));
       if(!days.length) return fail('rTime','Choose at least one day');
-      const rt=val('rType'), title=val('rTitle').trim()||RTYPES.find(x=>x[0]===rt)[1];
-      const rec = id ? r : {id:uid(), on:true}; if(!id || rec.time!==tm) rec.created=Date.now(); Object.assign(rec,{type:rt, time:tm, title, days, beep:n(val('rBeep')), sound:val('rSound'), note:val('rNote').trim()});
+      const rt=val('rType'), title=val('rTitle').trim()||RTYPES.find(x=>x[0]===rt)[1], ring=document.getElementById('rRing').checked;
+      const rec = id ? r : {id:uid(), on:true}; if(!id || rec.time!==tm) rec.created=Date.now(); Object.assign(rec,{type:rt, time:tm, title, days, ring, beep:n(val('rBeep')), sound:val('rSound'), note:val('rNote').trim()});
       if(!id) S.reminders.push(rec);
       const fm=firedMap(); delete fm['rem:'+rec.id];
-      setTimeout(()=>phoneAlarmSheet(rec.time, rec.title, rec.days), 60);
+      if(ring) setTimeout(()=>phoneAlarmSheet(rec.time, rec.title, rec.days), 60);
       return true;
     });
+  // keep the name in step with the type while it is still the default
+  const ty=document.getElementById('rType'), ti=document.getElementById('rTitle');
+  ty.addEventListener('change',()=>{ if(!ti.value.trim() || RTYPES.some(x=>x[1]===ti.value.trim())) ti.value=RTYPES.find(x=>x[0]===ty.value)[1]; });
 }
 function alarmsSheet(){
   const a=AL();
   const perm = window.Notification ? Notification.permission : 'unsupported';
-  openSheet(`<h3>Alarms and reminders</h3>
+  openSheet(`<h3>My routines and alarms</h3>
     <div class="list">${S.reminders.length?S.reminders.slice().sort((x,y)=>mins(x.time)-mins(y.time)).map(r=>`<div class="it"><div class="x" data-a="remsheet" data-id="${r.id}" style="cursor:pointer"><b>${fmtTime(r.time)} · ${esc(r.title)}</b><small>${daysText(r.days)} · beeps ${r.beep||a.beep} s</small></div>
       <label class="switch"><input type="checkbox" data-remon="${r.id}" ${r.on!==false?'checked':''}><span></span></label></div>`).join(''):'<div class="empty">No alarms yet.</div>'}</div>
-    <button class="btn" data-a="remsheet" style="margin-top:10px">Add an alarm</button>
+    <button class="btn" data-a="remsheet" style="margin-top:10px">Add a routine</button>
     <div class="area">Choose your sounds</div>
     <p class="muted" style="margin:0 0 8px">Tap ▶ to listen. Each alarm can also have its own sound.</p>
     <div class="sndlist">${SOUND_KEYS.map(k=>`<div class="row" style="padding:6px 0"><div class="lbl">${esc(SOUNDS[k].name)}</div><button class="btn sm ghost" data-a="playsnd" data-k="${k}" aria-label="Play ${esc(SOUNDS[k].name)}">${svg('play',16)} Play</button></div>`).join('')}</div>
@@ -818,17 +837,25 @@ function todoRow(x,t){
     ${x.done?'':`<button class="icon-btn" data-a="todotmr" data-id="${x.id}" aria-label="Move to tomorrow" title="Move to tomorrow">${svg('arrow',18)}</button>`}</div>`;
 }
 function planCard(t){
-  const {carried, today}=todosFor(t), all=[...carried,...today], done=today.filter(x=>x.done).length;
+  const {carried, today}=todosFor(t), all=[...carried,...today];
+  const rts=routinesOn(t), rDone=rts.filter(r=>routineDone(t,r.id)).length;
+  const done=today.filter(x=>x.done).length + rDone, total=today.length+carried.length+rts.length;
   const due=dueOn(t), fm=firedMap(t), now=nowMins();
-  const upcoming=due.filter(x=>mins(x.time)>=now-2 && !fm[x.key] && x.kind!=='todo');
+  const upcoming=due.filter(x=>mins(x.time)>=now-2 && !fm[x.key] && x.kind!=='todo' && !x.key.startsWith('rem:'));
   const missed=due.filter(x=>fm[x.key]==='missed');
-  return `<div class="card"><h2>${svg('today',18)} Today's plan<span class="sp"></span><span class="chip">${done}/${today.length+carried.length} done</span></h2>
+  const routineHtml = `<div class="area" style="margin-top:0;display:flex;align-items:center"><span style="flex:1">My routine today</span><button class="linkbtn" data-a="alarms" style="font-size:12.5px">Edit</button></div>
+    ${rts.length?`<div class="list">${rts.map(r=>{ const dn=routineDone(t,r.id), late=!dn && mins(r.time)<now; return `<div class="it todo ${dn?'done':''}">${checkBox(dn,'rtick','data-id="'+r.id+'"')}<div class="x" data-a="remsheet" data-id="${r.id}" style="cursor:pointer"><b>${esc(r.title)}</b><small>${r.ring!==false?svg('bell',12)+' ':''}${fmtTime(r.time)} · ${esc(daysText(r.days))}${late?' · <span style="color:var(--warn)">not ticked yet</span>':''}</small></div></div>`; }).join('')}</div>`
+      :`<div class="empty" style="padding:2px 0 6px">Set things you do regularly, like Bible reading every morning or field service on Saturdays.</div>`}
+    <button class="btn sm ghost" data-a="remsheet" style="margin:8px 0 4px">${svg('plus',15)} Add a routine</button>
+    <div class="area">To-do today</div>`;
+  return `<div class="card"><h2>${svg('today',18)} Today's plan<span class="sp"></span><span class="chip">${done}/${total} done</span></h2>
     ${missed.length?`<div class="banner" style="margin-bottom:10px"><span style="flex:1"><b>Missed while the app was closed:</b><br>${missed.slice(0,4).map(x=>fmtTime(x.time)+' · '+esc(x.title)).join('<br>')}${missed.length>4?'<br>and '+(missed.length-4)+' more':''}</span><button class="btn sm ghost" data-a="clearmissed">OK</button></div>`:''}
     ${upcoming.length?`<div class="alarms">${upcoming.slice(0,4).map(x=>`<span class="achip ${x.kind}">${svg('bell',13)} ${fmtTime(x.time)} · ${esc(x.title)}</span>`).join('')}</div>`:''}
+    ${routineHtml}
     <div class="addrow"><input type="text" id="todoText" placeholder="Add something to do today…" enterkeyhint="done"><input type="time" id="todoTime" aria-label="Alarm time (optional)"><button class="btn sm" data-a="todoadd" aria-label="Add">${svg('plus',18)}</button></div>
     <p class="muted" style="margin:4px 0 6px;font-size:12.5px">Add a time if you want it to beep. Anything not done moves to the next day by itself.</p>
     <div class="list">${all.length?all.map(x=>todoRow(x,t)).join(''):'<div class="empty">Nothing planned yet. What do you want to get done today?</div>'}</div>
-    <div class="btns" style="margin-top:10px"><button class="btn sm ghost" data-a="todosheet" data-tomorrow="1">Plan tomorrow</button><button class="btn sm ghost" data-a="alarms">${svg('bell',15)} Alarms</button>${today.some(x=>x.done)?`<button class="btn sm ghost" data-a="cleardone">Clear done</button>`:''}</div></div>`;
+    <div class="btns" style="margin-top:10px"><button class="btn sm ghost" data-a="todosheet" data-tomorrow="1">Plan tomorrow</button><button class="btn sm ghost" data-a="alarms">${svg('bell',15)} Routines and alarms</button>${today.some(x=>x.done)?`<button class="btn sm ghost" data-a="cleardone">Clear done</button>`:''}</div></div>`;
 }
 function todoSheet(id, tomorrow){
   const x = id ? S.todos.find(t=>t.id===id) : {text:'', date:tomorrow?addDays(TODAY(),1):TODAY(), time:'', alarm:true, note:''};
@@ -843,7 +870,9 @@ function todoSheet(id, tomorrow){
       const tx=val('tdText').trim(); if(!tx) return fail('tdText','Write what you want to do');
       const rec = id ? x : {id:uid(), done:false, created:TODAY()}; rec.createdAt=Date.now();
       Object.assign(rec,{text:tx, date:val('tdDate')||TODAY(), time:val('tdTime'), note:val('tdNote').trim(), alarm:true});
-      if(!id) S.todos.push(rec); delete firedMap(rec.date)['todo:'+rec.id]; return true;
+      if(!id) S.todos.push(rec); delete firedMap(rec.date)['todo:'+rec.id];
+      if(rec.time && (rec.date>TODAY() || mins(rec.time)>nowMins())) setTimeout(()=>phoneAlarmSheet(rec.time, rec.text, null), 60);
+      return true;
     });
 }
 
@@ -1767,7 +1796,9 @@ document.addEventListener('click', e => {
   if(a==='closebg' && e.target!==t) return;
   switch(a){
     case 'go': tab=t.dataset.t; render(); window.scrollTo(0,0); break;
-    case 'tick': { const d=day(), k=t.dataset.k; d[k]=!d[k]; save(); render(); if(d[k]&&k==='bible') toast('Bible reading done — streak '+streak(x=>x.bible)); break; }
+    case 'tick': { const d=day(), k=t.dataset.k; d[k]=!d[k];
+      routinesOn(TODAY()).filter(r=>RFLAG[r.type]===k).forEach(r=>{ S.routineDone=S.routineDone||{}; const m=S.routineDone[TODAY()]||(S.routineDone[TODAY()]={}); if(d[k]) m[r.id]=true; else delete m[r.id]; });
+      save(); render(); if(d[k]&&k==='bible') toast('Bible reading done — streak '+streak(x=>x.bible)); break; }
     case 'water': { const d=day(); d.water=Math.max(0,(d.water||0)+n(t.dataset.d)); save(); render(); break; }
     case 'addmin': {
       let en = S.ministry.find(x=>x.date===TODAY());
@@ -1809,7 +1840,8 @@ document.addEventListener('click', e => {
     case 'stcancel': if(confirm('Cancel this study session? Your notes from this session will be lost.')){ S.study.active=null; save(); render(); } break;
     case 'jopen': journalSheet(id); break;
     case 'jdel': if(confirm('Delete this journal entry?')){ S.study.journal=S.study.journal.filter(x=>x.id!==id); save(); closeSheet(); render(); } break;
-    case 'todoadd': { const tx=val('todoText').trim(); if(!tx){ document.getElementById('todoText').focus(); toast('Write a to-do first'); break; } S.todos.push({id:uid(), text:tx, date:TODAY(), time:val('todoTime'), alarm:true, done:false, created:TODAY(), createdAt:Date.now()}); save(); render(); setTimeout(()=>{ const i=document.getElementById('todoText'); if(i) i.focus(); },50); toast(val('todoTime')?'Added with alarm':'Added'); break; }
+    case 'todoadd': { const tx=val('todoText').trim(); if(!tx){ document.getElementById('todoText').focus(); toast('Write a to-do first'); break; } const tm=val('todoTime'); S.todos.push({id:uid(), text:tx, date:TODAY(), time:tm, alarm:true, done:false, created:TODAY(), createdAt:Date.now()}); save(); render(); toast(tm?'Added with alarm':'Added'); if(tm && mins(tm)>nowMins()) setTimeout(()=>phoneAlarmSheet(tm, tx, null), 80); else setTimeout(()=>{ const i=document.getElementById('todoText'); if(i) i.focus(); },50); break; }
+    case 'rtick': { const r=S.reminders.find(z=>z.id===id); const on=!routineDone(TODAY(),id); setRoutineDone(TODAY(), r, on); save(); render(); if(on) toast(r.title+' ✓'); break; }
     case 'tododone': { const x=S.todos.find(z=>z.id===id); x.done=!x.done; x.doneDate=x.done?TODAY():null; if(x.done && x.date<TODAY()) x.date=TODAY(); save(); render(); break; }
     case 'todotmr': { const x=S.todos.find(z=>z.id===id); x.date=addDays(TODAY(),1); save(); render(); toast('Moved to tomorrow'); break; }
     case 'todosheet': todoSheet(id, t.dataset.tomorrow); break;
