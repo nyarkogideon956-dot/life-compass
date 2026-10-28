@@ -1,4 +1,4 @@
-const CACHE = 'life-compass-v10';
+const CACHE = 'life-compass-v11';
 const FILES = [
   './',
   './index.html',
@@ -25,12 +25,13 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
-  if (url.origin !== location.origin) return; // videos and JW.org go straight to the internet
+  if (url.origin !== location.origin) return;            // videos and JW.org go straight to the internet
+  if (url.pathname.endsWith('version.json')) return;     // always ask GitHub for the latest version number
 
-  // The app page itself: try the internet first so updates show at once; use the saved copy when offline.
+  // The app page: newest from the internet when online, saved copy when offline.
   if (e.request.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('.html')) {
     e.respondWith(
-      fetch(e.request, {cache: 'no-store'}).then(res => {
+      fetch(url.origin + url.pathname, {cache: 'no-store', credentials: 'same-origin'}).then(res => {
         if (res && res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put('./index.html', copy)); }
         return res;
       }).catch(() => caches.match('./index.html').then(hit => hit || caches.match('./')))
