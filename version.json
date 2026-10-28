@@ -1,4 +1,4 @@
 {
-  "version": 13,
-  "note": "Fixes for number boxes and updates."
+  "version": 15,
+  "note": "Routines: set activities that repeat on chosen days and times."
 }
