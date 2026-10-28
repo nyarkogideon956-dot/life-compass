@@ -150,6 +150,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .switch input:checked+span::before{transform:translateX(18px)}
 .chip.good{background:#E3F4EB;color:#1E7F52}.chip.bad{background:#FBEAEA;color:var(--bad)}
 .dentry{padding-bottom:6px}
+.linkbtn{background:none;border:0;padding:0;color:var(--blue);text-decoration:underline;font-size:12px}
 .sndrow{display:grid;grid-template-columns:1fr 48px;gap:6px}
 .sndrow .btn{height:40px;padding:0;display:flex;align-items:center;justify-content:center}
 .f2[hidden],.f[hidden],.jentry[hidden]{display:none}
@@ -189,6 +190,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 
 <script>
 /* ---------- storage ---------- */
+const APP_VERSION = 13;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -368,7 +370,7 @@ const MONTH = (s=TODAY()) => s.slice(0,7);
 const YEAR = (s=TODAY()) => s.slice(0,4);
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function n(v){ const x=parseFloat(v); return isFinite(x)?x:0; }
+function n(v){ if(typeof v==='number') return isFinite(v)?v:0; const x=parseFloat(String(v??'').replace(/\s/g,'').replace(',','.')); return isFinite(x)?x:0; }
 function r1(x){ return Math.round(x*10)/10; }
 function money(x){ return S.settings.currency+' '+(Math.round(x*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function day(s=TODAY()){ return S.days[s] || (S.days[s]={}); }
@@ -468,9 +470,9 @@ V.today = () => {
   html += `<div class="card"><h2>${svg('health',18)} Health today</h2>
     <div class="row"><div class="lbl">Water<small>Target ${st.waterTarget} glasses</small></div>
       <div class="step"><button data-a="water" data-d="-1">−</button><b>${d.water||0}</b><button data-a="water" data-d="1">+</button></div></div>
-    <div class="row"><div class="lbl">Sleep last night (hours)</div><input class="mini" type="number" inputmode="decimal" step="0.5" min="0" max="24" data-f="sleep" value="${d.sleep??''}" placeholder="${st.sleepTarget}"></div>
-    <div class="row"><div class="lbl">Exercise (minutes)</div><input class="mini" type="number" inputmode="numeric" min="0" data-f="exercise" value="${d.exercise??''}" placeholder="${st.exerciseTarget}"></div>
-    <div class="row"><div class="lbl">Weight (kg)<small>Optional</small></div><input class="mini" type="number" inputmode="decimal" step="0.1" min="0" data-f="weight" value="${d.weight??''}"></div>
+    <div class="row"><div class="lbl">Sleep last night (hours)</div><input class="mini" type="text" inputmode="decimal" step="0.5" min="0" max="24" data-f="sleep" value="${d.sleep??''}" placeholder="${st.sleepTarget}"></div>
+    <div class="row"><div class="lbl">Exercise (minutes)</div><input class="mini" type="text" inputmode="numeric" min="0" data-f="exercise" value="${d.exercise??''}" placeholder="${st.exerciseTarget}"></div>
+    <div class="row"><div class="lbl">Weight (kg)<small>Optional</small></div><input class="mini" type="text" inputmode="decimal" step="0.1" min="0" data-f="weight" value="${d.weight??''}"></div>
     ${medCard(t,true)}
   </div>`;
   html += todayMoneyCard(t);
@@ -488,6 +490,7 @@ V.today = () => {
     ${monthGoals.length?monthGoals.slice(0,6).map(goalRow).join(''):`<div class="empty">No goals for ${monthName(MONTH())} yet.</div><button class="btn" data-a="goalsheet" data-h="1m">Set a goal for this month</button>`}
   </div>`;
   html += diaryCard(t);
+  html += `<p class="muted" style="text-align:center;font-size:12px;margin:4px 0 0">Life Compass version ${APP_VERSION} · <button class="linkbtn" data-a="forceupdate">Check for updates</button></p>`;
   return html;
 };
 
@@ -732,6 +735,21 @@ function closedAppHelp(time,title,days,date){
     <p class="muted" style="margin:6px 0 0;font-size:12.5px">Phone alarm works on most Android phones: check the days in your Clock app. Google Calendar needs data once; after that it reminds you offline.</p>`;
 }
 
+/* ---- after saving: put the alarm in the phone's own Clock so it rings when the app is closed ---- */
+function phoneAlarmSheet(times, title, days){
+  if(AL().noPhonePrompt) return;
+  const list = (Array.isArray(times)?times:[times]).filter(Boolean);
+  openSheet(`<h3>Make sure it rings when the app is closed</h3>
+    <p style="margin:0 0 10px">Life Compass rings only while it is open. Android stops web apps when they are closed, so <b>also put this alarm in your phone's Clock app</b>. It takes one tap per time.</p>
+    <div class="btns" style="flex-direction:column">
+      ${list.map(tm=>`<a class="btn" href="${phoneAlarmLink(tm,title)}">${svg('bell',18)}&nbsp; Add ${fmtTime(tm)} to my phone's Clock</a>`).join('')}
+      <a class="btn ghost" href="${gcalLink(list[0],title,days,null)}" target="_blank" rel="noopener">Add to Google Calendar instead</a>
+      <button class="btn ghost" data-a="close">Not now</button></div>
+    <p class="muted" style="margin:10px 0 0;font-size:12.5px">Your Clock app opens with the time and name filled in. Check the repeat days there (${esc(daysText(days))}), then tap Save. If nothing opens, set the alarm in your Clock app yourself.</p>
+    <label class="row" style="border:0;cursor:pointer;margin-top:4px"><span class="lbl" style="font-size:14px">Don't show this again</span><input type="checkbox" id="noPhonePrompt" style="width:20px;height:20px"></label>`, null);
+  document.getElementById('noPhonePrompt').addEventListener('change',e=>{ AL().noPhonePrompt=e.target.checked; save(); });
+}
+
 /* ---- reminder editor (personal study, tasks, etc.) ---- */
 function reminderSheet(id, type){
   const r = id ? S.reminders.find(x=>x.id===id) : {title:type==='study'?'Personal study':'', type:type||'study', time:'19:00', days:[0,1,2,3,4,5,6], beep:AL().beep, on:true, note:''};
@@ -755,6 +773,7 @@ function reminderSheet(id, type){
       const rec = id ? r : {id:uid(), on:true}; if(!id || rec.time!==tm) rec.created=Date.now(); Object.assign(rec,{type:rt, time:tm, title, days, beep:n(val('rBeep')), sound:val('rSound'), note:val('rNote').trim()});
       if(!id) S.reminders.push(rec);
       const fm=firedMap(); delete fm['rem:'+rec.id];
+      setTimeout(()=>phoneAlarmSheet(rec.time, rec.title, rec.days), 60);
       return true;
     });
 }
@@ -778,6 +797,7 @@ function alarmsSheet(){
     <div class="area">Notifications</div>
     <p class="muted" style="margin:0 0 8px">${perm==='granted'?'Notifications are on. If the app is open in the background, you also get a pop-up.':perm==='denied'?'Notifications are blocked for this app in Chrome settings.':perm==='unsupported'?'This browser does not support notifications.':'Allow notifications so a pop-up appears when the app is open in the background.'}</p>
     ${perm==='default'?`<button class="btn ghost" data-a="askNotif">Allow notifications</button>`:''}
+    ${a.noPhonePrompt?`<button class="btn sm ghost" data-a="phoneprompton" style="margin-top:8px">Show "add to phone Clock" after saving again</button>`:''}
     <div class="area">Important</div>
     <p class="muted" style="margin:0">The beep works offline, but only while Life Compass is open (on screen or recently used). Phones stop web apps that are fully closed. For alarms you must not miss, use <b>Set phone alarm</b> or <b>Add to Google Calendar</b> inside each alarm.</p>
     <button class="btn ghost" data-a="close" style="margin-top:14px">Close</button>`, null);
@@ -871,7 +891,9 @@ function medSheet(id){
       const times=[...new Set([...document.querySelectorAll('#mdTimes .mt')].map(x=>x.value).filter(Boolean))].sort();
       if(!times.length) return fail('mdName','Add at least one time');
       const rec = id ? m : {id:uid()}; rec.created=rec.created&&id&&String(rec.times)===String(times)?rec.created:Date.now(); Object.assign(rec,{name:nm, dose:val('mdDose').trim(), food:val('mdFood'), times, until:val('mdUntil'), on:val('mdOn')==='1', sound:val('mdSound'), note:val('mdNote').trim()});
-      if(!id) S.meds.push(rec); return true;
+      if(!id) S.meds.push(rec);
+      setTimeout(()=>phoneAlarmSheet(rec.times, 'Take '+rec.name, [0,1,2,3,4,5,6]), 60);
+      return true;
     });
   medSheet.timeRow=timeRow;
 }
@@ -961,7 +983,7 @@ function journalCard(){
 function journalSheet(id){
   const j=S.study.journal.find(x=>x.id===id);
   openSheet(`<h3>${esc(j.title)}</h3><p class="muted" style="margin:-6px 0 10px">${parse(j.date).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'})} · ${esc(j.material)}</p>
-    <div class="f2"><div class="f"><label>Date</label><input type="date" id="jDate" value="${j.date}"></div><div class="f"><label>Minutes</label><input type="number" id="jMins" value="${j.mins}"></div></div>
+    <div class="f2"><div class="f"><label>Date</label><input type="date" id="jDate" value="${j.date}"></div><div class="f"><label>Minutes</label><input type="text" inputmode="decimal" id="jMins" value="${j.mins}"></div></div>
     <div class="f"><label>What I learned</label><textarea id="jLearned" style="min-height:110px">${esc(j.learned)}</textarea></div>
     <div class="f"><label>How I will apply it</label><textarea id="jApply">${esc(j.apply)}</textarea></div>
     <div class="f2"><div class="f"><label>Verse to remember</label><input type="text" id="jVerse" value="${esc(j.verse)}"></div><div class="f"><label>Questions to research</label><input type="text" id="jQ" value="${esc(j.questions||'')}"></div></div>
@@ -1154,8 +1176,8 @@ function studentSheet(id){
     <div class="f"><label>Name</label><input type="text" id="stName" value="${esc(x.name)}" placeholder="Ama Mensah"></div>
     <div class="f"><label>Phone (WhatsApp)</label><input type="tel" id="stPhone" value="${esc(x.phone)}" placeholder="024 123 4567"></div>
     <div class="f2"><div class="f"><label>Studying</label><input type="text" id="stPub" value="${esc(x.pub)}" list="pubList"><datalist id="pubList"><option>Enjoy Life Forever!</option><option>Enjoy Life Forever! brochure</option><option>Good News From God!</option><option>Bible reading</option></datalist></div>
-    <div class="f"><label>Number of lessons</label><input type="number" id="stTotal" value="${x.total||''}" placeholder="60"></div></div>
-    <div class="f2"><div class="f"><label>Current lesson</label><input type="number" id="stLesson" value="${x.lesson||''}" placeholder="1"></div>
+    <div class="f"><label>Number of lessons</label><input type="text" inputmode="decimal" id="stTotal" value="${x.total||''}" placeholder="60"></div></div>
+    <div class="f2"><div class="f"><label>Current lesson</label><input type="text" inputmode="decimal" id="stLesson" value="${x.lesson||''}" placeholder="1"></div>
     <div class="f"><label>Study day and time</label><input type="text" id="stDay" value="${esc(x.day)}" placeholder="Saturday 4 pm"></div></div>
     <div class="f2"><div class="f"><label>Status</label><select id="stStatus">${STATUSES.map(([k,l])=>`<option value="${k}" ${k===x.status?'selected':''}>${l}</option>`).join('')}</select></div>
     <div class="f"><label>Progress</label><select id="stStage">${STAGES.map(g=>`<option ${g===x.stage?'selected':''}>${g}</option>`).join('')}</select></div></div>
@@ -1172,7 +1194,7 @@ function studySheet(id){
   const x=S.students.find(s=>s.id===id);
   openSheet(`<h3>Study with ${esc(x.name)}</h3>
     <div class="f2"><div class="f"><label>Date</label><input type="date" id="ssDate" value="${TODAY()}" max="${TODAY()}"></div>
-    <div class="f"><label>Lesson studied</label><input type="number" id="ssLesson" value="${x.lesson||''}"></div></div>
+    <div class="f"><label>Lesson studied</label><input type="text" inputmode="decimal" id="ssLesson" value="${x.lesson||''}"></div></div>
     <label class="row" style="cursor:pointer;border:0"><span class="lbl">Move to the next lesson<small>Next time: lesson ${(n(x.lesson)||0)+1}</small></span><input type="checkbox" id="ssNext" checked style="width:22px;height:22px"></label>
     <div class="f"><label>Note (how it went, questions to answer next time)</label><textarea id="ssNote"></textarea></div>
     ${actions}`, ()=>{
@@ -1507,9 +1529,9 @@ function goalSheet(id, h, area){
     <div class="f"><label>Goal</label><input type="text" id="gTitle" value="${esc(g.title)}" placeholder="Read the whole Bible this year"></div>
     <div class="f2"><div class="f"><label>Area</label><select id="gArea">${Object.entries(AREAS).map(([k,a])=>`<option value="${k}" ${k===g.area?'selected':''}>${a.label}</option>`).join('')}</select></div>
     <div class="f"><label>Timeframe</label><select id="gH">${Object.entries(HORIZONS).map(([k,l])=>`<option value="${k}" ${k===g.horizon?'selected':''}>${l}</option>`).join('')}</select></div></div>
-    <div class="f2"><div class="f"><label>Target number (optional)</label><input type="number" inputmode="decimal" id="gTarget" value="${g.target||''}" placeholder="66"></div>
+    <div class="f2"><div class="f"><label>Target number (optional)</label><input type="text" inputmode="decimal" id="gTarget" value="${g.target||''}" placeholder="66"></div>
     <div class="f"><label>Unit</label><input type="text" id="gUnit" value="${esc(g.unit)}" placeholder="books"></div></div>
-    ${id&&g.target>0?`<div class="f"><label>Progress so far</label><input type="number" inputmode="decimal" id="gProg" value="${g.progress||0}"></div>`:''}
+    ${id&&g.target>0?`<div class="f"><label>Progress so far</label><input type="text" inputmode="decimal" id="gProg" value="${g.progress||0}"></div>`:''}
     <p class="muted" style="margin:0 0 10px">Add a target number if you can count it (hours, kg, cedis, books). Leave it empty for yes/no goals.</p>
     ${actions}${id?`<button class="btn danger" data-a="delgoal" data-id="${id}" style="margin-top:8px">Delete goal</button>`:''}`, ()=>{
       const title = val('gTitle').trim(); if(!title) return fail('gTitle','Enter the goal first');
@@ -1528,7 +1550,7 @@ function minSheet(id){
   const e = id ? S.ministry.find(x=>x.id===id) : {date:TODAY(), hours:'', studies:'', notes:''};
   openSheet(`<h3>${id?'Edit ministry':'Log ministry'}</h3>
     <div class="f2"><div class="f"><label>Date</label><input type="date" id="mDate" value="${e.date}" max="${TODAY()}"></div>
-    <div class="f"><label>Hours</label><input type="number" inputmode="decimal" step="0.25" min="0" id="mHours" value="${e.hours}" placeholder="2"></div></div>
+    <div class="f"><label>Hours</label><input type="text" inputmode="decimal" step="0.25" min="0" id="mHours" value="${e.hours}" placeholder="2"></div></div>
     <p class="muted" style="margin:0 0 10px">Bible studies are counted from your Students list. Use Record study there.</p>
     <div class="f"><label>Notes (return visits, who to call back)</label><textarea id="mNotes">${esc(e.notes)}</textarea></div>
     ${actions}${id?`<button class="btn danger" data-a="delmin" data-id="${id}" style="margin-top:8px">Delete entry</button>`:''}`, ()=>{
@@ -1559,7 +1581,7 @@ function helpSheet(id){
 function paySheet(){
   const bs=S.settings.buckets;
   openSheet(`<h3>I paid myself</h3>
-    <div class="f2"><div class="f"><label>Amount (${esc(S.settings.currency)})</label><input type="number" inputmode="decimal" min="0" step="0.01" id="pAmt" placeholder="1500"></div>
+    <div class="f2"><div class="f"><label>Amount (${esc(S.settings.currency)})</label><input type="text" inputmode="decimal" min="0" step="0.01" id="pAmt" placeholder="1500"></div>
     <div class="f"><label>Date</label><input type="date" id="pDate" value="${TODAY()}" max="${TODAY()}"></div></div>
     <div class="f"><label>From (optional)</label><input type="text" id="pNote" placeholder="K-gabs job, farm sales"></div>
     <div class="card" style="background:var(--bg)" id="pSplit">${bs.map(b=>`<div class="row"><div class="lbl">${esc(b.name)}<small>${b.pct}%</small></div><span class="amt">${money(0)}</span></div>`).join('')}</div>
@@ -1582,7 +1604,7 @@ function bucketSelect(id, preferred){
 }
 function spendSheet(cat){
   openSheet(`<h3>Add expense</h3>
-    <div class="f2"><div class="f"><label>Amount (${esc(S.settings.currency)})</label><input type="number" inputmode="decimal" min="0" step="0.01" id="sAmt" placeholder="20"></div>
+    <div class="f2"><div class="f"><label>Amount (${esc(S.settings.currency)})</label><input type="text" inputmode="decimal" min="0" step="0.01" id="sAmt" placeholder="20"></div>
     <div class="f"><label>Date</label><input type="date" id="sDate" value="${TODAY()}" max="${TODAY()}"></div></div>
     <div class="f"><label>Category</label><select id="sCat">${S.settings.categories.map(c=>`<option ${c===cat?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
     <div class="f"><label>What for? (optional)</label><input type="text" id="sNote" placeholder="Trotro to work, kenkey"></div>
@@ -1597,7 +1619,7 @@ function saveSheet(goalId, withdraw){
   if(!S.savings.length){ S.savings.push({id:uid(), name:'General savings', target:0}); save(); }
   const gid = goalId || S.savings[0].id;
   openSheet(`<h3>${withdraw?'Take money out of savings':'Add to savings'}</h3>
-    <div class="f2"><div class="f"><label>Amount (${esc(S.settings.currency)})</label><input type="number" inputmode="decimal" min="0" step="0.01" id="vAmt" placeholder="100"></div>
+    <div class="f2"><div class="f"><label>Amount (${esc(S.settings.currency)})</label><input type="text" inputmode="decimal" min="0" step="0.01" id="vAmt" placeholder="100"></div>
     <div class="f"><label>Date</label><input type="date" id="vDate" value="${TODAY()}" max="${TODAY()}"></div></div>
     <div class="f"><label>Savings goal</label><select id="vGoal">${S.savings.map(g=>`<option value="${g.id}" ${g.id===gid?'selected':''}>${esc(g.name)} (${money(savedIn(g.id))})</option>`).join('')}</select></div>
     ${withdraw?'':`<div class="f"><label>Taken from which bucket?</label>${bucketSelect('vB','Savings')}</div>`}
@@ -1614,7 +1636,7 @@ function saveGoalSheet(id){
   const g = id ? S.savings.find(x=>x.id===id) : {name:'', target:'', deadline:''};
   openSheet(`<h3>${id?'Edit savings goal':'New savings goal'}</h3>
     <div class="f"><label>Name</label><input type="text" id="gsName" value="${esc(g.name)}" placeholder="Emergency fund"></div>
-    <div class="f2"><div class="f"><label>Target (${esc(S.settings.currency)})</label><input type="number" inputmode="decimal" id="gsT" value="${g.target||''}" placeholder="5000"></div>
+    <div class="f2"><div class="f"><label>Target (${esc(S.settings.currency)})</label><input type="text" inputmode="decimal" id="gsT" value="${g.target||''}" placeholder="5000"></div>
     <div class="f"><label>Reach it by (optional)</label><input type="date" id="gsD" value="${g.deadline||''}"></div></div>
     ${actions}${id?`<button class="btn danger" data-a="delsavegoal" data-id="${id}" style="margin-top:8px">Delete goal</button>`:''}`, ()=>{
       const nm=val('gsName').trim(); if(!nm) return fail('gsName','Enter a name');
@@ -1633,8 +1655,8 @@ function daySheet(s){
   const d=S.days[s]||{};
   openSheet(`<h3>${nice(s)}</h3>
     ${[['bible','Daily Bible reading'],['study','Personal study'],['prayer','Prayer and meditation'],['meeting','Meeting preparation']].map(([k,l])=>`<label class="row" style="cursor:pointer"><span class="lbl">${l}</span><input type="checkbox" id="d_${k}" ${d[k]?'checked':''} style="width:22px;height:22px"></label>`).join('')}
-    <div class="f2" style="margin-top:8px"><div class="f"><label>Water (glasses)</label><input type="number" id="d_water" value="${d.water??''}"></div><div class="f"><label>Sleep (hours)</label><input type="number" step="0.5" id="d_sleep" value="${d.sleep??''}"></div></div>
-    <div class="f2"><div class="f"><label>Exercise (min)</label><input type="number" id="d_exercise" value="${d.exercise??''}"></div><div class="f"><label>Weight (kg)</label><input type="number" step="0.1" id="d_weight" value="${d.weight??''}"></div></div>
+    <div class="f2" style="margin-top:8px"><div class="f"><label>Water (glasses)</label><input type="text" inputmode="decimal" id="d_water" value="${d.water??''}"></div><div class="f"><label>Sleep (hours)</label><input type="text" inputmode="decimal" step="0.5" id="d_sleep" value="${d.sleep??''}"></div></div>
+    <div class="f2"><div class="f"><label>Exercise (min)</label><input type="text" inputmode="decimal" id="d_exercise" value="${d.exercise??''}"></div><div class="f"><label>Weight (kg)</label><input type="text" inputmode="decimal" step="0.1" id="d_weight" value="${d.weight??''}"></div></div>
     ${actions}`, ()=>{
       const r = S.days[s] || (S.days[s]={});
       ['bible','study','prayer','meeting'].forEach(k=>r[k]=document.getElementById('d_'+k).checked);
@@ -1647,11 +1669,11 @@ function settingsSheet(){
   openSheet(`<h3>Settings</h3>
     <div class="f2"><div class="f"><label>Your name</label><input type="text" id="sName" value="${esc(st.name)}" placeholder="Gideon"></div>
     <div class="f"><label>Currency</label><input type="text" id="sCur" value="${esc(st.currency)}"></div></div>
-    <div class="f2"><div class="f"><label>Monthly ministry target (h)</label><input type="number" id="sMin" value="${st.ministryTarget}"></div>
-    <div class="f"><label>Water target (glasses)</label><input type="number" id="sWat" value="${st.waterTarget}"></div></div>
-    <div class="f2"><div class="f"><label>Sleep target (h)</label><input type="number" step="0.5" id="sSl" value="${st.sleepTarget}"></div>
-    <div class="f"><label>Exercise target (min)</label><input type="number" id="sEx" value="${st.exerciseTarget}"></div></div>
-    <div class="f"><label>Daily spending limit (${esc(st.currency)}, 0 = none)</label><input type="number" inputmode="decimal" id="sBud" value="${st.dailyBudget||0}"></div>
+    <div class="f2"><div class="f"><label>Monthly ministry target (h)</label><input type="text" inputmode="decimal" id="sMin" value="${st.ministryTarget}"></div>
+    <div class="f"><label>Water target (glasses)</label><input type="text" inputmode="decimal" id="sWat" value="${st.waterTarget}"></div></div>
+    <div class="f2"><div class="f"><label>Sleep target (h)</label><input type="text" inputmode="decimal" step="0.5" id="sSl" value="${st.sleepTarget}"></div>
+    <div class="f"><label>Exercise target (min)</label><input type="text" inputmode="decimal" id="sEx" value="${st.exerciseTarget}"></div></div>
+    <div class="f"><label>Daily spending limit (${esc(st.currency)}, 0 = none)</label><input type="text" inputmode="decimal" id="sBud" value="${st.dailyBudget||0}"></div>
     <div class="f"><label>Expense categories (one per line)</label><textarea id="sCats" style="min-height:150px">${esc(st.categories.join('\n'))}</textarea></div>
     <div class="area">Bible languages</div>
     <p class="muted" style="margin:0 0 8px">One per line as CODE = Name. Tap Test to check a language opens correctly in JW Library. If it opens the wrong language, change its code. Download the Bible in that language in JW Library first.</p>
@@ -1671,6 +1693,9 @@ function settingsSheet(){
     <input type="file" id="restoreFile" accept=".json,application/json" hidden>
     <div class="area" style="margin-top:20px">Put it on your home screen</div>
     <p class="muted" style="margin:0">Android (Chrome): menu ⋮ → Add to Home screen / Install app. iPhone (Safari): Share → Add to Home Screen. It then opens like an app and works offline.</p>
+    <div class="area" style="margin-top:20px">App version</div>
+    <p class="muted" style="margin:0 0 8px">You are using <b>version ${APP_VERSION}</b>. If something looks old or missing, tap below with data on. Your entries are not touched.</p>
+    <button class="btn ghost" data-a="forceupdate">Check for updates</button>
     <div class="area" style="margin-top:20px">Passcode and people</div>
     <p class="muted" style="margin:0 0 8px">${curProfile().pin?'Your passcode is on.':'No passcode yet.'} ${P.list.length>1?'People on this phone: '+P.list.map(x=>esc(x.name||'Me')+(x.id===P.current?' (you now)':'')).join(', ')+'.':'Add a person to give someone their own private space on this phone.'}</p>
     <div class="btns"><button class="btn ghost" style="flex:1" data-a="pinsheet">${curProfile().pin?'Change passcode':'Set passcode'}</button><button class="btn ghost" style="flex:1" data-a="personsheet">Add a person</button></div>
@@ -1692,7 +1717,7 @@ function settingsSheet(){
     });
   updBk();
 }
-function bucketRow(b,i){ return `<div class="bkrow f2" style="grid-template-columns:1fr 80px 34px;align-items:center;margin-bottom:6px"><input type="text" class="bn" value="${esc(b.name)}" placeholder="Bucket name"><input type="number" class="bp mini" value="${b.pct}" style="width:80px!important"><button class="icon-btn" data-a="delbucket" aria-label="Remove">${svg('trash',17)}</button></div>`; }
+function bucketRow(b,i){ return `<div class="bkrow f2" style="grid-template-columns:1fr 80px 34px;align-items:center;margin-bottom:6px"><input type="text" class="bn" value="${esc(b.name)}" placeholder="Bucket name"><input type="text" inputmode="decimal" class="bp mini" value="${b.pct}" style="width:80px!important"><button class="icon-btn" data-a="delbucket" aria-label="Remove">${svg('trash',17)}</button></div>`; }
 function updBk(){ const el=document.getElementById('bkTot'); if(!el) return; const t=[...document.querySelectorAll('#bk .bp')].reduce((a,e)=>a+n(e.value),0); el.textContent='Total: '+r1(t)+'%'+(Math.round(t)===100?'':' — must be 100%'); }
 
 function freshSheet(){
@@ -1774,6 +1799,9 @@ document.addEventListener('click', e => {
     case 'backup': { const ws=weekSheet.open; backup(); if(ws) weekSheet(ws); break; }
     case 'restore': document.getElementById('restoreFile').click(); break;
     case 'freshsheet': freshSheet(); break;
+    case 'forceupdate': forceUpdate(); break;
+    case 'phoneprompton': AL().noPhonePrompt=false; save(); closeSheet(); alarmsSheet(); break;
+    case 'reloadapp': location.reload(); break;
     case 'ststart': startStudy(); break;
     case 'stpause': { const a=SA(); a.sessionMs+=Date.now()-a.startedAt; a.running=false; save(); render(); break; }
     case 'stresume': { const a=SA(); a.startedAt=Date.now(); a.running=true; save(); render(); break; }
@@ -1859,7 +1887,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('change', e => {
   const t=e.target;
-  if(t.dataset.f){ const d=day(); if(t.value==='') delete d[t.dataset.f]; else d[t.dataset.f]=n(t.value); save(); toast('Saved'); }
+  if(t.dataset.f){ const d=day(); if(t.value.trim()==='') delete d[t.dataset.f]; else d[t.dataset.f]=n(t.value); save(); t.value = d[t.dataset.f]??''; toast('Saved'); }
   if(t.id==='moneyMonth'){ moneyMonth=t.value; render(); }
   if(t.id==='stMat'){ const bib=t.value==='Bible chapter'; document.getElementById('stBibleRow').hidden=!bib; document.getElementById('stTitleRow').hidden=bib; if(!bib) document.getElementById('stTitle').focus(); }
   if(t.id==='stBook'){ const c=document.getElementById('stCh'); c.innerHTML=Array.from({length:BOOKS[n(t.value)-1][1]},(_,i)=>`<option>${i+1}</option>`).join(''); }
@@ -1876,6 +1904,7 @@ document.addEventListener('change', e => {
 document.addEventListener('keydown', e => { if(e.key==='Enter' && e.target.id==='todoText'){ e.preventDefault(); const b=document.querySelector('[data-a=todoadd]'); if(b) b.click(); } });
 document.addEventListener('input', e => {
   const t=e.target;
+  if(t.dataset.f){ const d=day(); const v=t.value.trim(); if(v==='') delete d[t.dataset.f]; else if(isFinite(parseFloat(v.replace(',','.')))) d[t.dataset.f]=n(v); save(); }
   if(t.dataset.rv){ const m=MONTH(); S.reviews[m]=S.reviews[m]||{}; S.reviews[m][t.dataset.rv]=t.value; save(); }
   if(t.classList.contains('bp')) updBk();
   if(t.dataset.ans){ S.answers[t.dataset.ans]=t.value; save(); }
@@ -1884,6 +1913,38 @@ document.addEventListener('input', e => {
   if(t.id==='jSearch'){ const q=t.value.toLowerCase(); document.querySelectorAll('.jentry').forEach(el=>el.hidden=q&&!el.dataset.text.includes(q)); }
 });
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && !document.getElementById('sheet').innerHTML) render(); });
+
+/* ---------- updates ---------- */
+async function forceUpdate(){
+  if(!navigator.onLine){ toast('Connect to the internet, then try again'); return; }
+  toast('Getting the newest version…');
+  try{ save(); }catch(e){}
+  try{ const regs = await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister())); }catch(e){}
+  try{ const keys = await caches.keys(); await Promise.all(keys.map(k=>caches.delete(k))); }catch(e){}
+  location.replace(location.pathname + '?v=' + Date.now());
+}
+async function checkNewVersion(){
+  if(!navigator.onLine) return;
+  try{
+    const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'});
+    if(!r.ok) return;
+    const j = await r.json();
+    if(n(j.version) > APP_VERSION && !document.getElementById('updBanner')){
+      document.getElementById('main').insertAdjacentHTML('afterbegin', `<div class="banner" id="updBanner" style="background:#E3F4EB;border-color:#B9E2CB;color:#1E5E3E"><span style="flex:1"><b>A new version is ready.</b> ${esc(j.note||'')}</span><button class="btn sm" data-a="forceupdate">Update now</button></div>`);
+    }
+  }catch(e){}
+}
+setTimeout(checkNewVersion, 2500);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) checkNewVersion(); });
+
+/* ---------- show problems instead of failing silently ---------- */
+function showProblem(msg){
+  if(document.getElementById('errBanner')) return;
+  const m=document.getElementById('main'); if(!m) return;
+  m.insertAdjacentHTML('afterbegin', `<div class="banner" id="errBanner" style="background:#FBEAEA;border-color:#F2C4C4;color:#7A1F1F"><span style="flex:1"><b>Something went wrong.</b> Your entries are safe. Tell Claude this message: <code style="font-size:12px">${esc(String(msg).slice(0,160))}</code></span><button class="btn sm" data-a="reloadapp">Reload</button></div>`);
+}
+window.addEventListener('error', e=>{ if(e && e.message && !/ResizeObserver|Script error/i.test(e.message)) showProblem(e.message + (e.lineno?' (line '+e.lineno+')':'')); });
+window.addEventListener('unhandledrejection', e=>{ const r=e && e.reason; if(r && r.name!=='AbortError' && !/fetch|network/i.test(String(r.message||r))) showProblem(r.message||r); });
 
 /* ---------- lock screen ---------- */
 function needsLock(){ if(P.list.length<2 && !curProfile().pin) return false; try{ return sessionStorage.getItem('lc.unlocked')!==P.current; }catch(e){ return true; } }
