@@ -46,7 +46,7 @@ nav button.on svg{stroke:var(--navy)}
 .step{display:flex;align-items:center;gap:6px}
 .step button{width:34px;height:34px;border-radius:10px;border:1px solid var(--sky2);background:var(--sky);color:var(--navy);font-size:20px;line-height:1}
 .step b{min-width:34px;text-align:center}
-input[type=number],input[type=text],input[type=search],input[type=tel],input[type=time],input[type=date],input[type=month],select,textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 10px;background:#fff;outline:none}
+input[type=number],input[type=text],input[type=date],input[type=month],select,textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 10px;background:#fff;outline:none}
 input:focus,select:focus,textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--sky)}
 .mini{width:84px!important;text-align:center}
 .btn{border:0;border-radius:11px;padding:11px 14px;background:var(--navy);color:#fff;font-weight:600;width:100%}
@@ -150,26 +150,6 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .switch input:checked+span::before{transform:translateX(18px)}
 .chip.good{background:#E3F4EB;color:#1E7F52}.chip.bad{background:#FBEAEA;color:var(--bad)}
 .dentry{padding-bottom:6px}
-.pstrip{display:flex;flex-wrap:wrap;gap:8px}
-.pstrip.view{margin-top:10px}
-.pthumb{position:relative;width:84px;height:84px;border-radius:10px;overflow:hidden;background:var(--sky)}
-.pthumb img{width:100%;height:100%;object-fit:cover;display:block;cursor:pointer}
-.pthumb.missing::after{content:"Picture not on this phone";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;color:var(--muted);padding:4px}
-.pdel{position:absolute;top:3px;right:3px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(15,30,51,.7);color:#fff;font-size:16px;line-height:1}
-.padd{width:84px;height:84px;border-radius:10px;border:1.5px dashed var(--sky2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--navy);font-size:11.5px;cursor:pointer;text-align:center}
-#photoView{position:fixed;inset:0;z-index:70;background:rgba(5,12,25,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:16px}
-#photoView[hidden]{display:none}
-#photoView img{max-width:100%;max-height:80vh;border-radius:8px}
-#photoView .btn{width:auto;padding:10px 28px}
-.nfilter{display:flex;gap:6px;overflow-x:auto;margin-top:10px;padding-bottom:2px}
-.nfilter button{flex:none;border:1px solid var(--sky2);background:#fff;border-radius:999px;padding:6px 12px;font-size:13.5px;color:var(--navy)}
-.nfilter button span{color:var(--muted);font-size:12px}
-.nfilter button.on{background:var(--navy);border-color:var(--navy);color:#fff}
-.nfilter button.on span{color:#C9D9F0}
-.note .nk{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--blue);font-weight:600}
-.note .nt{font-weight:600;margin-top:2px}
-.note .nx{white-space:pre-wrap;font-size:15px;margin-top:4px}
-.note.diary .nk{color:#5B3A99}.note.question .nk{color:#1E7F52}.note.bible .nk{color:var(--navy)}
 .linkbtn{background:none;border:0;padding:0;color:var(--blue);text-decoration:underline;font-size:12px}
 .sndrow{display:grid;grid-template-columns:1fr 48px;gap:6px}
 .sndrow .btn{height:40px;padding:0;display:flex;align-items:center;justify-content:center}
@@ -199,7 +179,6 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 <header>
   <img src="icon.svg" alt="">
   <h1 id="title">Life Compass</h1>
-  <button data-a="gonotes" aria-label="My notes" title="My notes"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg></button>
   <button data-a="settings" aria-label="Settings"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
 </header>
 <main id="main"></main>
@@ -208,11 +187,10 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 <div class="toast" id="toast"></div>
 <div id="lock" hidden></div>
 <div id="alarm" hidden></div>
-<div id="photoView" hidden></div>
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 17;
+const APP_VERSION = 16;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -250,7 +228,7 @@ function fresh(){
     bible:{book:1, chapter:1, read:{}, log:[]}, answers:{},
     savings:[], students:[],
     todos:[], reminders:[], meds:[], medTaken:{}, food:{eat:[],avoid:[]}, diary:{}, fired:{}, snooze:[],
-    study:{active:null, journal:[]}, routineDone:{}, notes:[]
+    study:{active:null, journal:[]}, routineDone:{}
   };
 }
 
@@ -452,10 +430,9 @@ function renderNav(){
 }
 function render(){
   renderNav();
-  document.getElementById('title').textContent = tab==='today'?'Life Compass':tab==='notes'?'My notes':TABS.find(t=>t[0]===tab)[1];
+  document.getElementById('title').textContent = tab==='today'?'Life Compass':TABS.find(t=>t[0]===tab)[1];
   document.getElementById('main').innerHTML = V[tab]();
   if(tab==='faith') loadVideo();
-  hydratePhotos();
 }
 
 /* ---------- views ---------- */
@@ -1015,7 +992,6 @@ function studyView(){
       <div class="f"><label>How I will apply it</label><textarea data-st="apply" placeholder="One thing I will do this week">${esc(a.apply)}</textarea></div>
       <div class="f2"><div class="f"><label>Verse to remember</label><input type="text" data-st="verse" value="${esc(a.verse)}" placeholder="Proverbs 3:5"></div>
       <div class="f"><label>Questions to research</label><input type="text" data-st="questions" value="${esc(a.questions)}" placeholder="Optional"></div></div>
-      <div class="f"><label>Pictures (optional)</label>${photoStrip(a.photos||[], 'study')}</div>
       <div class="btns"><button class="btn" style="flex:2" data-a="stfinish">Finish and save</button>${a.running?`<button class="btn ghost" style="flex:1" data-a="stpause">Pause</button>`:`<button class="btn ghost" style="flex:1" data-a="stresume">Resume</button>`}</div>
       <button class="btn sm ghost" data-a="stcancel" style="margin-top:8px;width:100%">Cancel without saving</button></div>`;
   } else {
@@ -1041,26 +1017,23 @@ function journalCard(){
     :'<div class="empty">Your study notes appear here after each session, so you can look back at what you learned.</div>'}</div>`;
 }
 function journalSheet(id){
-  const j=S.study.journal.find(x=>x.id===id); sheetPhotos=(j.photos||[]).slice(); sheetAdded=[];
+  const j=S.study.journal.find(x=>x.id===id);
   openSheet(`<h3>${esc(j.title)}</h3><p class="muted" style="margin:-6px 0 10px">${parse(j.date).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'})} · ${esc(j.material)}</p>
     <div class="f2"><div class="f"><label>Date</label><input type="date" id="jDate" value="${j.date}"></div><div class="f"><label>Minutes</label><input type="text" inputmode="decimal" id="jMins" value="${j.mins}"></div></div>
     <div class="f"><label>What I learned</label><textarea id="jLearned" style="min-height:110px">${esc(j.learned)}</textarea></div>
     <div class="f"><label>How I will apply it</label><textarea id="jApply">${esc(j.apply)}</textarea></div>
     <div class="f2"><div class="f"><label>Verse to remember</label><input type="text" id="jVerse" value="${esc(j.verse)}"></div><div class="f"><label>Questions to research</label><input type="text" id="jQ" value="${esc(j.questions||'')}"></div></div>
-    <div class="f"><label>Pictures</label>${photoStrip(j.photos||[], 'sheet')}</div>
     ${j.book?`<a class="btn ghost" href="${jwlib(bcode(j.book,j.chapter))}" style="width:100%;margin-bottom:8px">Open ${esc(j.title)} in JW Library</a>`:''}
     ${actions}<button class="btn danger" data-a="jdel" data-id="${j.id}" style="margin-top:8px">Delete entry</button>`, ()=>{
-      (j.photos||[]).filter(p=>!sheetPhotos.includes(p)).forEach(photoDel);
-      j.photos = sheetPhotos.slice(); sheetAdded=[];
       Object.assign(j,{date:val('jDate')||j.date, mins:Math.max(0,n(val('jMins'))), learned:val('jLearned').trim(), apply:val('jApply').trim(), verse:val('jVerse').trim(), questions:val('jQ').trim()}); return true;
     });
 }
 function finishStudy(){
   const a=SA(); if(!a) return;
   const ms=studyMs(a), minsDone=Math.max(1,Math.round(ms/60000));
-  S.study.journal.push({id:uid(), ts:Date.now(), date:a.date||TODAY(), mins:minsDone, material:a.material, title:studyTitle(a), book:a.book||null, chapter:a.chapter||null, learned:a.learned.trim(), apply:a.apply.trim(), verse:a.verse.trim(), questions:a.questions.trim(), photos:a.photos||[]});
+  S.study.journal.push({id:uid(), ts:Date.now(), date:a.date||TODAY(), mins:minsDone, material:a.material, title:studyTitle(a), book:a.book||null, chapter:a.chapter||null, learned:a.learned.trim(), apply:a.apply.trim(), verse:a.verse.trim(), questions:a.questions.trim()});
   day(a.date||TODAY()).study=true;
-  if(a.material==='Bible chapter'){ const set=new Set(S.bible.read[a.book]||[]); if(!set.has(a.chapter)){ set.add(a.chapter); S.bible.read[a.book]=[...set].sort((x,y)=>x-y); S.bible.log.push({date:TODAY(), book:a.book, chapter:a.chapter, note:''}); } day().bible=true; }
+  if(a.material==='Bible chapter'){ const set=new Set(S.bible.read[a.book]||[]); if(!set.has(a.chapter)){ set.add(a.chapter); S.bible.read[a.book]=[...set].sort((x,y)=>x-y); S.bible.log.push({date:TODAY(), book:a.book, chapter:a.chapter, note:a.learned.trim()}); } day().bible=true; }
   if(a.material==='Bible chapter'){ S.study.next = a.chapter<BOOKS[a.book-1][1] ? {book:a.book, chapter:a.chapter+1} : {book:a.book%66+1, chapter:1}; }
   S.study.active=null; save(); render(); toast('Saved: '+hoursText(minsDone/60)+' of personal study');
 }
@@ -1332,7 +1305,7 @@ function bibleCard(){
     <div class="f"><label>Bible language</label>${langSelect('bLang')}</div>
     <div class="scripture" style="margin-bottom:10px"><div class="kicker">${esc(name)}</div><div>${esc(theme)}</div></div>
     <div class="btns"><a class="btn sm" href="${jwlib(code)}">Read ${esc(name)} ${B.chapter} in JW Library${LANG()?' ('+esc(langName())+')':''}</a><a class="btn sm ghost" href="${jworg(code)}" target="_blank" rel="noopener">Read on JW.org</a></div>
-    <div class="f" style="margin-top:12px"><label>${esc(q)}</label><textarea id="bNote" data-bdraft="${B.book}:${B.chapter}" placeholder="Your thoughts on ${esc(name)} ${B.chapter}… (saves as you type)">${esc((B.drafts||{})[B.book+':'+B.chapter]||'')}</textarea></div>
+    <div class="f" style="margin-top:12px"><label>${esc(q)}</label><textarea id="bNote" placeholder="Your thoughts on ${esc(name)} ${B.chapter}…"></textarea></div>
     <button class="btn" data-a="readch">I read ${esc(name)} ${B.chapter}</button>
     ${doneToday.length?`<p class="muted" style="margin:8px 0 0">Read today: ${doneToday.map(x=>esc(BOOKS[x.book-1][0])+' '+x.chapter).join(', ')}</p>`:''}
     <div class="area">${esc(name)}: ${readSet.size} of ${chs} chapters · Whole Bible: ${total} of ${TOTAL_CH} (${pct(total,TOTAL_CH)}%)</div>
@@ -1346,7 +1319,7 @@ function notesCard(){
   const log=[...S.bible.log].reverse().slice(0,25);
   if(!log.length) return '';
   const byDay={}; log.forEach(x=>(byDay[x.date]=byDay[x.date]||[]).push(x));
-  return `<div class="card"><h2>My reading history<span class="sp"></span><button class="btn sm ghost" data-a="gonotes">All my notes</button></h2>${Object.keys(byDay).sort().reverse().map(d=>`<div class="area">${nice(d)}</div><div class="list">${byDay[d].map(x=>`<div class="it"><span class="check on" style="width:24px;height:24px"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px">${I.check}</svg></span><div class="x"><b>${esc(BOOKS[x.book-1][0])} ${x.chapter}</b>${x.note?`<div style="font-size:14.5px;margin-top:2px">${esc(x.note)}</div>`:''}</div></div>`).join('')}</div>`).join('')}</div>`;
+  return `<div class="card"><h2>My reading history</h2>${Object.keys(byDay).sort().reverse().map(d=>`<div class="area">${nice(d)}</div><div class="list">${byDay[d].map(x=>`<div class="it"><span class="check on" style="width:24px;height:24px"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px">${I.check}</svg></span><div class="x"><b>${esc(BOOKS[x.book-1][0])} ${x.chapter}</b>${x.note?`<div style="font-size:14.5px;margin-top:2px">${esc(x.note)}</div>`:''}</div></div>`).join('')}</div>`).join('')}</div>`;
 }
 const vidCache = {};
 const vidLang = () => LANG() || 'E';
@@ -1581,7 +1554,7 @@ function openSheet(html, onSave){
   openSheet.save = onSave;
   const f = el.querySelector('input,select,textarea'); if(f && f.type!=='date') setTimeout(()=>f.focus(),60);
 }
-function closeSheet(){ if(!ringing) stopBeep(); if(typeof sheetAdded!=='undefined' && sheetAdded.length){ sheetAdded.forEach(photoDel); sheetAdded=[]; } document.getElementById('sheet').innerHTML=''; openSheet.save=null; weekSheet.open=null; }
+function closeSheet(){ if(!ringing) stopBeep(); document.getElementById('sheet').innerHTML=''; openSheet.save=null; weekSheet.open=null; }
 function val(id){ const e=document.getElementById(id); return e?e.value:''; }
 function fail(id,msg){ const e=document.getElementById(id); e.insertAdjacentHTML('afterend',`<div class="err">${msg}</div>`); e.addEventListener('input',()=>{ const n=e.nextElementSibling; if(n&&n.classList.contains('err')) n.remove(); },{once:true}); e.focus(); return false; }
 const actions = `<div class="btns" style="margin-top:6px"><button class="btn ghost" style="flex:1" data-a="close">Cancel</button><button class="btn" style="flex:1" data-a="save">Save</button></div>`;
@@ -1801,25 +1774,23 @@ function startFresh(withBackup){
   if(withBackup) backup();
   const old = S.settings, f = fresh();
   if(keep){ f.settings = {...old, started:TODAY()}; }
-  S = f; save(); photoClear(); closeSheet(); tab='today'; render(); window.scrollTo(0,0);
+  S = f; save(); closeSheet(); tab='today'; render(); window.scrollTo(0,0);
   toast('Fresh start — welcome!');
 }
 
 /* ---------- backup ---------- */
 async function backup(){
   S.settings.lastBackup = Date.now(); save();
-  let photos={}; try{ photos=await photoAll(); }catch(e){}
-  const out = JSON.stringify(Object.keys(photos).length ? {...S, __photos:photos} : S, null, 1);
   if(NATIVE){
     const F=window.Capacitor.Plugins.Filesystem, Sh=window.Capacitor.Plugins.Share, name='life-compass-backup-'+TODAY()+'.json';
     try{
-      const r=await F.writeFile({path:name, data:out, directory:'CACHE', encoding:'utf8'});
+      const r=await F.writeFile({path:name, data:JSON.stringify(S,null,1), directory:'CACHE', encoding:'utf8'});
       await Sh.share({title:'Life Compass backup', text:'My Life Compass backup '+TODAY(), files:[r.uri], dialogTitle:'Keep your backup safe'});
       toast('Choose Google Drive or WhatsApp to keep it');
     }catch(e){ if(!/cancel/i.test(String(e&&e.message||e))) alert('The backup could not be shared: '+(e&&e.message||e)); }
     render(); return;
   }
-  const blob = new Blob([out],{type:'application/json'});
+  const blob = new Blob([JSON.stringify(S,null,1)],{type:'application/json'});
   const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='life-compass-backup-'+TODAY()+'.json';
   document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},500);
   toast('Backup downloaded'); render();
@@ -1831,9 +1802,7 @@ function restore(file){
       const d = JSON.parse(r.result);
       if(!d || !d.settings || !d.days) throw 0;
       if(!confirm('Replace everything on this phone with this backup?')) return;
-      const ph=d.__photos||{}; delete d.__photos;
-      localStorage.setItem(KEY, JSON.stringify(d)); S = load();
-      Promise.all(Object.entries(ph).map(([k,v])=>photoPut(k,v).catch(()=>{}))).then(()=>{ closeSheet(); render(); toast('Backup restored'+(Object.keys(ph).length?' with '+Object.keys(ph).length+' pictures':'')); });
+      localStorage.setItem(KEY, JSON.stringify(d)); S = load(); closeSheet(); render(); toast('Backup restored');
     }catch(e){ alert('That file is not a Life Compass backup.'); }
   };
   r.readAsText(file);
@@ -1882,17 +1851,6 @@ document.addEventListener('click', e => {
     case 'restore': document.getElementById('restoreFile').click(); break;
     case 'freshsheet': freshSheet(); break;
     case 'forceupdate': forceUpdate(); break;
-    case 'gonotes': closeSheet(); tab='notes'; render(); window.scrollTo(0,0); break;
-    case 'nfilter': notesFilter=t.dataset.k; render(); break;
-    case 'notesheet': noteSheet(id); break;
-    case 'delnote': if(confirm('Delete this note and its pictures?')){ const x=S.notes.find(n=>n.id===id); (x.photos||[]).forEach(photoDel); S.notes=S.notes.filter(n=>n.id!==id); save(); closeSheet(); render(); } break;
-    case 'viewphoto': viewPhoto(id); break;
-    case 'closephoto': { const el=document.getElementById('photoView'); el.hidden=true; el.innerHTML=''; break; }
-    case 'delphoto': {
-      if(t.dataset.target==='study' && SA()){ SA().photos=(SA().photos||[]).filter(p=>p!==id); photoDel(id); save(); render(); }
-      else { sheetPhotos=sheetPhotos.filter(p=>p!==id); if(sheetAdded.includes(id)){ sheetAdded=sheetAdded.filter(p=>p!==id); photoDel(id); } t.closest('.pthumb').remove(); }
-      break;
-    }
     case 'nativetest': nativeTest(); break;
     case 'nativeperm': nativePerm(); break;
     case 'phoneprompton': AL().noPhonePrompt=false; save(); closeSheet(); alarmsSheet(); break;
@@ -1962,13 +1920,13 @@ document.addEventListener('click', e => {
       if(B.tick!==false){
         const set=new Set(B.read[B.book]||[]);
         if(set.has(c)){ set.delete(c); B.log=B.log.filter(x=>!(x.book===B.book&&x.chapter===c&&x.date===TODAY())); toast(BOOKS[B.book-1][0]+' '+c+' unticked'); }
-        else { const dk=B.book+':'+c, nt=((B.drafts||{})[dk]||'').trim(); if(B.drafts) delete B.drafts[dk]; B.log.push({date:TODAY(), book:B.book, chapter:c, note:nt}); day().bible=true; toast(BOOKS[B.book-1][0]+' '+c+' ticked ✓'+(nt?' · note saved':'')); }
+        else { set.add(c); B.log.push({date:TODAY(), book:B.book, chapter:c, note:''}); day().bible=true; toast(BOOKS[B.book-1][0]+' '+c+' ticked ✓'); }
         B.read[B.book]=[...set].sort((a,b)=>a-b);
       }
       B.chapter=c; save(); render(); break;
     }
     case 'readch': {
-      const B=S.bible, note=(val('bNote')||(B.drafts||{})[B.book+':'+B.chapter]||'').trim(); if(B.drafts) delete B.drafts[B.book+':'+B.chapter];
+      const B=S.bible, note=val('bNote').trim();
       const set=new Set(B.read[B.book]||[]); set.add(B.chapter); B.read[B.book]=[...set].sort((a,b)=>a-b);
       B.log.push({date:TODAY(), book:B.book, chapter:B.chapter, note});
       if(B.log.length>2000) B.log=B.log.slice(-2000);
@@ -2005,8 +1963,6 @@ document.addEventListener('input', e => {
   if(t.classList.contains('bp')) updBk();
   if(t.dataset.ans){ S.answers[t.dataset.ans]=t.value; save(); }
   if(t.dataset.diary){ S.diary[t.dataset.diary]=t.value; save(); }
-  if(t.dataset.bdraft){ S.bible.drafts=S.bible.drafts||{}; if(t.value.trim()) S.bible.drafts[t.dataset.bdraft]=t.value; else delete S.bible.drafts[t.dataset.bdraft]; save(); }
-  if(t.id==='notesSearch'){ notesQuery=t.value; clearTimeout(notesSearchT); notesSearchT=setTimeout(()=>{ const pos=t.selectionStart; render(); const n=document.getElementById('notesSearch'); if(n){ n.focus(); try{ n.setSelectionRange(pos,pos); }catch(e){} } }, 300); }
   if(t.dataset.st && SA()){ SA()[t.dataset.st]=t.value; save(); }
   if(t.id==='jSearch'){ const q=t.value.toLowerCase(); document.querySelectorAll('.jentry').forEach(el=>el.hidden=q&&!el.dataset.text.includes(q)); }
 });
@@ -2088,97 +2044,6 @@ if(NATIVE){
     if(/^(https?:|jwlibrary:|tel:|sms:|mailto:|whatsapp:|intent:)/i.test(h)){ e.preventDefault(); window.location.href=h; }
   }, true);
 }
-
-/* ================= MY NOTES: everything you wrote, in one place, with pictures ================= */
-/* pictures live in the phone's IndexedDB (more room than normal storage); text notes stay with the rest of your data */
-const PHOTO_DB = () => 'lc-photos-' + KEY;
-function idb(){ return new Promise((res,rej)=>{ const r=indexedDB.open(PHOTO_DB(),1); r.onupgradeneeded=()=>r.result.createObjectStore('p'); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
-async function photoPut(id, data){ const db=await idb(); return new Promise((res,rej)=>{ const t=db.transaction('p','readwrite'); t.objectStore('p').put(data,id); t.oncomplete=()=>res(); t.onerror=()=>rej(t.error); }); }
-async function photoGet(id){ if(photoCache[id]) return photoCache[id]; const db=await idb(); return new Promise(res=>{ const r=db.transaction('p').objectStore('p').get(id); r.onsuccess=()=>{ if(r.result) photoCache[id]=r.result; res(r.result||null); }; r.onerror=()=>res(null); }); }
-async function photoDel(id){ delete photoCache[id]; try{ const db=await idb(); db.transaction('p','readwrite').objectStore('p').delete(id); }catch(e){} }
-async function photoAll(){ const db=await idb(); return new Promise(res=>{ const out={}, r=db.transaction('p').objectStore('p').openCursor(); r.onsuccess=()=>{ const c=r.result; if(c){ out[c.key]=c.value; c.continue(); } else res(out); }; r.onerror=()=>res(out); }); }
-async function photoClear(){ try{ const db=await idb(); db.transaction('p','readwrite').objectStore('p').clear(); }catch(e){} for(const k in photoCache) delete photoCache[k]; }
-const photoCache = {};
-let sheetPhotos = [];   // pictures in the note being edited
-let sheetAdded = [];    // pictures added in this edit but not saved yet
-function shrinkPhoto(file){
-  return new Promise((res,rej)=>{
-    const url=URL.createObjectURL(file), img=new Image();
-    img.onload=()=>{ const max=1280, sc=Math.min(1, max/Math.max(img.width,img.height)); const c=document.createElement('canvas'); c.width=Math.round(img.width*sc); c.height=Math.round(img.height*sc); c.getContext('2d').drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg',0.72)); };
-    img.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error('That file is not a picture')); };
-    img.src=url;
-  });
-}
-async function addPhotoFiles(files, target){
-  const ids=[];
-  for(const f of files){ try{ const data=await shrinkPhoto(f); const id='ph'+uid(); await photoPut(id,data); photoCache[id]=data; ids.push(id); }catch(e){ toast(e.message||'Could not add that picture'); } }
-  if(!ids.length) return;
-  if(target==='study' && SA()){ SA().photos=[...(SA().photos||[]), ...ids]; save(); render(); }
-  else { sheetPhotos.push(...ids); sheetAdded.push(...ids); const box=document.getElementById('sheetPhotos'); if(box) box.outerHTML=photoStrip(sheetPhotos,'sheet'); hydratePhotos(); }
-  toast(ids.length>1? ids.length+' pictures added' : 'Picture added');
-}
-function photoStrip(ids, target){
-  return `<div class="pstrip" ${target==='sheet'?'id="sheetPhotos"':''}>${ids.map(id=>`<div class="pthumb"><img data-photo="${id}" alt="Picture" data-a="viewphoto" data-id="${id}"><button type="button" class="pdel" data-a="delphoto" data-id="${id}" data-target="${target}" aria-label="Remove picture">×</button></div>`).join('')}
-    <label class="padd">${svg('plus',20)}<span>Add picture</span><input type="file" accept="image/*" multiple hidden data-addphoto="${target}"></label></div>`;
-}
-function photoRow(ids){ return ids&&ids.length?`<div class="pstrip view">${ids.map(id=>`<div class="pthumb"><img data-photo="${id}" alt="Picture" data-a="viewphoto" data-id="${id}"></div>`).join('')}</div>`:''; }
-async function hydratePhotos(){ for(const img of document.querySelectorAll('img[data-photo]:not([src])')){ const d=await photoGet(img.dataset.photo); if(d) img.src=d; else img.closest('.pthumb')?.classList.add('missing'); } }
-async function viewPhoto(id){
-  const d=await photoGet(id); if(!d) return;
-  const el=document.getElementById('photoView'); el.innerHTML=`<img src="${d}" alt="Picture"><button class="btn" data-a="closephoto">Close</button>`; el.hidden=false;
-}
-
-/* every kind of note, newest first */
-function allNotes(){
-  const out=[];
-  S.notes.forEach(x=>out.push({kind:'note', label:'My note', id:x.id, date:x.date, ts:x.ts||0, title:x.title||'', text:x.text||'', photos:x.photos||[]}));
-  S.bible.log.filter(x=>x.note).forEach((x,i)=>out.push({kind:'bible', label:'Bible reading', date:x.date, ts:i, title:BOOKS[x.book-1][0]+' '+x.chapter, text:x.note, book:x.book, chapter:x.chapter}));
-  S.study.journal.forEach(j=>out.push({kind:'study', label:'Personal study', id:j.id, date:j.date, ts:j.ts||0, title:j.title, text:[j.learned, j.apply&&('Apply: '+j.apply), j.verse&&('Verse: '+j.verse), j.questions&&('To research: '+j.questions)].filter(Boolean).join('\n'), photos:j.photos||[]}));
-  Object.entries(S.answers||{}).filter(([,v])=>(v||'').trim()).forEach(([d,v])=>{ const q=VERSES[dayNum(d)%VERSES.length]; out.push({kind:'question', label:'Question of the day', date:d, ts:0, title:q[3], text:v, ref:q[0]}); });
-  Object.entries(S.diary||{}).filter(([,v])=>(v||'').trim()).forEach(([d,v])=>out.push({kind:'diary', label:'Diary', date:d, ts:0, title:'My day', text:v}));
-  return out.sort((a,b)=>b.date.localeCompare(a.date)||(b.ts-a.ts));
-}
-let notesFilter='all', notesQuery='', notesSearchT=null;
-const NOTE_KINDS=[['all','All'],['note','My notes'],['bible','Bible'],['study','Study'],['question','Questions'],['diary','Diary']];
-V.notes = () => {
-  const all=allNotes(), q=notesQuery.trim().toLowerCase();
-  const list=all.filter(x=>(notesFilter==='all'||x.kind===notesFilter) && (!q || (x.title+' '+x.text+' '+(x.ref||'')).toLowerCase().includes(q)));
-  const count=k=>k==='all'?all.length:all.filter(x=>x.kind===k).length;
-  let html=`<div class="card"><button class="btn" data-a="notesheet">${svg('plus',18)}&nbsp; New note</button>
-    <input type="search" id="notesSearch" value="${esc(notesQuery)}" placeholder="Search everything you wrote…" style="margin-top:10px">
-    <div class="nfilter">${NOTE_KINDS.map(([k,l])=>`<button class="${k===notesFilter?'on':''}" data-a="nfilter" data-k="${k}">${l} <span>${count(k)}</span></button>`).join('')}</div></div>`;
-  if(!list.length) return html+`<div class="card"><div class="empty">${all.length?'Nothing matches your search.':'Notes you write anywhere in the app appear here: Bible reading notes, study notes, answers to the question of the day and your diary. Tap New note to write one with pictures.'}</div></div>`;
-  let last='';
-  list.slice(0,150).forEach(x=>{
-    if(x.date!==last){ html+=`<div class="area" style="margin:16px 4px 6px">${parse(x.date).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>`; last=x.date; }
-    const open = x.kind==='note'?`data-a="notesheet" data-id="${x.id}"`: x.kind==='study'?`data-a="jopen" data-id="${x.id}"`:'';
-    html+=`<div class="card note ${x.kind}" ${open} style="${open?'cursor:pointer':''}"><div class="nk">${x.label}${x.ref?' · '+esc(x.ref):''}</div>
-      ${x.title?`<div class="nt">${esc(x.title)}</div>`:''}<div class="nx">${esc(x.text)}</div>${photoRow(x.photos)}
-      ${x.kind==='bible'?`<a class="btn sm ghost" href="${jwlib(bcode(x.book,x.chapter))}" style="margin-top:8px">Open in JW Library</a>`:''}</div>`;
-  });
-  if(list.length>150) html+=`<p class="muted" style="text-align:center">Showing the newest 150. Search to find older notes.</p>`;
-  return html;
-};
-function noteSheet(id){
-  const x = id ? S.notes.find(n=>n.id===id) : {title:'', text:'', date:TODAY(), photos:[]};
-  sheetPhotos = (x.photos||[]).slice();
-  openSheet(`<h3>${id?'Edit note':'New note'}</h3>
-    <div class="f"><label>Title</label><input type="text" id="nTitle" value="${esc(x.title)}" placeholder="What I learned at the meeting"></div>
-    <div class="f"><label>Note</label><textarea id="nText" style="min-height:150px" placeholder="Write anything you want to keep…">${esc(x.text)}</textarea></div>
-    <div class="f"><label>Pictures</label>${photoStrip(sheetPhotos,'sheet')}</div>
-    <div class="f"><label>Date</label><input type="date" id="nDate" value="${x.date}"></div>
-    ${actions}${id?`<button class="btn danger" data-a="delnote" data-id="${id}" style="margin-top:8px">Delete note</button>`:''}`, ()=>{
-      const tx=val('nText').trim(), ti=val('nTitle').trim();
-      if(!tx && !ti && !sheetPhotos.length) return fail('nText','Write something or add a picture');
-      const rec = id ? x : {id:uid(), ts:Date.now()};
-      (x.photos||[]).filter(p=>!sheetPhotos.includes(p)).forEach(photoDel);
-      Object.assign(rec,{title:ti, text:tx, date:val('nDate')||TODAY(), photos:sheetPhotos.slice()});
-      if(!id) S.notes.push(rec); sheetAdded=[]; return true;
-    });
-  sheetAdded=[];
-  hydratePhotos();
-}
-document.addEventListener('change', e=>{ const t=e.target; if(t.dataset.addphoto && t.files && t.files.length){ addPhotoFiles([...t.files], t.dataset.addphoto); t.value=''; } });
 
 /* ---------- updates ---------- */
 const APK_URL = 'https://github.com/nyarkogideon956-dot/life-compass/releases/latest/download/life-compass.apk';

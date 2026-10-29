@@ -1,0 +1,9 @@
+{
+  "appId": "app.lifecompass.gideon",
+  "appName": "Life Compass",
+  "webDir": "www",
+  "android": { "allowMixedContent": false },
+  "plugins": {
+    "LocalNotifications": { "smallIcon": "ic_stat_lc", "iconColor": "#0C3C78" }
+  }
+}
