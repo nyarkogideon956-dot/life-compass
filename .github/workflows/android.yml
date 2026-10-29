@@ -1,0 +1,76 @@
+# Builds the Life Compass Android app every time the app changes,
+# and publishes it at: https://github.com/nyarkogideon956-dot/life-compass/releases/latest/download/life-compass.apk
+name: Build Android app
+
+on:
+  push:
+    branches: [main]
+    paths: ['index.html', 'version.json', 'android-app.zip', 'android-app/**', '.github/workflows/android.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-app
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unpack the Android project (uploaded as android-app.zip)
+        run: |
+          if [ -f android-app.zip ]; then unzip -o -q android-app.zip; fi
+          test -f android-app/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: android-app/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Install Capacitor
+        working-directory: android-app
+        run: npm ci
+
+      - name: Put the newest web app inside the Android app
+        working-directory: android-app
+        run: npm run sync
+
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.LC_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then echo "Missing secret LC_KEYSTORE_B64"; exit 1; fi
+          echo "$KEYSTORE_B64" | base64 -d > android-app/android/app/lifecompass.keystore
+
+      - name: Build the app
+        working-directory: android-app/android
+        env:
+          LC_KEYSTORE_PASSWORD: ${{ secrets.LC_KEYSTORE_PASSWORD }}
+          LC_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          export LC_VERSION_NAME=$(grep -o 'APP_VERSION = [0-9]*' ../../index.html | grep -o '[0-9]*$')
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+          cp app/build/outputs/apk/release/app-release.apk ../../life-compass.apk
+
+      - name: Publish the app for download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=$(grep -o 'APP_VERSION = [0-9]*' index.html | grep -o '[0-9]*$')
+          gh release delete app --cleanup-tag -y || true
+          gh release create app life-compass.apk \
+            --title "Life Compass app — version $V" \
+            --notes "Open this page on your Android phone, tap life-compass.apk to download, then open it to install. Updating keeps your entries." \
+            --latest
