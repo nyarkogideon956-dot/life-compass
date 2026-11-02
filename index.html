@@ -169,7 +169,8 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .note .nk{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--blue);font-weight:600}
 .note .nt{font-weight:600;margin-top:2px}
 .note .nx{white-space:pre-wrap;font-size:15px;margin-top:4px}
-.note.diary .nk{color:#5B3A99}.note.question .nk{color:#1E7F52}.note.bible .nk{color:var(--navy)}
+.note.diary .nk{color:#5B3A99}.note.lesson .nk{color:#8A5A00}
+.pararow{display:flex;align-items:center;gap:8px}.pararow input{width:80px!important;text-align:center}.pararow span{color:var(--muted)}.note.question .nk{color:#1E7F52}.note.bible .nk{color:var(--navy)}
 .wdot{width:12px;height:12px;border-radius:50%;flex:none;margin-top:5px;background:#B8C4D3}
 .wdot.green{background:#1E8E5A}.wdot.orange{background:#E08A00}.wdot.red{background:#C0392B}
 .wchip{font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap;background:#EEF1F5;color:#5F6B7A}
@@ -225,7 +226,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 18;
+const APP_VERSION = 19;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -1636,7 +1637,8 @@ function studentsView(){
         <div style="flex:1;min-width:0"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b style="font-size:16.5px">${esc(x.name)}</b><span class="st-chip ${x.status}">${statusLbl}</span></div>
           <div class="muted">${esc(x.pub||'')}${x.day?' · '+esc(x.day):''}${x.stage&&x.stage!=='Studying'?' · '+esc(x.stage):''}</div></div>
         <button class="icon-btn" data-a="studentsheet" data-id="${x.id}" aria-label="Edit">${svg('edit',18)}</button></div>
-      ${total?`<div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:10px"><span>Lesson ${les} of ${total}</span><span class="muted">${pct(les,total)}%</span></div>${bar(pct(les,total))}`:les?`<div style="font-size:13.5px;margin-top:10px">Lesson ${les}</div>`:''}
+      ${total?`<div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:10px"><span>${cap(unitOf(x)[0])} ${les} of ${total}</span><span class="muted">${pct(les,total)}%</span></div>${bar(pct(les,total))}`:les?`<div style="font-size:13.5px;margin-top:10px">${cap(unitOf(x)[0])} ${les}</div>`:''}
+      ${n(x.nextPara)>1?`<div style="font-size:13.5px;margin-top:4px;color:var(--navy)">Next time: ${unitOf(x)[0]} ${les}, from ${unitOf(x)[1]} ${x.nextPara}</div>`:''}
       <p class="muted" style="margin:8px 0 0">${last?`Last study ${days===0?'today':days===1?'yesterday':days+' days ago'} (${nice(last)}) · ${(x.sessions||[]).length} ${(x.sessions||[]).length===1?'study':'studies'} in total`:'No study recorded yet'}${x.phone?' · '+esc(x.phone):''}</p>
       <div class="btns" style="margin-top:10px"><button class="btn sm" data-a="studysheet" data-id="${x.id}">Record study</button>
         ${tel?`<button class="btn sm ghost" data-a="encourage" data-id="${x.id}">Encourage</button><a class="btn sm ghost" href="tel:+${tel}">Call</a>`:''}</div></div>`;
@@ -1645,39 +1647,114 @@ function studentsView(){
 }
 function studentSheet(id){
   const x = id ? S.students.find(s=>s.id===id) : {name:'',phone:'',pub:'Enjoy Life Forever!',total:60,lesson:1,status:'steady',stage:'Studying',day:'',notes:'',started:TODAY()};
+  setTimeout(()=>{ const pub=document.getElementById('stPub'), un=document.getElementById('stUnit'); if(!pub||!un) return;
+    const lbl=()=>{ const u=UNITS[un.value]; document.getElementById('stTotalLbl').textContent='Number of '+u[0]+'s (optional)'; document.getElementById('stLessonLbl').textContent='Current '+u[0]; };
+    pub.addEventListener('change',()=>{ un.value=autoUnit(pub.value); const tt=document.getElementById('stTotal'); if(un.value!=='lp' && tt.value==='60') tt.value=''; lbl(); });
+    un.addEventListener('change',lbl); },0);
   openSheet(`<h3>${id?'Edit Bible student':'New Bible student'}</h3>
     <div class="f"><label>Name</label><input type="text" id="stName" value="${esc(x.name)}" placeholder="Ama Mensah"></div>
     <div class="f"><label>Phone (WhatsApp)</label><input type="tel" id="stPhone" value="${esc(x.phone)}" placeholder="024 123 4567"></div>
-    <div class="f2"><div class="f"><label>Studying</label><input type="text" id="stPub" value="${esc(x.pub)}" list="pubList"><datalist id="pubList"><option>Enjoy Life Forever!</option><option>Enjoy Life Forever! brochure</option><option>Good News From God!</option><option>Bible reading</option></datalist></div>
-    <div class="f"><label>Number of lessons</label><input type="text" inputmode="decimal" id="stTotal" value="${x.total||''}" placeholder="60"></div></div>
-    <div class="f2"><div class="f"><label>Current lesson</label><input type="text" inputmode="decimal" id="stLesson" value="${x.lesson||''}" placeholder="1"></div>
-    <div class="f"><label>Study day and time</label><input type="text" id="stDay" value="${esc(x.day)}" placeholder="Saturday 4 pm"></div></div>
+    <div class="f2"><div class="f"><label>Studying</label><input type="text" id="stPub" value="${esc(x.pub)}" list="pubList"><datalist id="pubList"><option>Enjoy Life Forever!</option><option>Enjoy Life Forever! brochure</option><option>Listen to God and Live Forever</option><option>Listen to God</option><option>Good News From God!</option><option>Bible reading</option></datalist></div>
+    <div class="f"><label>How you count</label><select id="stUnit">${Object.entries(UNITS).map(([k,u])=>`<option value="${k}" ${k===(x.unit||autoUnit(x.pub))?'selected':''}>${u[2]}</option>`).join('')}</select></div></div>
+    <div class="f2"><div class="f"><label id="stTotalLbl">Number of ${unitOf(x)[0]}s (optional)</label><input type="text" inputmode="decimal" id="stTotal" value="${x.total||''}" placeholder="${unitOf(x)[0]==='lesson'?'60':''}"></div>
+    <div class="f"><label id="stLessonLbl">Current ${unitOf(x)[0]}</label><input type="text" inputmode="decimal" id="stLesson" value="${x.lesson||''}" placeholder="1"></div>
+    </div>
+    <div class="f"><label>Study day and time</label><input type="text" id="stDay" value="${esc(x.day)}" placeholder="Saturday 4 pm"></div>
     <div class="f2"><div class="f"><label>Status</label><select id="stStatus">${STATUSES.map(([k,l])=>`<option value="${k}" ${k===x.status?'selected':''}>${l}</option>`).join('')}</select></div>
     <div class="f"><label>Progress</label><select id="stStage">${STAGES.map(g=>`<option ${g===x.stage?'selected':''}>${g}</option>`).join('')}</select></div></div>
     <div class="f"><label>Notes (family, questions, interests)</label><textarea id="stNotes">${esc(x.notes)}</textarea></div>
-    ${id&&(x.sessions||[]).length?`<div class="area">Study history</div><div class="list">${[...x.sessions].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,12).map(s=>`<div class="it"><div class="x"><b>${nice(s.date)}${s.lesson?' · Lesson '+s.lesson:''}</b><small>${esc(s.note||'')}</small></div><button class="icon-btn" data-a="delsession" data-id="${x.id}" data-sid="${s.id}" aria-label="Delete">${svg('trash',17)}</button></div>`).join('')}</div>`:''}
+    ${id&&(x.sessions||[]).length?`<div class="area">Study history</div><div class="list">${[...x.sessions].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,12).map(s=>`<div class="it"><div class="x"><b>${nice(s.date)}${sessionLine(s)?' · '+esc(sessionLine(s)):''}</b>${s.summary?`<div style="font-size:14px;margin-top:2px;white-space:pre-wrap">${esc(s.summary)}</div>`:''}${s.ref?`<small style="color:var(--blue)">Scripture: ${esc(s.ref)}</small>`:''}${s.note?`<small>Private: ${esc(s.note)}</small>`:''}${s.sent?`<small>Summary sent ✓</small>`:''}
+      ${s.summary||s.ref?`<button class="btn sm ghost" data-a="sumsheet" data-id="${x.id}" data-sid="${s.id}" style="margin-top:6px">${s.sent?'Send again':'Send summary'}</button>`:''}</div><button class="icon-btn" data-a="delsession" data-id="${x.id}" data-sid="${s.id}" aria-label="Delete">${svg('trash',17)}</button></div>`).join('')}</div>`:''}
     ${actions}${id?`<button class="btn danger" data-a="delstudent" data-id="${id}" style="margin-top:8px">Delete student</button>`:''}`, ()=>{
       const nm=val('stName').trim(); if(!nm) return fail('stName','Enter the name');
       const rec = id ? x : {id:uid(), sessions:[], started:TODAY()};
-      Object.assign(rec,{name:nm, phone:val('stPhone').trim(), pub:val('stPub').trim(), total:n(val('stTotal')), lesson:n(val('stLesson')), day:val('stDay').trim(), status:val('stStatus'), stage:val('stStage'), notes:val('stNotes').trim()});
+      Object.assign(rec,{name:nm, phone:val('stPhone').trim(), pub:val('stPub').trim(), unit:val('stUnit'), total:n(val('stTotal')), lesson:n(val('stLesson')), day:val('stDay').trim(), status:val('stStatus'), stage:val('stStage'), notes:val('stNotes').trim()});
       if(!id) S.students.push(rec); return true;
     });
 }
+/* ---------- how each student's study is counted ---------- */
+const UNITS = {lp:['lesson','paragraph','Lessons and paragraphs'], sp:['section','page','Sections and pages'], cp:['chapter','paragraph','Chapters and paragraphs']};
+const autoUnit = pub => /listen to god/i.test(pub||'') ? 'sp' : /good news|book|chapter/i.test(pub||'') && !/enjoy life/i.test(pub||'') ? 'cp' : 'lp';
+function unitOf(x){ return UNITS[x.unit] || UNITS[autoUnit(x.pub)]; }
+const cap = w => w.charAt(0).toUpperCase()+w.slice(1);
+
+/* ---------- Bible study session: paragraphs, summary, scripture to remember ---------- */
+/* reads "Psalm 83:18", "Ps 83:18", "1 Pet 5:7", "Rev 21:3, 4" and gives the book, chapter and verse */
+function parseRef(txt){
+  const m=String(txt||'').toLowerCase().replace(/\./g,' ').match(/^\s*((?:[123]\s*)?[a-z]+(?:\s+of\s+[a-z]+)?)\s*(\d{1,3})(?:\s*:\s*(\d{1,3}))?/);
+  if(!m) return null;
+  const want=m[1].replace(/\s+/g,''); if(want.replace(/^[123]/,'').length<2) return null;
+  const names=BOOKS.map((b,i)=>[b[0].toLowerCase().replace(/\s+/g,''),i]);
+  const hit = names.find(([nm])=>nm===want) || names.find(([nm])=>nm===want+'s') || names.find(([nm])=>nm.startsWith(want));
+  if(!hit) return null;
+  const b=hit[1]+1, c=n(m[2]), v=m[3]?n(m[3]):1;
+  if(c<1 || c>BOOKS[b-1][1]) return null;
+  return {book:b, chapter:c, verse:v, link:jworg(bcode(b,c,v))};
+}
 function studySheet(id){
-  const x=S.students.find(s=>s.id===id);
+  const x=S.students.find(s=>s.id===id), les=n(x.lesson)||1, from=n(x.nextPara)||1, [U1,U2]=unitOf(x);
   openSheet(`<h3>Study with ${esc(x.name)}</h3>
     <div class="f2"><div class="f"><label>Date</label><input type="date" id="ssDate" value="${TODAY()}" max="${TODAY()}"></div>
-    <div class="f"><label>Lesson studied</label><input type="text" inputmode="decimal" id="ssLesson" value="${x.lesson||''}"></div></div>
-    <label class="row" style="cursor:pointer;border:0"><span class="lbl">Move to the next lesson<small>Next time: lesson ${(n(x.lesson)||0)+1}</small></span><input type="checkbox" id="ssNext" checked style="width:22px;height:22px"></label>
-    <div class="f"><label>Note (how it went, questions to answer next time)</label><textarea id="ssNote"></textarea></div>
-    ${actions}`, ()=>{
-      const les=n(val('ssLesson'));
-      x.sessions=x.sessions||[]; x.sessions.push({id:uid(), date:val('ssDate')||TODAY(), lesson:les, note:val('ssNote').trim()});
-      if(document.getElementById('ssNext').checked) x.lesson = (les||n(x.lesson)||0)+1; else if(les) x.lesson=les;
-      if(x.total && x.lesson>x.total) x.lesson=x.total;
-      return true;
-    });
+    <div class="f"><label>${cap(U1)}</label><input type="text" inputmode="decimal" id="ssLesson" value="${les}"></div></div>
+    <div class="f"><label>${cap(U2)}s studied</label><div class="pararow"><span>From</span><input type="text" inputmode="numeric" id="ssFrom" value="${from}"><span>to</span><input type="text" inputmode="numeric" id="ssTo" value="" placeholder="${from+5}"></div></div>
+    <label class="row" style="cursor:pointer;border:0;padding-top:0"><span class="lbl">We finished this ${U1}<small id="ssNextTxt">Next time: ${U1} ${les}, from ${U2} …</small></span><input type="checkbox" id="ssDone" style="width:22px;height:22px"></label>
+    <div class="f"><label>Summary of what we learned</label><textarea id="ssSum" style="min-height:110px" placeholder="God has a name, Jehovah. He wants us to know him as a friend. We can talk to him in prayer anytime."></textarea></div>
+    <div class="f"><label>Scripture to remember</label><input type="text" id="ssRef" placeholder="Psalm 83:18"><div id="ssRefOk" class="muted" style="font-size:12.5px;margin-top:4px;min-height:16px"></div></div>
+    <div class="f"><label>To prepare for next time (optional)</label><input type="text" id="ssPrep" placeholder="Read the next paragraphs and the scriptures"></div>
+    <div class="f"><label>Private note, only for you (optional)</label><textarea id="ssNote" placeholder="How it went, questions to answer next time"></textarea></div>
+    <div class="btns" style="flex-direction:column">${x.phone?`<button class="btn wa" data-a="sssave" data-id="${x.id}" data-send="1">Save and send summary to ${esc(firstName(x.name))}</button>`:''}
+      <div class="btns"><button class="btn ghost" style="flex:1" data-a="close">Cancel</button><button class="btn${x.phone?' ghost':''}" style="flex:1" data-a="sssave" data-id="${x.id}">Save</button></div></div>`, null);
+  const upd=()=>{
+    const to=n(val('ssTo')), done=document.getElementById('ssDone').checked, l=n(val('ssLesson'))||les;
+    document.getElementById('ssNextTxt').textContent = done ? 'Next time: '+U1+' '+(l+1)+', from '+U2+' 1' : 'Next time: '+U1+' '+l+', from '+U2+' '+(to?to+1:'…');
+    const r=parseRef(val('ssRef')), ok=document.getElementById('ssRefOk');
+    ok.innerHTML = !val('ssRef').trim() ? '' : r ? '✓ '+esc((r.book===19?'Psalm':BOOKS[r.book-1][0])+' '+r.chapter+':'+r.verse)+' found. A link to read it on jw.org will be added.' : 'The app can\'t find this verse, so no link will be added. You can still send it.';
+    ok.style.color = r||!val('ssRef').trim() ? 'var(--ok)' : 'var(--muted)';
+  };
+  ['ssTo','ssDone','ssLesson','ssRef'].forEach(i=>{ const el=document.getElementById(i); el.addEventListener('input',upd); el.addEventListener('change',upd); });
+  upd();
 }
+function saveStudy(id){
+  const x=S.students.find(s=>s.id===id);
+  const les=n(val('ssLesson'))||n(x.lesson)||1, from=n(val('ssFrom'))||null, to=n(val('ssTo'))||null, done=document.getElementById('ssDone').checked;
+  if(from && to && to<from){ fail('ssTo','"To" should be the same or higher than "From"'); return null; }
+  const sess={id:uid(), unit:x.unit||autoUnit(x.pub), date:val('ssDate')||TODAY(), lesson:les, from, to, finished:done, summary:val('ssSum').trim(), ref:val('ssRef').trim(), prep:val('ssPrep').trim(), note:val('ssNote').trim()};
+  x.sessions=x.sessions||[]; x.sessions.push(sess);
+  if(done){ x.lesson=les+1; x.nextPara=1; } else { x.lesson=les; x.nextPara = to ? to+1 : (from||1); }
+  if(x.total && x.lesson>x.total) x.lesson=x.total;
+  save(); return sess;
+}
+function paraText(sess){ const w=(UNITS[sess.unit]||UNITS.lp)[1]; return sess.from&&sess.to ? (sess.from===sess.to?w+' '+sess.from:w+'s '+sess.from+'–'+sess.to) : sess.from ? 'from '+w+' '+sess.from : ''; }
+function summaryMessage(x, sess){
+  const time=timeOfDay(), nm=firstName(x.name), today=sess.date===TODAY();
+  const g = {morning:'Good morning '+nm+'!', afternoon:'Hi '+nm+'!', evening:'Good evening '+nm+'!'}[time];
+  const r=parseRef(sess.ref);
+  let t = g+' '+(today?'Thank you for studying with me today':'Thank you for our study on '+parse(sess.date).toLocaleDateString(undefined,{weekday:'long'}))+' 😊';
+  const what=[x.pub?x.pub:'', (UNITS[sess.unit]||unitOf(x))[0]+' '+sess.lesson, paraText(sess)].filter(Boolean).join(', ').replace(/^[a-z]/,c=>c.toUpperCase());
+  t += '\n\n📖 What we covered: '+what;
+  if(sess.summary) t += '\n\n✏️ What we learned:\n'+sess.summary;
+  if(sess.ref) t += '\n\n💡 Scripture to remember: '+sess.ref+(r?'\nRead it here: '+r.link:'');
+  if(sess.prep) t += '\n\n📝 Before next time: '+sess.prep;
+  t += '\n\n'+(x.day?'See you on '+x.day+'!':'Looking forward to our next study!')+' '+CLOSE[time][dayNum()%CLOSE[time].length];
+  return t;
+}
+function summarySheet(id, sid){
+  const x=S.students.find(s=>s.id===id), sess=(x.sessions||[]).find(s=>s.id===sid); if(!sess) return;
+  const ph=phoneIntl(x.phone);
+  openSheet(`<h3>Send the study summary to ${esc(firstName(x.name))}</h3>
+    ${!ph?`<div class="f"><label>Phone number</label><input type="tel" id="smPhone" placeholder="024 123 4567"></div>`:''}
+    <div class="f"><label>Message (you can change anything)</label><textarea id="smText" style="min-height:260px">${esc(summaryMessage(x,sess))}</textarea></div>
+    <div class="btns" style="flex-direction:column">
+      <a class="btn wa" id="smWa" href="#" target="_blank" rel="noopener" data-a="smsend" data-id="${x.id}" data-sid="${sess.id}" data-via="wa">Send on WhatsApp</a>
+      <a class="btn ghost" id="smSms" href="#" data-a="smsend" data-id="${x.id}" data-sid="${sess.id}" data-via="sms">Send as text message (SMS)</a>
+      <button class="btn ghost" data-a="smcopy">Copy</button>
+      <button class="btn ghost" data-a="close">Close</button></div>`, null);
+  const upd=()=>{ const t=val('smText'), p=phoneIntl(x.phone||val('smPhone')); document.getElementById('smWa').href = p?`https://wa.me/${p}?text=${encodeURIComponent(t)}`:`https://wa.me/?text=${encodeURIComponent(t)}`; document.getElementById('smSms').href=`sms:${p?'+'+p:''}?body=${encodeURIComponent(t)}`; };
+  document.getElementById('smText').addEventListener('input',upd);
+  const pi=document.getElementById('smPhone'); if(pi) pi.addEventListener('input',()=>{ upd(); if(pi.value.trim().length>=9){ x.phone=pi.value.trim(); save(); } });
+  upd();
+}
+function sessionLine(s){ return [s.lesson?cap((UNITS[s.unit]||UNITS.lp)[0])+' '+s.lesson:'', paraText(s)].filter(Boolean).join(', '); }
 
 /* ---------- encouraging messages ---------- */
 const MSGS = [
@@ -2292,6 +2369,10 @@ document.addEventListener('click', e => {
     case 'restore': document.getElementById('restoreFile').click(); break;
     case 'freshsheet': freshSheet(); break;
     case 'forceupdate': forceUpdate(); break;
+    case 'sssave': { const sess=saveStudy(id); if(!sess) break; render(); if(t.dataset.send){ summarySheet(id, sess.id); } else { closeSheet(); toast('Study saved'); } break; }
+    case 'sumsheet': summarySheet(id, t.dataset.sid); break;
+    case 'smsend': { const x=S.students.find(s=>s.id===id), sess=(x.sessions||[]).find(s=>s.id===t.dataset.sid); if(sess) sess.sent=TODAY(); recordSend('student', id, t.dataset.via, val('smText'), '', sess?sess.ref:'', '', ''); toast('Opening '+(t.dataset.via==='wa'?'WhatsApp':'messages')+'…'); setTimeout(()=>{ closeSheet(); render(); },600); return; }
+    case 'smcopy': { const txt=val('smText'); (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast('Copied'),()=>{ const ta=document.getElementById('smText'); ta.focus(); ta.select(); toast('Press and hold to copy'); }); break; }
     case 'peopletab': peopleTab=t.dataset.k; render(); break;
     case 'pfilter': peopleFilter=t.dataset.k; render(); break;
     case 'gopeople': tab='others'; peopleTab='met'; peopleFilter='due'; render(); window.scrollTo(0,0); break;
@@ -2576,13 +2657,14 @@ function allNotes(){
   const out=[];
   S.notes.forEach(x=>out.push({kind:'note', label:'My note', id:x.id, date:x.date, ts:x.ts||0, title:x.title||'', text:x.text||'', photos:x.photos||[]}));
   S.bible.log.filter(x=>x.note).forEach((x,i)=>out.push({kind:'bible', label:'Bible reading', date:x.date, ts:i, title:BOOKS[x.book-1][0]+' '+x.chapter, text:x.note, book:x.book, chapter:x.chapter}));
+  S.students.forEach(x=>(x.sessions||[]).filter(s=>s.summary||s.ref||s.note).forEach(s=>out.push({kind:'lesson', label:'Bible study', date:s.date, ts:0, title:x.name+(sessionLine(s)?' · '+sessionLine(s):''), text:[s.summary, s.ref&&('Scripture: '+s.ref), s.prep&&('Before next time: '+s.prep), s.note&&('Private note: '+s.note)].filter(Boolean).join('\n')})));
   S.study.journal.forEach(j=>out.push({kind:'study', label:'Personal study', id:j.id, date:j.date, ts:j.ts||0, title:j.title, text:[j.learned, j.apply&&('Apply: '+j.apply), j.verse&&('Verse: '+j.verse), j.questions&&('To research: '+j.questions)].filter(Boolean).join('\n'), photos:j.photos||[]}));
   Object.entries(S.answers||{}).filter(([,v])=>(v||'').trim()).forEach(([d,v])=>{ const q=VERSES[dayNum(d)%VERSES.length]; out.push({kind:'question', label:'Question of the day', date:d, ts:0, title:q[3], text:v, ref:q[0]}); });
   Object.entries(S.diary||{}).filter(([,v])=>(v||'').trim()).forEach(([d,v])=>out.push({kind:'diary', label:'Diary', date:d, ts:0, title:'My day', text:v}));
   return out.sort((a,b)=>b.date.localeCompare(a.date)||(b.ts-a.ts));
 }
 let notesFilter='all', notesQuery='', notesSearchT=null;
-const NOTE_KINDS=[['all','All'],['note','My notes'],['bible','Bible'],['study','Study'],['question','Questions'],['diary','Diary']];
+const NOTE_KINDS=[['all','All'],['note','My notes'],['bible','Bible'],['lesson','Bible studies'],['study','Study'],['question','Questions'],['diary','Diary']];
 V.notes = () => {
   const all=allNotes(), q=notesQuery.trim().toLowerCase();
   const list=all.filter(x=>(notesFilter==='all'||x.kind===notesFilter) && (!q || (x.title+' '+x.text+' '+(x.ref||'')).toLowerCase().includes(q)));
