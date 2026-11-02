@@ -225,6 +225,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 <header>
   <img src="icon.svg" alt="">
   <h1 id="title">Life Compass</h1>
+  <button data-a="syncsheet" aria-label="Sync with my other device" title="Sync"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg></button>
   <button data-a="gonotes" aria-label="My notes" title="My notes"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg></button>
   <button data-a="settings" aria-label="Settings"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
 </header>
@@ -238,7 +239,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 22;
+const APP_VERSION = 24;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -407,7 +408,7 @@ function load(){
 }
 let S = load();
 (function tidy(){ try{ const keep=addDays(ymd(new Date()),-14); Object.keys(S.fired||{}).forEach(k=>{ if(k<keep) delete S.fired[k]; }); }catch(e){} })();
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast('Could not save — storage full?'); } scheduleNativeSoon(); }
+function save(quiet){ if(!quiet && S && S.settings) S.settings.lastChange=Date.now(); try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast('Could not save — storage full?'); } scheduleNativeSoon(); }
 
 /* ---------- helpers ---------- */
 function ymd(d){ const z=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate()); }
@@ -751,7 +752,7 @@ function soundSelect(id, cur, withDefault){
 let ringing=null, wakeLock=null;
 function ring(item){
   ringing=item;
-  firedMap()[item.key]='rang'; save();
+  firedMap()[item.key]='rang'; save(true);
   startBeep(n(item.beep)||AL().beep||30, item.sound);
   const el=document.getElementById('alarm');
   const extra = item.kind==='med'?`<button class="btn" data-al="taken">I've taken it</button>`
@@ -1662,7 +1663,8 @@ function secGlance(){
       return `<div style="padding:8px 0;border-top:1px solid var(--line)"><div style="display:flex;justify-content:space-between"><b>${esc(g)}</b><span class="muted">${inn}/${ps.length} reported</span></div>${bar(pct(inn,ps.length))}</div>`; }).join('')
       :'<div class="empty">Give each publisher a group on the Publishers tab to see this.</div>'}</div>
   <div class="card"><h2>For the circuit overseer</h2><p class="muted" style="margin:0 0 10px">One PDF with the last 6 months: reports, attendance, pioneers, inactive and irregular publishers, groups and newly baptized.</p>
-    <button class="btn" data-a="coprint">Print circuit overseer summary</button></div>`;
+    <button class="btn" data-a="coprint">Print circuit overseer summary</button>
+    <button class="btn ghost" data-a="printsheet" data-k="s21" style="margin-top:8px">Send all S-21 cards (PDF or ZIP)</button></div>`;
   return html;
 }
 
@@ -1826,6 +1828,7 @@ function pubSheet(id){
     ${actions}
     ${id?pubYearHTML(p):''}
     ${id&&(p.visits||[]).length?`<div class="area">Visits</div><div class="list">${[...p.visits].reverse().map(v=>`<div class="it"><div class="x"><b>${nice(v.date)}${v.by?' · '+esc(v.by):''}</b><small>${esc(v.note||'')}</small></div></div>`).join('')}</div>`:''}
+    ${id?`<button class="btn wa" data-a="sendcard" data-id="${id}" style="margin-top:12px">Send ${esc(firstName(p.name))} their S-21 card</button><p class="muted" style="font-size:12.5px;margin:6px 0 0">Makes this service year's card as a PDF. Choose WhatsApp, then ${esc(firstName(p.name))}.</p>`:''}
     ${id?`<div class="btns" style="margin-top:12px"><button class="btn ghost" style="flex:1" data-a="pubvisit" data-id="${id}">Log a visit</button><button class="btn danger" style="flex:1" data-a="delpub" data-id="${id}">Delete</button></div>`:''}`, ()=>{
       const nm=val('puName').trim(); if(!nm) return fail('puName','Enter the name');
       const rec = id ? p : {id:uid(), visits:[], since:MONTH()};
@@ -2060,14 +2063,14 @@ async function loadPdfLib(){
 const FORM_KEY={s21:'form:S-21', s88:'form:S-88'};
 function b64ToBytes(b64){ const s=atob(b64.split(',').pop()); const u=new Uint8Array(s.length); for(let i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return u; }
 function bytesToB64(u){ let s=''; for(let i=0;i<u.length;i+=0x8000) s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000)); return btoa(s); }
-async function savePdfFile(bytes, name){
+async function savePdfFile(bytes, name, text, mime){
   if(NATIVE){
     const F=window.Capacitor.Plugins.Filesystem, Sh=window.Capacitor.Plugins.Share;
     const r=await F.writeFile({path:name, data:bytesToB64(bytes), directory:'CACHE'});
-    await Sh.share({title:name, files:[r.uri], dialogTitle:'Open or send the PDF'});
+    await Sh.share({title:name, text:text||undefined, files:[r.uri], dialogTitle:'Choose WhatsApp to send it'});
     return;
   }
-  const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'})), a=document.createElement('a');
+  const url=URL.createObjectURL(new Blob([bytes],{type:mime||'application/pdf'})), a=document.createElement('a');
   a.href=url; a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },1500);
 }
 
@@ -2118,6 +2121,53 @@ async function makeS21(people, sy, totals){
   }
   return out.save();
 }
+/* ---------- send one publisher their card, or all cards as a ZIP ---------- */
+function crc32(u){ const T=crc32.t||(crc32.t=(()=>{ const t=new Uint32Array(256); for(let i=0;i<256;i++){ let c=i; for(let k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; t[i]=c>>>0; } return t; })());
+  let crc=0xFFFFFFFF; for(let i=0;i<u.length;i++) crc=T[(crc^u[i])&0xff]^(crc>>>8); return (crc^0xFFFFFFFF)>>>0; }
+function makeZip(files){   // simple ZIP (stored): [{name, data:Uint8Array}]
+  const enc=new TextEncoder(), parts=[], central=[]; let off=0;
+  files.forEach(f=>{ const nm=enc.encode(f.name), crc=crc32(f.data), sz=f.data.length;
+    const h=new DataView(new ArrayBuffer(30)); h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(12,0x21,true); h.setUint32(14,crc,true); h.setUint32(18,sz,true); h.setUint32(22,sz,true); h.setUint16(26,nm.length,true);
+    parts.push(new Uint8Array(h.buffer), nm, f.data);
+    const c=new DataView(new ArrayBuffer(46)); c.setUint32(0,0x02014b50,true); c.setUint16(4,20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true); c.setUint16(14,0x21,true); c.setUint32(16,crc,true); c.setUint32(20,sz,true); c.setUint32(24,sz,true); c.setUint16(28,nm.length,true); c.setUint32(42,off,true);
+    central.push(new Uint8Array(c.buffer), nm); off+=30+nm.length+sz; });
+  const cs=central.reduce((a,b)=>a+b.length,0), e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true); e.setUint16(8,files.length,true); e.setUint16(10,files.length,true); e.setUint32(12,cs,true); e.setUint32(16,off,true);
+  const all=[...parts,...central,new Uint8Array(e.buffer)], out=new Uint8Array(all.reduce((a,b)=>a+b.length,0)); let q=0; all.forEach(b=>{ out.set(b,q); q+=b.length; });
+  return out;
+}
+const safeName = x => String(x||'').replace(/[\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim() || 'Publisher';
+async function sendCard(id, btn){
+  const p=SEC().pubs.find(x=>x.id===id); if(!p) return;
+  if(!(await photoGet(FORM_KEY.s21))){ toast('First add your blank S-21 card once'); printSheet('s21'); return; }
+  const was=btn.textContent; btn.textContent='Making the card…'; btn.disabled=true;
+  try{ const sy=curSY();
+    await savePdfFile(await makeS21([p], sy, []), 'S-21 '+safeName(p.name)+' '+sy+'.pdf', `Hello ${firstName(p.name)}, here is your publisher record card for the ${sy} service year (${syLabel(sy)}). Please check it and let me know if anything needs correcting. Thank you!`);
+    toast('Card ready'); }
+  catch(e){ toast(e.message||'Could not make the card'); }
+  btn.textContent=was; btn.disabled=false;
+}
+async function printZip(btn){
+  const was=btn.textContent; btn.textContent='Making the ZIP…'; btn.disabled=true;
+  try{
+    const sy=n(val('prSY')), who=val('prWho'), all=activePubs();
+    const people=(who==='all'?all : who.startsWith('g:')?all.filter(p=>(p.group||'')===who.slice(2)) : SEC().pubs.filter(p=>p.id===who.slice(2)))
+      .sort((a,b)=>(a.group||'').localeCompare(b.group||'')||a.name.localeCompare(b.name));
+    const labels={pub:'Publishers',aux:'Auxiliary pioneers',rp:'Regular pioneers'};
+    const totals=[...document.querySelectorAll('.prTot:checked')].map(c=>[c.value,labels[c.value]]);
+    if(!people.length && !totals.length) throw new Error('Nobody chosen.');
+    const files=[], used=new Set();
+    for(const [i,p] of people.entries()){
+      btn.textContent='Making card '+(i+1)+' of '+people.length+'…';
+      let nm=(p.group?safeName(p.group)+'/':'')+'S-21 '+safeName(p.name)+'.pdf'; if(used.has(nm)) nm=nm.replace('.pdf',' ('+p.id.slice(-4)+').pdf'); used.add(nm);
+      files.push({name:nm, data:await makeS21([p], sy, [])});
+    }
+    for(const t of totals) files.push({name:'Totals - '+t[1]+'.pdf', data:await makeS21([], sy, [t])});
+    await savePdfFile(makeZip(files), 'S-21 cards '+sy+'.zip', `Publisher record cards (S-21) for the ${sy} service year: ${people.length} publisher${people.length===1?'':'s'}${totals.length?' and the total cards':''}.`, 'application/zip');
+    toast('ZIP ready: '+files.length+' cards'); closeSheet();
+  }catch(e){ toast(e.message||'Could not make the ZIP'); btn.textContent=was; btn.disabled=false; }
+}
+
 /* ---------- S-88: attendance, filled into the form's own boxes ---------- */
 async function makeS88(sy){
   const L=await loadPdfLib(), blank=await photoGet(FORM_KEY.s88); if(!blank) throw new Error('Add your blank S-88 form first.');
@@ -2143,7 +2193,8 @@ function printSheet(kind){
       <div class="area">Also add total cards</div>
       ${[['pub','Publishers'],['aux','Auxiliary pioneers'],['rp','Regular pioneers']].map(([k,l])=>`<label class="row" style="cursor:pointer"><span class="lbl">${l}</span><input type="checkbox" class="prTot" value="${k}" checked style="width:22px;height:22px"></label>`).join('')}`:''}
     <p class="muted" style="font-size:12.5px;margin:8px 0">You get a PDF to print or send. The first time, the app needs data to download its printing tool.</p>
-    <button class="btn" data-a="printgo" data-k="${kind}">Make the PDF</button>`, null);
+    <button class="btn" data-a="printgo" data-k="${kind}">Make one PDF</button>
+    ${kind==='s21'?`<button class="btn ghost" data-a="printzip" style="margin-top:8px">Make a ZIP: one PDF per publisher</button><p class="muted" style="font-size:12.5px;margin:6px 0 0">For the circuit overseer: send the ZIP on WhatsApp or email. One PDF is easier to open on a phone; the ZIP is better if he wants each card as its own file.</p>`:''}`, null);
   photoGet(FORM_KEY[kind]).then(b=>{ const el=document.getElementById('pfState'); if(el) el.innerHTML = b ? '✓ Blank form saved on this phone. Choose again only to replace it.' : '<span style="color:var(--bad)">Not added yet. Choose the blank PDF below.</span>'; });
 }
 async function printGo(kind){
@@ -3087,6 +3138,9 @@ function settingsSheet(){
     <button class="btn sm ghost" data-a="addbucket" style="margin:4px 0 6px">${svg('plus',16)} Add bucket</button>
     <div class="muted" id="bkTot"></div>
     ${actions}
+    <div class="area" style="margin-top:20px">Phone and laptop</div>
+    <p class="muted" style="margin:0 0 8px">Use Life Compass on two devices and keep them the same with the Sync button at the top.</p>
+    <button class="btn ghost" data-a="syncsheet">Sync with my other device</button>
     <div class="area" style="margin-top:20px">Backup</div>
     <p class="muted" style="margin:0 0 8px">Your data is saved only on this phone. Download a backup file regularly and keep it in Google Drive or WhatsApp to yourself. ${st.lastBackup?'Last backup: '+new Date(st.lastBackup).toLocaleDateString()+'.':'No backup made yet.'}</p>
     <div class="btns"><button class="btn ghost" style="flex:1" data-a="backup">Download backup</button><button class="btn ghost" style="flex:1" data-a="restore">Restore backup</button></div>
@@ -3163,6 +3217,99 @@ async function backup(){
   document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},500);
   toast('Backup downloaded'); render();
 }
+/* ================= SYNC BETWEEN PHONE AND LAPTOP (through a file, merged, nothing wiped) ================= */
+function deviceId(){ try{ let d=localStorage.getItem('lc.device'); if(!d){ d=uid(); localStorage.setItem('lc.device',d); } return d; }catch(e){ return 'x'; } }
+function deviceName(){ try{ return localStorage.getItem('lc.deviceName') || (NATIVE?'Android app':/Android|iPhone|iPad/i.test(navigator.userAgent)?'Phone browser':'Laptop'); }catch(e){ return 'This device'; } }
+const SYNC_LOCAL = ['timer','fired','snooze'];          // belong to this device only
+function allIds(o, out=new Set()){ if(Array.isArray(o)) o.forEach(x=>allIds(x,out)); else if(o && typeof o==='object'){ if(o.id!=null) out.add(String(o.id)); Object.values(o).forEach(x=>allIds(x,out)); } return out; }
+const isObj = x => x && typeof x==='object' && !Array.isArray(x);
+const idArr = x => Array.isArray(x) && x.every(o=>isObj(o) && o.id!=null);
+function mergeVal(a, b, bNewer, ctx, path){
+  if(a===undefined) return b; if(b===undefined) return a;
+  if(Array.isArray(a) && Array.isArray(b)){
+    if(idArr(a) && idArr(b) && (a.length||b.length)){
+      const ib=new Map(b.map(o=>[String(o.id),o])), out=[], seen=new Set();
+      a.forEach(o=>{ const k=String(o.id); seen.add(k);
+        if(ib.has(k)) out.push(mergeVal(o, ib.get(k), bNewer, ctx, path+'[]'));
+        else if(ctx.baseB.has(k)){ ctx.removed++; }            // deleted on the other device
+        else out.push(o); });
+      b.forEach(o=>{ const k=String(o.id); if(seen.has(k)) return;
+        if(ctx.baseA.has(k)) return;                          // deleted on this device
+        out.push(o); ctx.added++; });
+      return out;
+    }
+    if(/^\.bible\.read\./.test(path)) return [...new Set([...a,...b])].sort((x,y)=>x-y);   // chapters read: keep all
+    if(JSON.stringify(a)!==JSON.stringify(b)) ctx.changed++;
+    return bNewer ? b : a;
+  }
+  if(isObj(a) && isObj(b)){
+    const out={}; new Set([...Object.keys(a),...Object.keys(b)]).forEach(k=>{ out[k]=mergeVal(a[k], b[k], bNewer, ctx, path+'.'+k); });
+    return out;
+  }
+  if(a!==b){ ctx.changed++; return bNewer ? b : a; }
+  return a;
+}
+function syncPack(){
+  S.settings.lastSyncOut=Date.now(); S.settings.lastBackup=Date.now(); save(true);
+  return {...S, __sync:{v:1, at:Date.now(), changed:S.settings.lastChange||0, device:deviceId(), name:deviceName(), base:S.syncBase||[]}};   // base = what both devices last agreed on
+}
+async function syncSend(){
+  const data=syncPack();
+  let photos={}; try{ photos=await photoAll(); delete photos['lib:pdf-lib']; }catch(e){}
+  if(Object.keys(photos).length) data.__photos=photos;
+  const out=JSON.stringify(data), d=new Date(), name='life-compass-sync-'+TODAY()+'-'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0')+'.json';
+  if(NATIVE){
+    const F=window.Capacitor.Plugins.Filesystem, Sh=window.Capacitor.Plugins.Share;
+    try{ const r=await F.writeFile({path:name, data:out, directory:'CACHE', encoding:'utf8'});
+      await Sh.share({title:'Life Compass sync', text:'Life Compass sync file', files:[r.uri], dialogTitle:'Save it to Google Drive'}); toast('Choose Drive to save it'); }
+    catch(e){ if(!/cancel/i.test(String(e&&e.message||e))) toast('Could not share the file'); }
+  } else {
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([out],{type:'application/json'})); a.download=name;
+    document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
+    toast('Saved to Downloads. Now put it in Google Drive');
+  }
+  closeSheet(); render();
+}
+function syncMerge(d){
+  const meta=d.__sync||{}, ph=d.__photos||{}; delete d.__sync; delete d.__photos;
+  const keepLocal={}; SYNC_LOCAL.forEach(k=>keepLocal[k]=S[k]);
+  const ctx={added:0, removed:0, changed:0, baseA:new Set(S.syncBase||[]), baseB:new Set(meta.base||[])};
+  const bNewer=(meta.changed||0) > (S.settings.lastChange||0);
+  const activeStudy=S.study&&S.study.active;
+  const merged=mergeVal(S, d, bNewer, ctx, '');
+  SYNC_LOCAL.forEach(k=>merged[k]=keepLocal[k]);
+  delete merged.syncBase;
+  if(merged.study) merged.study.active=activeStudy||null;
+  S=merged; const f=fresh(); S.settings={...f.settings, ...S.settings};
+  S.syncBase=[...allIds(S)]; S.settings.lastSyncIn=Date.now(); S.settings.lastSyncFrom=meta.name||'';
+  save();
+  return Promise.all(Object.entries(ph).map(([k,v])=>photoGet(k).then(x=>x?null:photoPut(k,v)).catch(()=>{}))).then(()=>ctx);
+}
+function syncLoad(file){
+  const r=new FileReader();
+  r.onload=()=>{
+    let d; try{ d=JSON.parse(r.result); if(!d||!d.settings||!d.days) throw 0; }catch(e){ toast('That file is not a Life Compass sync file'); return; }
+    if(d.__sync && d.__sync.device===deviceId()){ toast('That file came from this device. Load the one from your other device.'); return; }
+    syncMerge(d).then(ctx=>{ closeSheet(); render(); toast('Synced'+(d.__sync&&d.__sync.name?' with '+d.__sync.name:'')+': '+ctx.added+' new, '+ctx.changed+' updated'+(ctx.removed?', '+ctx.removed+' removed':'')); });
+  };
+  r.readAsText(file);
+}
+function syncSheet(){
+  const st=S.settings, when=t=>t?new Date(t).toLocaleString(undefined,{weekday:'short',day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}):'never';
+  openSheet(`<h3>Sync with my other device</h3>
+    <p class="muted" style="margin:-4px 0 12px">This device: <b>${esc(deviceName())}</b> · <button class="linkbtn" data-a="syncrename">rename</button></p>
+    <div class="area" style="margin-top:0">1 · When you finish on this device</div>
+    <button class="btn" data-a="syncsend">Send my data</button>
+    <p class="muted" style="margin:6px 0 12px;font-size:13px">${NATIVE?'Choose <b>Drive</b> when the share menu opens.':'The file goes to your Downloads. Open drive.google.com and drag it in.'} Last sent: ${when(st.lastSyncOut)}</p>
+    <div class="area">2 · When you start on the other device</div>
+    <button class="btn ghost" data-a="syncload">Load data from my other device</button>
+    <input type="file" id="syncFile" accept=".json,application/json" hidden>
+    <p class="muted" style="margin:6px 0 12px;font-size:13px">Pick the newest <b>life-compass-sync</b> file. ${/Laptop/.test(deviceName())?'Download it from drive.google.com first.':'In the file picker, tap ☰ and choose Drive.'} Last loaded: ${when(st.lastSyncIn)}${st.lastSyncFrom?' from '+esc(st.lastSyncFrom):''}</p>
+    <div class="banner" style="background:var(--sky);border-color:var(--sky2);color:var(--navy);margin:0 0 10px"><span>Loading <b>adds and updates</b>. It does not wipe what is on this device. If the same entry was changed on both devices, the newer device's version is kept. Alarms and the running timer stay as they are on each device.</span></div>
+    <p class="muted" style="font-size:13px;margin:0 0 10px">Good habit: <b>Send</b> when you stop working, <b>Load</b> when you start on the other device.</p>
+    <button class="btn ghost" data-a="close">Close</button>`, null);
+}
+
 function restore(file){
   const r = new FileReader();
   r.onload = () => {
@@ -3219,6 +3366,10 @@ document.addEventListener('click', e => {
     case 'delbucket': t.closest('.bkrow').remove(); updBk(); break;
     case 'backup': { const ws=weekSheet.open; backup(); if(ws) weekSheet(ws); break; }
     case 'restore': document.getElementById('restoreFile').click(); break;
+    case 'syncsheet': syncSheet(); break;
+    case 'syncsend': syncSend(); break;
+    case 'syncload': document.getElementById('syncFile').click(); break;
+    case 'syncrename': { const v=prompt('Name this device', deviceName()); if(v&&v.trim()){ try{ localStorage.setItem('lc.deviceName',v.trim()); }catch(e){} syncSheet(); } break; }
     case 'freshsheet': freshSheet(); break;
     case 'forceupdate': forceUpdate(); break;
     case 'sectab': secTab=t.dataset.k; render(); window.scrollTo(0,0); break;
@@ -3235,6 +3386,8 @@ document.addEventListener('click', e => {
     case 'atdel': if(confirm('Delete this attendance?')){ SEC().meetings=SEC().meetings.filter(x=>x.id!==id); save(); render(); } break;
     case 'printsheet': printSheet(t.dataset.k); break;
     case 'printgo': printGo(t.dataset.k); break;
+    case 'printzip': printZip(t); break;
+    case 'sendcard': sendCard(id, t); break;
     case 'sgsheet': suggestSheet(id); break;
     case 'sgadd': addSuggested(id); break;
     case 'histnav': histMonth=t.dataset.m; render(); break;
@@ -3424,6 +3577,7 @@ document.addEventListener('change', e => {
   if(t.id==='reportMonth'){ reportMonth=t.value; render(); }
   if(t.id==='sLangTest'){ document.getElementById('sLangTestBtn').href=jwlib('01001001', t.value); }
   if(t.id==='restoreFile' && t.files[0]) restore(t.files[0]);
+  if(t.id==='syncFile' && t.files[0]){ syncLoad(t.files[0]); t.value=''; }
 });
 document.addEventListener('keydown', e => { if(e.key==='Enter' && e.target.id==='todoText'){ e.preventDefault(); const b=document.querySelector('[data-a=todoadd]'); if(b) b.click(); } });
 document.addEventListener('input', e => {
