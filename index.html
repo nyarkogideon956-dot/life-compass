@@ -213,6 +213,12 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .student.stopped{opacity:.65}
 .student.steady{border-left:4px solid #1E7F52}
 .down{color:var(--warn);font-size:12.5px}
+.seg.six{overflow-x:auto}.seg.six button{font-size:12.5px;padding:8px 6px;flex:none}
+.pickrow{display:flex;gap:8px;align-items:center;margin-bottom:10px}.pickrow select{flex:1}
+.ptype{display:flex;flex-direction:column;gap:8px}.ptype button{text-align:left;border:1.5px solid var(--sky2);background:#fff;border-radius:12px;padding:12px 14px;color:var(--ink)}
+.ptype button b{display:block;color:var(--navy);font-size:16px}.ptype button small{color:var(--muted);font-size:13px}
+.ptype button.on{border-color:var(--navy);background:var(--sky)}
+.glance .big{font-size:26px;font-weight:700;color:var(--navy)}
 </style>
 </head>
 <body>
@@ -232,7 +238,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 21;
+const APP_VERSION = 22;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -508,7 +514,7 @@ V.today = () => {
     <div class="sub">${parse(t).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
     <div class="chips">
       ${secOn('faith')?`<span class="chip">Bible reading streak: ${bStreak} day${bStreak===1?'':'s'}</span>`:''}
-      ${secOn('ministry')?`<span class="chip">Ministry this month: ${r1(mm)} / ${st.ministryTarget} h</span>`:''}
+      ${secOn('ministry')?`<span class="chip">${ministryChip()}</span>`:''}
     </div></div>`;
   if(hasData && (sinceBackup===null || sinceBackup>=7))
     html += `<div class="banner"><span style="flex:1">${sinceBackup===null?'You haven\'t made a backup yet.':'Last backup was '+sinceBackup+' days ago.'} Your data lives only on this phone.</span><button class="btn sm" data-a="backup">Back up</button></div>`;
@@ -1498,7 +1504,7 @@ document.addEventListener('change', e=>{
 const PTYPES = [['pub','Publisher'],['unbap','Unbaptized publisher'],['rp','Regular pioneer'],['sp','Special pioneer'],['fm','Field missionary']];
 const PSTATUS = [['active','Active'],['inactive','Inactive'],['moved','Moved away']];
 const FREQ = [['1','Every month'],['3','Every 3 months'],['6','Every 6 months'],['12','Every year'],['0','Once']];
-let secTab='reports', secMonth=null, secGroup='all';
+let secTab='glance', secMonth=null, secGroup='all', secRepView='month', secSY=null;
 function SEC(){
   S.sec = S.sec || {};
   const d=S.sec;
@@ -1538,20 +1544,22 @@ function money2(v){ return money(n(v)); }
 
 /* ---------- the Secretary tab ---------- */
 V.sec = () => {
-  const segs=[['reports','Reports'],['pubs','Publishers'],['att','Meetings'],['duties','Duties'],['committee','Committee']];
-  let html=`<div class="seg">${segs.map(([k,l])=>`<button class="${k===secTab?'on':''}" data-a="sectab" data-k="${k}">${l}</button>`).join('')}</div>`;
+  const segs=[['glance','Overview'],['reports','Reports'],['pubs','Publishers'],['att','Meetings'],['duties','Duties'],['committee','Committee']];
+  let html=`<div class="seg six">${segs.map(([k,l])=>`<button class="${k===secTab?'on':''}" data-a="sectab" data-k="${k}">${l}</button>`).join('')}</div>`;
   if(!curProfile().pin) html+=`<div class="banner"><span style="flex:1">These are confidential congregation records. They stay only on this phone. Set a passcode so nobody else can open them.</span><button class="btn sm" data-a="pinsheet">Set passcode</button></div>`;
-  html += secTab==='reports'?secReports(): secTab==='pubs'?secPubs(): secTab==='att'?secAttendance(): secTab==='duties'?secDuties(): secCommittee();
+  html += secTab==='glance'?secGlance(): secTab==='reports'?secReports(): secTab==='pubs'?secPubs(): secTab==='att'?secAttendance(): secTab==='duties'?secDuties(): secCommittee();
   return html;
 };
 function secReports(){
   const d=SEC(); if(!secMonth) secMonth=secMonthDefault();
-  const m=secMonth, t=monthTotals(m), months=[...new Set([MONTH(), secMonthDefault(), prevMonth(secMonthDefault()), ...Object.keys(d.reports)])].sort().reverse().slice(0,14);
+  const m=secMonth, t=monthTotals(m), months=lastNMonths(MONTH(),36).reverse();
   if(!d.pubs.length) return `<div class="card"><div class="empty">Start by adding your publishers on the <b>Publishers</b> tab. You can paste a whole list at once.</div><button class="btn" data-a="sectab" data-k="pubs" style="margin-top:10px">Go to Publishers</button></div>`;
   const att=needsAttention(m), groups=groupsList();
+  const viewSeg=`<div class="seg">${[['month','One month'],['year','Whole service year']].map(([k,l])=>`<button class="${k===secRepView?'on':''}" data-a="secrepview" data-k="${k}">${l}</button>`).join('')}</div>`;
+  if(secRepView==='year') return viewSeg+secYearView();
   const list=activePubs().filter(p=>secGroup==='all'||(p.group||'')===secGroup).sort((a,b)=>(a.group||'').localeCompare(b.group||'')||a.name.localeCompare(b.name));
   const missing=list.filter(p=>repState(rep(m,p.id))==='missing');
-  let html=`<div class="card"><h2>Reports for<span class="sp"></span><select id="secMonth" style="width:auto">${months.map(x=>`<option value="${x}" ${x===m?'selected':''}>${monthName(x)}</option>`).join('')}</select></h2>
+  let html=viewSeg+`<div class="card"><div class="pickrow"><button class="btn sm ghost" data-a="secmnav" data-m="${prevMonth(m)}" aria-label="Previous month">‹</button><select id="secMonth">${months.map(x=>`<option value="${x}" ${x===m?'selected':''}>${monthName(x)}</option>`).join('')}</select><button class="btn sm ghost" data-a="secmnav" data-m="${nextMonth(m)}" ${m>=MONTH()?'disabled style="opacity:.35"':''} aria-label="Next month">›</button></div>
     <div class="stat"><div><small>Reports in</small><b>${t.in+t.none} / ${t.total}</b></div><div><small>Still missing</small><b style="color:${t.missing?'var(--bad)':'var(--ok)'}">${t.missing}</b></div></div>
     ${bar(pct(t.in+t.none,t.total))}
     <table class="tot"><tr><th></th><th>Number</th><th>Hours</th><th>Studies</th></tr>
@@ -1592,6 +1600,141 @@ function saveReport(id){
   const aux=document.getElementById('rpAux');
   d.reports[m][id]={got:TODAY(), shared:sh==='yes', aux:!!(aux&&aux.checked), hours:sh==='yes'&&val('rpHours')!==''?n(val('rpHours')):null, studies:sh==='yes'?n(val('rpStudies')):0, remarks:val('rpRem').trim()};
   save(); return true;
+}
+
+const nextMonth = m => { const d=parse(m+'-01'); d.setMonth(d.getMonth()+1); return ymd(d).slice(0,7); };
+function lastNMonths(endM,k){ const out=[]; let m=endM; for(let i=0;i<k;i++){ out.unshift(m); m=prevMonth(m); } return out; }
+const monthHasData = m => Object.keys(SEC().reports[m]||{}).length>0;
+function lastReported(p){ const ks=Object.keys(SEC().reports).filter(m=>repState(rep(m,p.id))==='in').sort(); return ks[ks.length-1]||null; }
+/* inactive: no report for six months in a row (counted only over months where reports were entered) */
+function inactivePubs(){
+  const ms=lastNMonths(secMonthDefault(),6), full=ms.every(monthHasData);
+  return SEC().pubs.filter(p=>p.status!=='moved' && (p.status==='inactive' || (full && (p.since||'0000')<=ms[0] && ms.every(m=>repState(rep(m,p.id))!=='in'))));
+}
+function irregularPubs(){
+  const ms=lastNMonths(secMonthDefault(),6).filter(monthHasData), ina=new Set(inactivePubs().map(p=>p.id));
+  return activePubs().filter(p=>!ina.has(p.id)).map(p=>({p, missed:ms.filter(m=>(p.since||'0000')<=m && repState(rep(m,p.id))!=='in').length})).filter(x=>x.missed>0).sort((a,b)=>b.missed-a.missed);
+}
+
+/* ---------- the whole service year at once ---------- */
+function secYearView(){
+  if(!secSY) secSY=curSY();
+  const sy=secSY, ms=syMonthList(sy);
+  let tot={st:0, auxH:0, rpH:0};
+  const rows=ms.map((m,i)=>{ const t=monthTotals(m), has=monthHasData(m); if(has){ tot.st+=t.pub.st+t.aux.st+t.rp.st; tot.auxH+=t.aux.h; tot.rpH+=t.rp.h; }
+    return `<tr data-a="secopenmonth" data-m="${m}" style="cursor:pointer"><td>${MONTH_NAMES[i].slice(0,3)}</td><td>${has?(t.in+t.none)+'/'+t.total:'—'}</td><td>${has?t.pub.st+t.aux.st+t.rp.st:''}</td><td>${has&&t.aux.n?t.aux.n+' · '+r1(t.aux.h)+'h':''}</td><td>${has&&t.rp.n?t.rp.n+' · '+r1(t.rp.h)+'h':''}</td></tr>`; }).join('');
+  return `<div class="card"><div class="pickrow"><button class="btn sm ghost" data-a="secsynav" data-y="${sy-1}" aria-label="Previous year">‹</button><b style="flex:1;text-align:center">${sy} · ${syLabel(sy)}</b><button class="btn sm ghost" data-a="secsynav" data-y="${sy+1}" ${sy>=curSY()?'disabled style="opacity:.35"':''} aria-label="Next year">›</button></div>
+    <table class="tot sy"><tr><th>Month</th><th>Reports</th><th>Studies</th><th>Aux</th><th>Reg. pio.</th></tr>${rows}
+    <tr><td><b>Total</b></td><td></td><td><b>${tot.st}</b></td><td><b>${tot.auxH?r1(tot.auxH)+'h':''}</b></td><td><b>${tot.rpH?r1(tot.rpH)+'h':''}</b></td></tr></table>
+    <p class="muted" style="font-size:12.5px;margin:8px 0 0">Tap a month to open its reports. To see one person's whole year, tap their name on the Publishers tab.</p>
+    <button class="btn ghost" data-a="printsheet" data-k="s21" style="margin-top:10px">Print S-21 cards for this year</button></div>`;
+}
+
+/* ---------- congregation at a glance ---------- */
+function secGlance(){
+  const d=SEC();
+  if(!d.pubs.length) return `<div class="card"><div class="empty">Add your publishers first. Then this page shows how the congregation is doing.</div><button class="btn" data-a="sectab" data-k="pubs" style="margin-top:10px">Go to Publishers</button></div>`;
+  const m=secMonthDefault(), t=monthTotals(m), miss=activePubs().filter(p=>repState(rep(m,p.id))==='missing');
+  const thisM=MONTH(), lastM=prevMonth(thisM);
+  const att=k=>{ const a=attMonth(thisM,k), b=attMonth(lastM,k); return `<div><small>${k==='mid'?'Midweek':'Weekend'} average</small><b>${a.n?a.avg:'—'}</b><small>${b.n?(a.n?(a.avg>=b.avg?'▲ ':'▼ ')+'last month '+b.avg:'last month '+b.avg):'no record last month'}</small></div>`; };
+  const ina=inactivePubs(), irr=irregularPubs(), sy=curSY(), done=syMonthList(sy).filter(x=>x<=m && monthHasData(x)).length;
+  const pios=activePubs().filter(isPioneer).sort((a,b)=>a.name.localeCompare(b.name)), groups=groupsList();
+  const co=d.co||{}, cd=co.date?-daysSince(co.date):null;
+  let html=`${co.date&&cd>=0?`<div class="banner" style="background:var(--sky);border-color:var(--sky2);color:var(--navy)"><span style="flex:1"><b>Circuit overseer's visit</b> ${cd===0?'starts today':'in '+cd+' day'+(cd===1?'':'s')} (${nice(co.date)})</span></div>`:''}
+  <div class="card glance"><h2>Reports · ${monthName(m)}</h2>
+    <div class="stat"><div><small>Reports in</small><b>${t.in+t.none} / ${t.total}</b></div><div><small>Still missing</small><b style="color:${miss.length?'var(--bad)':'var(--ok)'}">${miss.length}</b></div></div>
+    ${bar(pct(t.in+t.none,t.total))}
+    ${miss.length?`<p class="muted" style="margin:8px 0 0">Missing: ${miss.slice(0,12).map(p=>esc(p.name)).join(', ')}${miss.length>12?' and '+(miss.length-12)+' more':''}</p>`:''}
+    <button class="btn sm ghost" data-a="secopenmonth" data-m="${m}" style="margin-top:10px">Open reports</button></div>
+  <div class="card"><h2>Meeting attendance · ${monthName(thisM)}</h2><div class="stat">${att('mid')}${att('wk')}</div>
+    <button class="btn sm ghost" data-a="sectab" data-k="att" style="margin-top:10px">Add attendance</button></div>
+  <div class="card"><h2>Regular pioneers · service year ${sy}<span class="sp"></span><span class="chip">${pios.length}</span></h2>
+    ${pios.length?pios.map(p=>{ const y=pubYear(p,sy), goal=p.type==='rp'?50*done:0;
+      return `<div style="padding:8px 0;border-top:1px solid var(--line)"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(p.name)}</b><span class="muted">${r1(y.hours)} h${goal?' of '+goal:''}${done?' · avg '+r1(y.hours/done)+' h':''}</span></div>${goal?bar(pct(y.hours,goal)):''}</div>`; }).join('')
+      :'<div class="empty">No regular pioneers marked. Set their type on the Publishers tab.</div>'}
+    ${pios.length&&done?`<p class="muted" style="font-size:12.5px;margin:6px 0 0">Goal so far = 50 hours × ${done} month${done===1?'':'s'} with reports.</p>`:''}</div>
+  <div class="card"><h2>Inactive publishers<span class="sp"></span><span class="chip" style="${ina.length?'background:#FBEAEA;color:#A32D2D':''}">${ina.length}</span></h2>
+    ${ina.length?`<div class="list">${ina.map(p=>{ const lr=lastReported(p); return `<div class="it"><span class="wdot red" style="margin-top:6px"></span><div class="x" data-a="pubsheet" data-id="${p.id}" style="cursor:pointer"><b>${esc(p.name)}</b><small>${esc(p.group||'No group')} · ${lr?'last report '+monthName(lr):'no report recorded'}</small></div>${p.phone?`<button class="btn sm ghost" data-a="secenc" data-id="${p.id}">Encourage</button>`:''}</div>`; }).join('')}</div>`
+      :'<div class="empty">Nobody inactive. (Counted when there is no report for 6 months in a row.)</div>'}
+    ${irr.length?`<div class="area">Irregular · missed at least one of the last 6 months</div><div class="list">${irr.slice(0,15).map(x=>`<div class="it"><span class="wdot orange" style="margin-top:6px"></span><div class="x"><b>${esc(x.p.name)}</b><small>${esc(x.p.group||'No group')} · missed ${x.missed} month${x.missed===1?'':'s'}</small></div></div>`).join('')}</div>`:''}</div>
+  <div class="card"><h2>Field service groups · ${monthName(m)}</h2>
+    ${groups.length?groups.map(g=>{ const ps=activePubs().filter(p=>(p.group||'')===g), inn=ps.filter(p=>repState(rep(m,p.id))!=='missing').length;
+      return `<div style="padding:8px 0;border-top:1px solid var(--line)"><div style="display:flex;justify-content:space-between"><b>${esc(g)}</b><span class="muted">${inn}/${ps.length} reported</span></div>${bar(pct(inn,ps.length))}</div>`; }).join('')
+      :'<div class="empty">Give each publisher a group on the Publishers tab to see this.</div>'}</div>
+  <div class="card"><h2>For the circuit overseer</h2><p class="muted" style="margin:0 0 10px">One PDF with the last 6 months: reports, attendance, pioneers, inactive and irregular publishers, groups and newly baptized.</p>
+    <button class="btn" data-a="coprint">Print circuit overseer summary</button></div>`;
+  return html;
+}
+
+/* ---------- circuit overseer summary PDF (made on the phone) ---------- */
+async function makeCOSummary(){
+  const L=await loadPdfLib(), doc=await L.PDFDocument.create();
+  const font=await doc.embedFont(L.StandardFonts.Helvetica), bold=await doc.embedFont(L.StandardFonts.HelveticaBold);
+  const ink=L.rgb(0.05,0.13,0.3), grey=L.rgb(0.4,0.45,0.52), line=L.rgb(0.85,0.88,0.92), W=595, H=842, M=40;
+  const clean=x=>String(x??'').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[–—]/g,'-').replace(/✓/g,'Yes').replace(/[^\x20-\x7E\xA0-\xFF]/g,'');
+  const fit=(x,w,size,f)=>{ x=clean(x); while(x && f.widthOfTextAtSize(x,size)>w) x=x.slice(0,-1); return x; };
+  let page, y;
+  const newPage=()=>{ page=doc.addPage(); page.setSize(W,H); y=H-M; };
+  const need=h=>{ if(y-h<M+20) newPage(); };
+  const text=(x,xp,size=9.5,f=font,c=ink)=>page.drawText(clean(x),{x:xp,y,size,font:f,color:c});
+  const heading=x=>{ need(44); y-=10; text(x,M,12.5,bold); y-=6; page.drawLine({start:{x:M,y},end:{x:W-M,y},thickness:1,color:ink}); y-=14; };
+  const row=(cells,xs,f=font,size=9.5)=>{ need(14); cells.forEach((c,i)=>text(fit(c,((xs[i+1]||W-M)-xs[i])-6,size,f),xs[i],size,f)); y-=5; page.drawLine({start:{x:M,y},end:{x:W-M,y},thickness:0.4,color:line}); y-=10; };
+  const note=x=>{ need(14); text(x,M,9,font,grey); y-=14; };
+  const end=secMonthDefault(), ms=lastNMonths(end,6), mn=m=>monthName(m).split(' ')[0].slice(0,3)+' '+m.slice(2,4);
+  newPage();
+  text('Congregation summary for the circuit overseer',M,16,bold); y-=18;
+  text(monthName(ms[0])+' to '+monthName(end)+'   ·   Prepared '+parse(TODAY()).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})+(SEC().co.date?'   ·   Visit '+parse(SEC().co.date).toLocaleDateString('en-GB',{day:'numeric',month:'long'}):''),M,9.5,font,grey); y-=10;
+
+  heading('1. Field service reports');
+  let xs=[M,120,200,290,390,490];
+  row(['Month','Reports in','Publishers (studies)','Aux. pioneers (hours)','Reg. pioneers (hours)','All studies'],xs,bold,8.5);
+  ms.forEach(m=>{ const t=monthTotals(m); if(!monthHasData(m)) return row([mn(m),'not entered','','','',''],xs);
+    row([mn(m),(t.in+t.none)+' of '+t.total,t.pub.n+' ('+t.pub.st+')',t.aux.n+' ('+r1(t.aux.h)+')',t.rp.n+' ('+r1(t.rp.h)+')',t.pub.st+t.aux.st+t.rp.st],xs); });
+
+  heading('2. Meeting attendance (average)');
+  xs=[M,200,360];
+  row(['Month','Midweek','Weekend'],xs,bold,8.5);
+  ms.forEach(m=>{ const a=attMonth(m,'mid'), b=attMonth(m,'wk'); row([monthName(m),a.n?a.avg+'  ('+a.n+' meeting'+(a.n===1?'':'s')+')':'-',b.n?b.avg+'  ('+b.n+' meeting'+(b.n===1?'':'s')+')':'-'],xs); });
+
+  heading('3. Pioneers: hours each month');
+  const pios=activePubs().filter(isPioneer).sort((a,b)=>a.name.localeCompare(b.name));
+  xs=[M,190,240,290,340,390,440,490];
+  row(['Name',...ms.map(mn),'Total'],xs,bold,8.5);
+  if(!pios.length) note('No pioneers marked.');
+  pios.forEach(p=>{ let tot=0; const cells=ms.map(m=>{ const r=rep(m,p.id); if(!r||r.shared===false) return '-'; tot+=n(r.hours); return r.hours!=null?r1(n(r.hours)):'-'; }); row([p.name,...cells,r1(tot)],xs); });
+
+  heading('4. Inactive publishers (no report for 6 months)');
+  const ina=inactivePubs();
+  xs=[M,230,360];
+  if(ina.length){ row(['Name','Group','Last report'],xs,bold,8.5); ina.forEach(p=>{ const lr=lastReported(p); row([p.name,p.group||'-',lr?monthName(lr):'none recorded'],xs); }); } else note('None.');
+
+  heading('5. Irregular publishers (missed at least one of the 6 months)');
+  const irr=irregularPubs();
+  if(irr.length){ row(['Name','Group','Months missed'],xs,bold,8.5); irr.forEach(x=>row([x.p.name,x.p.group||'-',x.missed],xs)); } else note('None.');
+
+  heading('6. Field service groups');
+  xs=[M,200,300,420];
+  const groups=groupsList();
+  if(groups.length){ row(['Group','Active publishers','Reports in (6 months)','Missing for '+mn(end)],xs,bold,8.5);
+    groups.forEach(g=>{ const ps=activePubs().filter(p=>(p.group||'')===g); let due=0, got=0; ms.filter(monthHasData).forEach(m=>ps.forEach(p=>{ due++; if(repState(rep(m,p.id))!=='missing') got++; }));
+      row([g,ps.length,due?pct(got,due)+'%':'-',ps.filter(p=>repState(rep(end,p.id))==='missing').length],xs); }); }
+  else note('No groups set.');
+
+  heading('7. Newly baptized (first year)');
+  const nb=newlyBaptized();
+  xs=[M,220,330,400];
+  if(nb.length){ row(['Name','Baptized','Visits','Last visit'],xs,bold,8.5); nb.forEach(p=>{ const lv=lastVisit(p); const fd=x=>parse(x).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}); row([p.name,fd(p.baptized),(p.visits||[]).length,lv?fd(lv):'not visited'],xs); }); } else note('None in the last year.');
+
+  const od=SEC().duties.filter(x=>x.due && daysSince(x.due)>0);
+  if(od.length){ heading('8. Overdue duties'); od.forEach(x=>note(x.name+' - due '+nice(x.due))); }
+  need(30); y-=10; note('Confidential congregation record. Made with Life Compass.');
+  return doc.save();
+}
+async function coPrint(btn){
+  const was=btn.textContent; btn.textContent='Making the PDF…'; btn.disabled=true;
+  try{ await savePdfFile(await makeCOSummary(), 'Circuit overseer summary '+secMonthDefault()+'.pdf'); toast('PDF ready'); }
+  catch(e){ toast(e.message||'Could not make the PDF'); }
+  btn.textContent=was; btn.disabled=false;
 }
 
 /* ---------- paste a group's report ---------- */
@@ -1723,7 +1866,8 @@ function secDuties(){
   let html=`<div class="card"><h2>Circuit overseer's visit</h2>
     ${co.date?`<div class="codebox" style="font-size:24px;margin-top:4px">${cd>0?cd+' day'+(cd===1?'':'s')+' to go':cd===0?'Starts today':'Visit week of '+nice(co.date)}</div>`:''}
     <div class="f"><label>Visit starts</label><input type="date" id="coDate" value="${co.date||''}"></div>
-    <div class="f"><label>To prepare</label><textarea id="coNotes" placeholder="Reports up to date&#10;Accounts audited&#10;Hospitality arranged">${esc(co.notes||'')}</textarea></div></div>`;
+    <div class="f"><label>To prepare</label><textarea id="coNotes" placeholder="Reports up to date&#10;Accounts audited&#10;Hospitality arranged">${esc(co.notes||'')}</textarea></div>
+    <button class="btn ghost" data-a="coprint">Print circuit overseer summary</button></div>`;
   html+=`<div class="card"><h2>My duties<span class="sp"></span><button class="btn sm ghost" data-a="dutysheet">${svg('plus',15)} Add</button></h2>
     <div class="list">${list.map(x=>{ const c=dutyClass(x), k=x.due?daysSince(x.due):null;
       return `<div class="it"><span class="wdot ${c}" style="margin-top:6px"></span><div class="x" data-a="dutysheet" data-id="${x.id}" style="cursor:pointer"><b>${esc(x.name)}</b><small>${esc((FREQ.find(f=>f[0]===x.freq)||['',''])[1])} · ${x.due?(k>0?'<span style="color:var(--bad)">Overdue since '+nice(x.due)+'</span>':k===0?'Due today':'Due '+nice(x.due)):'Set a due date'}${x.log.length?' · last done '+nice(x.log[x.log.length-1].date):''}</small></div>${x.due?`<button class="btn sm" data-a="dutydone" data-id="${x.id}">Done</button>`:''}</div>`; }).join('')}</div>
@@ -1792,7 +1936,7 @@ function secTodayCard(){
   const d=SEC(), m=secMonthDefault(), t=monthTotals(m), soon=d.duties.filter(x=>x.due && daysSince(x.due)>=-7).sort((a,b)=>a.due.localeCompare(b.due));
   const nbv=newlyBaptized().filter(p=>{ const lv=lastVisit(p); return !lv || daysSince(lv)>90; });
   if(!d.pubs.length && !soon.length) return `<div class="card"><h2>Secretary</h2><div class="empty">Add your publishers to start tracking reports.</div><button class="btn ghost" data-a="gosec" data-k="pubs" style="margin-top:8px">Open Secretary</button></div>`;
-  return `<div class="card"><h2>Secretary<span class="sp"></span><button class="btn sm ghost" data-a="gosec" data-k="reports">Open</button></h2>
+  return `<div class="card"><h2>Secretary<span class="sp"></span><button class="btn sm ghost" data-a="gosec" data-k="glance">Open</button></h2>
     ${d.pubs.length?`<div class="row" style="border:0;padding-top:0"><div class="lbl">${monthName(m)} reports<small>${t.missing?t.missing+' still missing':'All reports in ✓'}</small></div><b>${t.in+t.none}/${t.total}</b></div>`:''}
     ${soon.map(x=>`<div class="row"><span class="wdot ${dutyClass(x)}" style="margin:0 8px 0 0"></span><div class="lbl">${esc(x.name)}<small>${daysSince(x.due)>0?'Overdue':daysSince(x.due)===0?'Due today':'Due '+nice(x.due)}</small></div><button class="btn sm ghost" data-a="dutydone" data-id="${x.id}">Done</button></div>`).join('')}
     ${nbv.length?`<p class="muted" style="margin:8px 0 0">Newly baptized to visit: <b>${nbv.map(p=>esc(p.name)).join(', ')}</b></p>`:''}</div>`;
@@ -2042,6 +2186,26 @@ function pubYearHTML(p){
 /* ================= GOALS: suggested steps for this month ================= */
 function monthsLeft(g){ if(g.horizon==='1m') return 1; if(g.horizon==='1y') return 12-parse(TODAY()).getMonth(); const end=n(S.settings.started.slice(0,4))+5; return Math.max(1,(end-n(YEAR()))*12+12-parse(TODAY()).getMonth()); }
 function sundaysLeft(){ const out=[]; let d=TODAY(); const m=MONTH(); while(d.slice(0,7)===m){ if(parse(d).getDay()===0) out.push(d); d=addDays(d,1); } return out; }
+function monthlyIncome(){
+  const from=addDays(TODAY(),-90), pays=S.money.filter(e=>e.type==='pay'&&e.date>=from);
+  if(!pays.length) return 0;
+  const months=new Set(pays.map(e=>e.date.slice(0,7))).size;
+  return sum(pays)/Math.max(1,Math.min(3,months));
+}
+function moneyNum(t){
+  const m=t.match(/(?:gh₵|ghs?|₵|cedis?)\s*(\d[\d,.]*)/) || t.match(/(\d[\d,.]*)\s*(?:gh₵|ghs?\b|₵|cedis?\b)/);
+  return m?n(m[1]):0;
+}
+function goalThing(title){
+  const m=String(title).match(/\b(?:buy|get|purchase|afford|save for|save up for)\s+(?:a |an |the |my |some )?(.+?)(?=\s+(?:which|that|for|costing|worth|at|by|before|this|next|in)\b|[,.(]|\s*\d|$)/i);
+  const x=(m?m[1]:title).trim();
+  return x.length>36?x.slice(0,34)+'…':x;
+}
+function goalEnd(g){
+  if(g.horizon==='1m') return ymd(new Date(parse(MONTH()+'-01').getFullYear(), parse(MONTH()+'-01').getMonth()+1, 0));
+  if(g.horizon==='1y') return (g.period||YEAR())+'-12-31';
+  return (n(S.settings.started.slice(0,4))+5)+S.settings.started.slice(4);
+}
 function suggestSteps(g){
   const t=(g.title||'').toLowerCase(), num=n((t.match(/(\d[\d,.]*)/)||[])[1])||n(g.target), left=monthsLeft(g), monthNeed=num?Math.ceil(num/left):0;
   const m=MONTH(), d=k=>{ const x=parse(m+'-01'); x.setDate(k); return ymd(x)<TODAY()?TODAY():ymd(x); };
@@ -2049,63 +2213,93 @@ function suggestSteps(g){
   const sundays=sundaysLeft(), steps=[];
   const add=(text,date,kind='todo',extra={})=>steps.push({text,date,kind,...extra});
   const weekly=(text)=>sundays.forEach(s=>add(text,s));
-  if(/pioneer|hours|ministry|field service|preach/.test(t)){
+  const isMoney = /₵/.test(t) || /\b(save|saving|savings|money|cedis?|ghs|debt|budget|buy|purchase|afford|costs?|price|pay for)\b/.test(t);
+  if(/bethel/.test(t)){
+    if(/\b(visit|tour|go to|see)\b/.test(t) && !/\b(serve|service|apply|application|work)\b/.test(t)){
+      add('Check the tour days and book your visit on jw.org (About Us → Offices and Tours)', d(1));
+      add('Choose the date and ask who would like to come with you', d(3));
+      add('Plan the transport: how you will get there and what it will cost', d(5));
+      add('Set aside money for transport and food', d(7));
+      add('Get ready: dress neatly, leave early, take water', last);
+      add('After the visit, write what you saw and learned in My notes', last);
+    } else {
+      add('Read about Bethel service on jw.org (search "Bethel service")', d(1));
+      add('Tell the elders that you would like to apply for Bethel service', d(3));
+      add('Plan to attend the meeting for those interested in Bethel at the next regional convention', d(10));
+      add('Personal study', '', 'routine', {type:'study', days:[1,3], time:'19:00', title:'Personal study'});
+      weekly('Weekly check: did I keep up Bible reading, meetings and ministry this week?');
+      add('Look after your health: sleep well and exercise', d(7));
+    }
+  } else if(isMoney){
+    const amt=moneyNum(t)||n(g.target)||num, thing=goalThing(g.title), end=goalEnd(g);
+    const weeks=Math.max(1, Math.ceil((parse(end)-parse(TODAY()))/(7*864e5)));
+    const inc=monthlyIncome();
+    if(!amt){
+      add('Find out the price, then edit this goal and put the amount as its target', d(1));
+      add('Look at your income on Money → Overview and decide how much you can set aside each week', d(2));
+      weekly('Put this week\'s amount into savings');
+    } else {
+      const perWeek=Math.ceil(amt/weeks), perMonth=Math.round(perWeek*4.33), share=inc?Math.round(perMonth/inc*100):0;
+      add(`Open a savings goal "${thing}" for ${money(amt)}`, d(1), 'savegoal', {name:thing, amount:amt, deadline:end});
+      add(inc
+        ? `Save ${money(perWeek)} every week for ${weeks} week${weeks===1?'':'s'}. That is about ${share}% of the ${money(inc)} you pay yourself each month.`
+        : `Save ${money(perWeek)} every week for ${weeks} week${weeks===1?'':'s'}. (Record "I paid myself" on the Money page, and next time the app will compare this with your income.)`, d(1));
+      if(inc && share>50) add(`Check: this needs more than half of what you earn. Think about a later date or a cheaper ${thing}.`, d(1));
+      sundays.forEach(s=>add(`Put ${money(perWeek)} into savings for ${thing}`, s));
+      if(/\b(buy|purchase|get|afford)\b/.test(t)) add(`Compare prices in two or three shops for ${thing}`, d(10));
+      add(`Buy ${thing} when your savings reach ${money(amt)}`, end<=last?end:last);
+    }
+  } else if(/pioneer|hours|ministry|field service|preach/.test(t)){
     const h=monthNeed || (/aux/.test(t)?30:/regular/.test(t)?50:15), perWeek=r1(h/4.3);
     if(/aux/.test(t)) add('Hand in the auxiliary pioneer application', d(3));
-    add(`Plan my month: about ${perWeek} hours each week to reach ${h} hours`, d(1));
+    add(`Aim for about ${perWeek} hours each week, so you reach ${h} hours this month`, d(1));
     add('Field service', '', 'routine', {type:'service', days:[6], time:'08:30', title:'Field service'});
-    add(`Midway check: aim for ${Math.round(h/2)} hours by today`, d(15));
-    add('Invite someone to work with me in service this week', d(5));
-    weekly('Check my hours on Faith → Ministry');
+    add(`Halfway check: you should have about ${Math.round(h/2)} hours by today`, d(15));
+    add('Invite someone to work with you in service this week', d(5));
+    weekly('Check your hours on Faith → Ministry');
   } else if(/bible|chapter|read the|scripture/.test(t) && !/study with|student|bible stud/.test(t)){
     const ch = /whole bible|entire bible|1189/.test(t) ? Math.ceil(1189/(left*30)) : monthNeed ? Math.ceil(monthNeed/30) : 1;
     add('Daily Bible reading', '', 'routine', {type:'bible', days:[0,1,2,3,4,5,6], time:'05:30', title:'Daily Bible reading'});
     add(`Read about ${ch} chapter${ch===1?'':'s'} each day`, d(1));
     weekly('Write one thought from this week\'s reading in My notes');
-    add('Look back: how many chapters did I read this month?', last);
+    add('Look back: how many chapters did you read this month?', last);
   } else if(/student|bible stud|study with/.test(t)){
-    add('Offer a free Bible study to 3 people I meet in service', d(7));
-    add('Follow up everyone in red on the People tab', d(3));
-    add('Ask an experienced publisher to come with me to a study', d(10));
+    add('Offer a free Bible study to 3 people you meet in service', d(7));
+    add('Follow up everyone marked red on the People tab', d(3));
+    add('Ask an experienced publisher to come with you to a study', d(10));
     weekly('Send each Bible student a friendly message');
   } else if(/personal study|watchtower|meeting|prepare|comment/.test(t)){
     add('Personal study', '', 'routine', {type:'study', days:[1,3], time:'19:00', title:'Personal study'});
     add('Meeting preparation', '', 'routine', {type:'meeting', days:[2,5], time:'19:30', title:'Meeting preparation'});
     weekly('Prepare one comment for the weekend meeting');
-  } else if(/weight|kg|lose|fit|exercise|walk|run|gym|health/.test(t)){
-    const kg=/kg|weight|lose/.test(t)&&num?Math.min(num/left, 2):0;
+  } else if(/\b(weight|kg|lose|fit|fitness|exercise|walk|run|gym|health)\b/.test(t)){
+    const kg=/\b(kg|weight|lose)\b/.test(t)&&num?Math.min(num/left, 2):0;
     add('Exercise', '', 'routine', {type:'exercise', days:[1,3,5], time:'06:00', title:'Exercise (30 minutes)'});
     if(kg) add(`Aim to lose about ${r1(kg)} kg this month (about 0.5 kg a week is healthy)`, d(1));
     add('Swap sugary drinks for water this week', d(2));
-    weekly('Weigh myself and note it on the Today page');
-    add('See a doctor before starting hard exercise if I have a health condition', d(1));
-  } else if(/save|saving|money|cedi|gh|debt|budget/.test(t)){
-    const amt=monthNeed, wk=amt?Math.ceil(amt/4.3):0;
-    add('Create this savings goal on Money → Savings', d(1));
-    if(amt) add(`Put ${money(wk)} into savings every week (${money(amt)} this month)`, d(1));
-    weekly('Check my spending for the week on Money → Expenses');
-    add('Look for one expense I can cut this month', d(7));
+    weekly('Weigh yourself and write it on the Today page');
+    add('If you have a health condition, see a doctor before starting hard exercise', d(1));
   } else if(/business|shop|customer|sales|farm|egg|bread/.test(t)){
     add('Write the 3 things that would help this most this month', d(1));
     add('Do the first one', d(7));
     weekly('Check progress and write the numbers down');
     add('Talk to one person who has done this before', d(14));
   } else {
-    add('Write why this goal matters to me', d(1));
-    add('Break it into 3 smaller steps', d(2));
-    add('Do the first small step', d(7));
-    weekly('Weekly check: what did I do this week toward this goal?');
-    add('Tell one person who can encourage me', d(4));
+    add('Write one sentence: why does this goal matter to you?', d(1));
+    add('Decide the first small thing you can do this week', d(2));
+    add('Do that first small thing', d(7));
+    weekly('Weekly check: what did you do this week for this goal?');
+    add('Tell one person who can encourage you', d(4));
   }
   return steps;
 }
 function suggestSheet(id){
   const g=S.goals.find(x=>x.id===id), steps=suggestSteps(g);
-  const exists=st=> st.kind==='routine' ? S.reminders.some(r=>r.type===st.type) : S.todos.some(x=>x.text===st.text && x.date===st.date);
+  const exists=st=> st.kind==='routine' ? S.reminders.some(r=>r.type===st.type) : st.kind==='savegoal' ? S.savings.some(x=>x.name.toLowerCase()===st.name.toLowerCase()) : S.todos.some(x=>x.text===st.text && x.date===st.date);
   const ask=`Help me plan this goal for ${monthName(MONTH())}: "${g.title}"${g.target?' (target '+g.target+(g.unit?' '+g.unit:'')+')':''}. Give me 5 to 8 practical weekly steps.`;
   openSheet(`<h3>Steps for ${monthName(MONTH())}</h3><p class="muted" style="margin:-6px 0 10px">${esc(g.title)}</p>
-    <p class="muted" style="font-size:12.5px;margin:0 0 8px">These are built-in suggestions based on your goal's words and numbers. Untick anything that doesn't fit, then add the rest to your plan.</p>
-    ${steps.map((st,i)=>`<label class="row" style="cursor:pointer;align-items:flex-start"><input type="checkbox" class="sgStep" value="${i}" ${exists(st)?'':'checked'} style="width:22px;height:22px;margin-top:2px"><span class="lbl">${esc(st.text)}<small>${st.kind==='routine'?'Routine: '+esc(daysText(st.days))+' at '+fmtTime(st.time)+(exists(st)?' · you already have one':''):nice(st.date)+(exists(st)?' · already in your plan':'')}</small></span></label>`).join('')}
+    <p class="muted" style="font-size:12.5px;margin:0 0 8px">A simple plan for this month. Each ticked step goes into Today's plan on its date. Untick anything that doesn't fit.</p>
+    ${steps.map((st,i)=>`<label class="row" style="cursor:pointer;align-items:flex-start"><input type="checkbox" class="sgStep" value="${i}" ${exists(st)?'':'checked'} style="width:22px;height:22px;margin-top:2px"><span class="lbl">${esc(st.text)}<small>${st.kind==='routine'?'Repeats: '+esc(daysText(st.days))+' at '+fmtTime(st.time)+(exists(st)?' · you already have one':''):st.kind==='savegoal'?'Creates it on Money → Savings'+(exists(st)?' · already there':''):'On your plan for '+nice(st.date)+(exists(st)?' · already there':'')}</small></span></label>`).join('')}
     <div class="btns" style="flex-direction:column;margin-top:10px"><button class="btn" data-a="sgadd" data-id="${id}">Add ticked steps to my plan</button>
       <a class="btn ghost" href="https://claude.ai/new?q=${encodeURIComponent(ask)}" target="_blank" rel="noopener">Ask Claude for a more detailed plan ↗</a>
       <button class="btn ghost" data-a="close">Close</button></div>`, null);
@@ -2115,7 +2309,8 @@ function addSuggested(id){
   const g=S.goals.find(x=>x.id===id), steps=suggestSheet.steps||[]; let n1=0, n2=0;
   g.steps=g.steps||[];
   document.querySelectorAll('.sgStep:checked').forEach(c=>{ const st=steps[n(c.value)];
-    if(st.kind==='routine'){ if(!S.reminders.some(r=>r.type===st.type)){ S.reminders.push({id:uid(), type:st.type, title:st.title, time:st.time, days:st.days, ring:true, on:true, beep:AL().beep, created:Date.now()}); n2++; } }
+    if(st.kind==='savegoal'){ let sg=S.savings.find(x=>x.name.toLowerCase()===st.name.toLowerCase()); if(!sg){ sg={id:uid(), name:st.name, target:st.amount, deadline:st.deadline}; S.savings.push(sg); n1++; } g.saveId=sg.id; }
+    else if(st.kind==='routine'){ if(!S.reminders.some(r=>r.type===st.type)){ S.reminders.push({id:uid(), type:st.type, title:st.title, time:st.time, days:st.days, ring:true, on:true, beep:AL().beep, created:Date.now()}); n2++; } }
     else { const td={id:uid(), text:st.text, date:st.date, time:'', alarm:true, done:false, created:TODAY(), createdAt:Date.now(), goal:id}; S.todos.push(td); g.steps.push(td.id); n1++; }
   });
   save(); closeSheet(); render(); toast((n1?n1+' to-do'+(n1===1?'':'s'):'')+(n1&&n2?' and ':'')+(n2?n2+' routine'+(n2===1?'':'s'):'')+(n1||n2?' added':'Nothing new added'));
@@ -2206,28 +2401,59 @@ V.faith = () => {
   return html;
 };
 function studiesInMonth(m){ return S.students.filter(st=>(st.sessions||[]).some(x=>x.date.slice(0,7)===m)); }
+/* ---------- publisher or pioneer ---------- */
+const PUBTYPES = [['pub','Publisher','Tick each month that you shared in the ministry. Tracking time is optional.'],
+  ['aux','Auxiliary pioneer','Monthly hour goal (usually 15 or 30), progress bar and monthly report.'],
+  ['rp','Regular pioneer','Monthly and service-year hour goal, progress and monthly report.']];
+const pubType = () => (S.settings||{}).pubType || '';
+const pubTypeName = () => (PUBTYPES.find(x=>x[0]===pubType())||['','Not chosen'])[1];
+function sharedMonth(m=MONTH()){ const v=(S.shared||{})[m]; return v!==undefined ? v : (ministryMonth(m)>0 || studiesInMonth(m).length>0 ? true : undefined); }
+function ministryChip(){
+  if(pubType()==='pub'){ const v=sharedMonth(); return 'Ministry this month: '+(v?'shared ✓':'not yet'); }
+  return 'Ministry this month: '+r1(ministryMonth())+' / '+S.settings.ministryTarget+' h';
+}
+function pubTypeCard(first){
+  return `<div class="card"><h2>${first?'Which one are you?':'I serve as'}</h2>
+    ${first?'<p class="muted" style="margin:0 0 10px">This decides what the Ministry page shows you. You can change it any time.</p>':''}
+    <div class="ptype">${PUBTYPES.map(([k,l,d])=>`<button class="${k===pubType()?'on':''}" data-a="setpubtype" data-k="${k}"><b>${l}</b><small>${d}</small></button>`).join('')}</div>
+    ${first?'':'<button class="btn ghost" data-a="pubtypeclose" style="margin-top:10px">Close</button>'}</div>`;
+}
+let pubTypeOpen=false;
 function ministryView(){
-  const st=S.settings, m=MONTH(), mm=ministryMonth(m), sy=serviceYear(), syh=ministryHours(sy.start,sy.end);
+  const st=S.settings, m=MONTH(), mm=ministryMonth(m), sy=serviceYear(), syh=ministryHours(sy.start,sy.end), pt=pubType();
+  if(!pt) return pubTypeCard(true);
+  if(pubTypeOpen) return pubTypeCard(false);
   const syTarget = st.ministryTarget*12;
   const thisMonthEntries = S.ministry.filter(e=>e.date.slice(0,7)===m).sort((a,b)=>b.date.localeCompare(a.date));
   const daysIn = new Date(parse(m+'-01').getFullYear(), parse(m+'-01').getMonth()+1, 0).getDate();
   const dayOfMonth = parse(TODAY()).getDate();
   const left = Math.max(0, st.ministryTarget-mm), daysLeft = daysIn-dayOfMonth+1;
-  let html = timerCard() + reportCard();
-  html += `<div class="card"><h2>Ministry · ${monthName(m)}</h2>
-    <div class="stat"><div><small>This month</small><b>${r1(mm)} h</b></div><div><small>Monthly target</small><b>${st.ministryTarget} h</b></div></div>
-    ${bar(pct(mm,st.ministryTarget))}
-    <p class="muted" style="margin:8px 0 0">${left>0?`${r1(left)} h to go — about ${r1(left/daysLeft)} h a day for the ${daysLeft} day${daysLeft===1?'':'s'} left.`:'Monthly target reached. Well done.'}</p>
-    <div class="stat" style="margin-top:10px"><div><small>Service year (${sy.label})</small><b>${r1(syh)} h</b></div><div><small>Service-year target</small><b>${syTarget} h</b></div></div>
-    ${bar(pct(syh,syTarget))}<p class="muted" style="margin:6px 0 0">Your monthly target × 12. Change it in settings.</p>
-    <button class="btn" data-a="minsheet" style="margin-top:12px">Log ministry hours</button></div>`;
-  html += `<div class="card"><h2>Ministry log</h2>${thisMonthEntries.length?`<div class="list">${thisMonthEntries.map(e=>`<div class="it"><div class="x"><b>${nice(e.date)} · ${r1(n(e.hours))} h</b><small>${e.notes?esc(e.notes):'—'}</small></div><button class="icon-btn" data-a="minsheet" data-id="${e.id}" aria-label="Edit">${svg('edit',18)}</button></div>`).join('')}</div>`:'<div class="empty">Nothing logged this month yet.</div>'}</div>`;
+  let html = `<div class="row" style="border:0;padding:0 2px 10px"><div class="lbl"><b>${esc(pubTypeName())}</b><small>${pt==='pub'?'No hour goal':'Goal: '+st.ministryTarget+' hours a month'}</small></div><button class="btn sm ghost" data-a="pubtypeopen">Change</button></div>`;
+  if(pt==='pub'){
+    const v=sharedMonth(m);
+    html += `<div class="card"><h2>Ministry · ${monthName(m)}</h2>
+      <div class="row" style="border:0;padding-top:0"><div class="lbl">I shared in the ministry this month<small>${v===undefined?'Not marked yet':v?'Yes ✓':'No'}</small></div>${checkBox(!!v,'sharedtoggle')}</div>
+      <div class="stat" style="margin-top:6px"><div><small>Time this month (just for you)</small><b>${hoursText(mm)}</b></div><div><small>Bible studies</small><b>${studiesInMonth(m).length}</b></div></div>
+      <button class="btn ghost" data-a="minsheet" style="margin-top:12px">Log time (optional)</button></div>`;
+    html += timerCard() + reportCard();
+  } else {
+    html += timerCard() + reportCard();
+    html += `<div class="card"><h2>Ministry · ${monthName(m)}</h2>
+      <div class="stat"><div><small>This month</small><b>${r1(mm)} h</b></div><div><small>Monthly goal</small><b>${st.ministryTarget} h</b></div></div>
+      ${bar(pct(mm,st.ministryTarget))}
+      <p class="muted" style="margin:8px 0 0">${left>0?`${r1(left)} h to go: about ${r1(left/daysLeft)} h a day for the ${daysLeft} day${daysLeft===1?'':'s'} left.`:'Monthly goal reached. Well done.'}</p>
+      ${pt==='rp'?`<div class="stat" style="margin-top:10px"><div><small>Service year (${sy.label})</small><b>${r1(syh)} h</b></div><div><small>Service-year goal</small><b>${syTarget} h</b></div></div>
+      ${bar(pct(syh,syTarget))}<p class="muted" style="margin:6px 0 0">Your monthly goal × 12. Change it in settings.</p>`:''}
+      <button class="btn" data-a="minsheet" style="margin-top:12px">Log ministry hours</button></div>`;
+  }
+  html += `<div class="card"><h2>Ministry log</h2>${thisMonthEntries.length?`<div class="list">${thisMonthEntries.map(e=>`<div class="it"><div class="x"><b>${nice(e.date)} · ${hoursText(n(e.hours))}</b><small>${e.notes?esc(e.notes):'—'}</small></div><button class="icon-btn" data-a="minsheet" data-id="${e.id}" aria-label="Edit">${svg('edit',18)}</button></div>`).join('')}</div>`:'<div class="empty">Nothing logged this month yet.</div>'}</div>`;
   html += areaGoals('faith');
   return html;
 }
 function reportText(m){
-  const hrs=r1(ministryMonth(m)), studs=studiesInMonth(m).length;
-  return `Field service report — ${monthName(m)}\nName: ${S.settings.name||''}\nHours: ${hrs}\nBible studies: ${studs}`;
+  const studs=studiesInMonth(m).length, pt=pubType(), nm=S.settings.name||'';
+  if(pt==='pub') return `Field service report: ${monthName(m)}\nName: ${nm}\nShared in the ministry: ${sharedMonth(m)?'Yes':'No'}\nBible studies: ${studs}`;
+  return `Field service report: ${monthName(m)}\nName: ${nm}${pt==='aux'?'\nAuxiliary pioneer':''}\nHours: ${r1(ministryMonth(m))}\nBible studies: ${studs}`;
 }
 function reportCard(){
   const m = reportMonth || MONTH();
@@ -2235,7 +2461,7 @@ function reportCard(){
   const studs = studiesInMonth(m);
   const txt = reportText(m);
   return `<div class="card report"><h2>Monthly report<span class="sp"></span><select id="reportMonth" style="width:auto">${months.map(x=>`<option value="${x}" ${x===m?'selected':''}>${monthName(x)}</option>`).join('')}</select></h2>
-    <div class="stat"><div><small>Hours</small><b>${r1(ministryMonth(m))}</b></div><div><small>Bible studies</small><b>${studs.length}</b></div></div>
+    <div class="stat"><div>${pubType()==='pub'?`<small>Shared in the ministry</small><b>${sharedMonth(m)?'Yes':'No'}</b>`:`<small>Hours</small><b>${r1(ministryMonth(m))}</b>`}</div><div><small>Bible studies</small><b>${studs.length}</b></div></div>
     <p class="muted" style="margin:8px 0 0">${studs.length?'Studies conducted: '+studs.map(x=>esc(x.name)).join(', '):'Bible studies are counted from the Students section. Each student you studied with this month counts once.'}</p>
     <div class="btns" style="margin-top:10px"><a class="btn sm" href="https://wa.me/?text=${encodeURIComponent(txt)}" target="_blank" rel="noopener">Send on WhatsApp</a><a class="btn sm ghost" href="sms:?body=${encodeURIComponent(txt)}">Send by SMS</a><button class="btn sm ghost" data-a="copyreport" data-m="${m}">Copy</button></div></div>`;
 }
@@ -2842,7 +3068,8 @@ function settingsSheet(){
   openSheet(`<h3>Settings</h3>
     <div class="f2"><div class="f"><label>Your name</label><input type="text" id="sName" value="${esc(st.name)}" placeholder="Gideon"></div>
     <div class="f"><label>Currency</label><input type="text" id="sCur" value="${esc(st.currency)}"></div></div>
-    <div class="f2"><div class="f"><label>Monthly ministry target (h)</label><input type="text" inputmode="decimal" id="sMin" value="${st.ministryTarget}"></div>
+    <div class="f"><label>I serve as</label><select id="sPubType"><option value="">Not chosen</option>${PUBTYPES.map(([k,l])=>`<option value="${k}" ${k===st.pubType?'selected':''}>${l}</option>`).join('')}</select></div>
+    <div class="f2"><div class="f"><label>Monthly ministry goal (h, pioneers)</label><input type="text" inputmode="decimal" id="sMin" value="${st.ministryTarget}"></div>
     <div class="f"><label>Water target (glasses)</label><input type="text" inputmode="decimal" id="sWat" value="${st.waterTarget}"></div></div>
     <div class="f2"><div class="f"><label>Sleep target (h)</label><input type="text" inputmode="decimal" step="0.5" id="sSl" value="${st.sleepTarget}"></div>
     <div class="f"><label>Exercise target (min)</label><input type="text" inputmode="decimal" id="sEx" value="${st.exerciseTarget}"></div></div>
@@ -2884,6 +3111,7 @@ function settingsSheet(){
       const rows=[...document.querySelectorAll('#bk .bkrow')].map(r=>({name:r.querySelector('.bn').value.trim(), pct:n(r.querySelector('.bp').value)})).filter(b=>b.name);
       const tot=rows.reduce((a,b)=>a+b.pct,0);
       if(rows.length && Math.round(tot)!==100) return fail('bkTot','Bucket percentages must add up to 100 (now '+r1(tot)+')');
+      st.pubType=val('sPubType')||st.pubType;
       Object.assign(st,{name:val('sName').trim(), currency:val('sCur').trim()||'GH₵', ministryTarget:n(val('sMin'))||0, waterTarget:n(val('sWat'))||8, sleepTarget:n(val('sSl'))||7, exerciseTarget:n(val('sEx'))||30, started:val('sStart')||st.started});
       if(rows.length) st.buckets=rows;
       st.dailyBudget = Math.max(0,n(val('sBud')));
@@ -2994,6 +3222,15 @@ document.addEventListener('click', e => {
     case 'freshsheet': freshSheet(); break;
     case 'forceupdate': forceUpdate(); break;
     case 'sectab': secTab=t.dataset.k; render(); window.scrollTo(0,0); break;
+    case 'secrepview': secRepView=t.dataset.k; render(); break;
+    case 'secmnav': if(t.dataset.m<=MONTH()){ secMonth=t.dataset.m; render(); } break;
+    case 'secsynav': if(n(t.dataset.y)<=curSY()){ secSY=n(t.dataset.y); render(); } break;
+    case 'secopenmonth': secMonth=t.dataset.m; secRepView='month'; secTab='reports'; render(); window.scrollTo(0,0); break;
+    case 'coprint': coPrint(t); break;
+    case 'setpubtype': { const k=t.dataset.k, st=S.settings; st.pubType=k; if(k==='aux' && !(st.ministryTarget===15||st.ministryTarget===30)) st.ministryTarget=30; if(k==='rp') st.ministryTarget=50; pubTypeOpen=false; save(); render(); toast('Set as '+pubTypeName()); break; }
+    case 'pubtypeopen': pubTypeOpen=true; render(); window.scrollTo(0,0); break;
+    case 'pubtypeclose': pubTypeOpen=false; render(); break;
+    case 'sharedtoggle': { S.shared=S.shared||{}; S.shared[MONTH()]=!sharedMonth(); save(); render(); toast(S.shared[MONTH()]?'Marked: shared this month ✓':'Unmarked'); break; }
     case 'atadd': { const c=n(val('atCount')), dt=val('atDate')||TODAY(); if(c<=0){ toast('Enter the number who attended'); break; } const d=SEC(); d.meetings=d.meetings||[]; const k=val('atKind'); const ex=d.meetings.find(x=>x.date===dt&&x.kind===k); if(ex) ex.count=c; else d.meetings.push({id:uid(), date:dt, kind:k, count:c}); if(k==='wk'){ d.meetDays=d.meetDays||{}; d.meetDays.wk=parse(dt).getDay(); } save(); render(); toast(ex?'Updated':'Attendance saved'); break; }
     case 'atdel': if(confirm('Delete this attendance?')){ SEC().meetings=SEC().meetings.filter(x=>x.id!==id); save(); render(); } break;
     case 'printsheet': printSheet(t.dataset.k); break;
@@ -3001,7 +3238,7 @@ document.addEventListener('click', e => {
     case 'sgsheet': suggestSheet(id); break;
     case 'sgadd': addSuggested(id); break;
     case 'histnav': histMonth=t.dataset.m; render(); break;
-    case 'gosec': tab='sec'; secTab=t.dataset.k||'reports'; render(); window.scrollTo(0,0); break;
+    case 'gosec': tab='sec'; secTab=t.dataset.k||'glance'; render(); window.scrollTo(0,0); break;
     case 'secgroup': secGroup=t.dataset.k; render(); break;
     case 'secrep': reportSheet(id); break;
     case 'rpyes': case 'rpno': { document.getElementById('rpShared').value=a==='rpyes'?'yes':'no'; document.querySelectorAll('[data-a=rpyes],[data-a=rpno]').forEach(b=>b.classList.toggle('on', b===t)); break; }
