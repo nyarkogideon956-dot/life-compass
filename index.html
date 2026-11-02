@@ -25,6 +25,7 @@ header h1{font-size:18px;font-weight:600;margin:0;flex:1}
 header button{background:none;border:0;color:#fff;padding:6px;border-radius:10px;display:flex}
 main{padding:14px 14px calc(96px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto}
 nav{position:fixed;bottom:0;left:0;right:0;z-index:5;background:#fff;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(6,1fr);padding:4px 2px calc(4px + env(safe-area-inset-bottom))}
+nav.many button{font-size:10px}
 nav button{background:none;border:0;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--muted);padding:6px 0;border-radius:10px}
 nav button svg{width:22px;height:22px}
 nav button.on{color:var(--navy);font-weight:600}
@@ -184,6 +185,11 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .chips2 button.on{background:var(--navy);border-color:var(--navy);color:#fff}
 .btn.wa{background:#1E8E5A}
 .codebox{font-size:30px;font-weight:700;letter-spacing:.08em;text-align:center;color:var(--navy);background:var(--sky);border-radius:14px;padding:14px;margin:14px 0 8px;font-variant-numeric:tabular-nums}
+.tot{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px;font-variant-numeric:tabular-nums}
+.tot th{font-size:11.5px;color:var(--muted);font-weight:600;text-align:right;padding:4px 6px;text-transform:uppercase;letter-spacing:.04em}
+.tot.sy td,.tot.sy th{padding:4px 5px;font-size:13px}
+.tot td{text-align:right;padding:6px;border-top:1px solid var(--line)}.tot td:first-child,.tot th:first-child{text-align:left;padding-left:0}
+.it.rep{cursor:pointer}
 .linkbtn{background:none;border:0;padding:0;color:var(--blue);text-decoration:underline;font-size:12px}
 .sndrow{display:grid;grid-template-columns:1fr 48px;gap:6px}
 .sndrow .btn{height:40px;padding:0;display:flex;align-items:center;justify-content:center}
@@ -226,7 +232,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 19;
+const APP_VERSION = 21;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -406,7 +412,14 @@ const MONTH = (s=TODAY()) => s.slice(0,7);
 const YEAR = (s=TODAY()) => s.slice(0,4);
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function n(v){ if(typeof v==='number') return isFinite(v)?v:0; const x=parseFloat(String(v??'').replace(/\s/g,'').replace(',','.')); return isFinite(x)?x:0; }
+function n(v){
+  if(typeof v==='number') return isFinite(v)?v:0;
+  let t=String(v??'').replace(/[\s₵]/g,'').replace(/^GH[S¢C]?/i,'');
+  if(t.includes(',') && t.includes('.')) t=t.replace(/,/g,'');            // 1,250.50
+  else if(/^-?\d{1,3}(,\d{3})+$/.test(t)) t=t.replace(/,/g,'');          // 1,250 or 12,500,000
+  else t=t.replace(',','.');                                              // 7,5 means 7.5
+  const x=parseFloat(t); return isFinite(x)?x:0;
+}
 function r1(x){ return Math.round(x*10)/10; }
 function money(x){ return S.settings.currency+' '+(Math.round(x*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function day(s=TODAY()){ return S.days[s] || (S.days[s]={}); }
@@ -450,6 +463,7 @@ const I = {
   trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   edit:'<path d="M4 20h4L19 9l-4-4L4 16v4z"/>',
   play:'<path d="M7 5v14l11-7z"/>',
+  sec:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h4"/>',
   bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
   arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>'
 };
@@ -459,13 +473,13 @@ function barPlain(p,color){ return `<div class="bar"><i style="width:${Math.max(
 function bar(p,done){ return `<div class="bar ${done||p>=100?'done':''}"><i style="width:${p}%"></i></div>`; }
 
 /* ---------- navigation ---------- */
-const TABS = [['today','Today'],['goals','Goals'],['faith','Faith'],['health','Health'],['money','Money'],['others','People']];
-const TAB_SEC = {goals:['goals'], faith:['faith','ministry'], health:['health'], money:['money'], others:['people']};
+const TABS = [['today','Today'],['goals','Goals'],['faith','Faith'],['health','Health'],['money','Money'],['others','People'],['sec','Secretary']];
+const TAB_SEC = {goals:['goals'], faith:['faith','ministry'], health:['health'], money:['money'], others:['people'], sec:['secretary']};
 function tabOn(k){ return !TAB_SEC[k] || TAB_SEC[k].some(secOn); }
 let tab = 'today', goalH = '1m', moneyMonth = MONTH();
 function renderNav(){
   const vis=TABS.filter(([k])=>tabOn(k)), nav=document.getElementById('nav');
-  nav.style.gridTemplateColumns='repeat('+vis.length+',1fr)';
+  nav.style.gridTemplateColumns='repeat('+vis.length+',1fr)'; nav.classList.toggle('many', vis.length>6);
   nav.innerHTML = vis.map(([k,l])=>`<button class="${k===tab?'on':''}" data-tab="${k}">${svg(k)}<span>${l}</span></button>`).join('');
 }
 function render(){
@@ -503,6 +517,7 @@ V.today = () => {
     html += `<div class="banner" style="background:var(--sky);border-color:var(--sky2);color:var(--navy)"><span style="flex:1">Did someone share Life Compass with you and give you a setup code?</span><button class="btn sm" data-a="setupcode">Enter code</button><button class="btn sm ghost" data-a="nosetup">No</button></div>`;
   html += planCard(t);
   if(secOn('people')) html += followCard(t);
+  if(secOn('secretary')) html += secTodayCard();
   html += weekCard(t);
   if(secOn('ministry')) html += timerCard();
   if(secOn('faith')) html += encouragement(t);
@@ -664,6 +679,7 @@ function dueOn(date){
   S.meds.filter(m=>m.on!==false && (!m.until || date<=m.until)).forEach(m=>(m.times||[]).forEach(tm=>out.push({key:'med:'+m.id+':'+tm, time:tm, title:'Take '+m.name+(m.dose?' ('+m.dose+')':''), kind:'med', id:m.id, slot:tm, sound:m.sound||AL().medSound||'', created:m.created||0})));
   S.todos.filter(x=>x.time && x.alarm!==false && !x.done && (x.date===date || (x.date<date && date===TODAY()))).forEach(x=>out.push({key:'todo:'+x.id, time:x.time, title:x.text, kind:'todo', id:x.id, sound:x.sound||'', created:x.date<date?0:(x.createdAt||0), quietMiss:x.date<date}));
   if(secOn('people')){ const fu=S.contacts.filter(c=>warmth(c)!=='off' && c.follow && (c.follow===date || (date===TODAY() && c.follow<date))); if(fu.length) out.push({key:'fu:'+fu.map(c=>c.id).sort().join(','), time:AL().followTime||'10:00', title:'Follow up: '+fu.slice(0,3).map(c=>firstName(c.name)).join(', ')+(fu.length>3?' and '+(fu.length-3)+' more':''), kind:'followup', created:Date.now(), quietMiss:true}); }
+  if(secOn('secretary') && S.sec) (S.sec.duties||[]).filter(x=>x.due && (x.due===date || (date===TODAY() && x.due<date))).forEach(x=>out.push({key:'duty:'+x.id+':'+x.due, time:'09:00', title:(x.due<date?'Overdue: ':'Due today: ')+x.name, kind:'duty', id:x.id, created:Date.now(), quietMiss:true}));
   if(AL().diaryOn) out.push({key:'diary', time:AL().diaryTime, title:'Write about your day', kind:'diary', sound:AL().diarySound||'', created:Date.now(), quietMiss:true});
   return out.sort((a,b)=>mins(a.time)-mins(b.time));
 }
@@ -735,6 +751,7 @@ function ring(item){
   const extra = item.kind==='med'?`<button class="btn" data-al="taken">I've taken it</button>`
     : item.kind==='todo'?`<button class="btn" data-al="done">Mark as done</button>`
     : item.kind==='followup'?`<button class="btn" data-al="people">See who to message</button>`
+    : item.kind==='duty'?`<button class="btn" data-al="sec">Open Secretary</button>`
     : item.kind==='diary'?`<button class="btn" data-al="diary">Write now</button>`
     : item.kind==='study'?`<button class="btn" data-al="studied">OK, I'm starting</button>`
     : item.key && item.key.startsWith('rem:')?`<button class="btn" data-al="rdone">Mark as done</button>`:'';
@@ -752,6 +769,7 @@ document.addEventListener('click', e=>{
   if(a==='snooze'){ S.snooze.push({key:it.key+':s'+Date.now(), at:Date.now()+10*60000, item:it}); save(); toast('Snoozed for 10 minutes'); }
   if(a==='taken'){ const m=S.medTaken[TODAY()]||(S.medTaken[TODAY()]={}); m[it.id+':'+it.slot]=true; save(); toast('Marked as taken'); }
   if(a==='done'){ const x=S.todos.find(t=>t.id===it.id); if(x){ x.done=true; x.doneDate=TODAY(); save(); } toast('Done'); }
+  if(a==='sec'){ tab='sec'; secTab='duties'; }
   if(a==='people'){ tab='others'; peopleTab='met'; peopleFilter='due'; }
   if(a==='rdone'){ const r=S.reminders.find(z=>z.id===it.id); if(r){ setRoutineDone(TODAY(), r, true); save(); toast('Done ✓'); } }
   if(a==='diary'){ tab='today'; setTimeout(()=>{ const d=document.getElementById('diaryBox'); if(d){ d.scrollIntoView({block:'center'}); d.focus(); } },120); }
@@ -1406,7 +1424,7 @@ document.addEventListener('change', e=>{
 
 /* ================= SECTIONS AND THE SETUP CODE ================= */
 const SECTIONS = [['goals','Goals'],['faith','Bible and personal study'],['ministry','Ministry and Bible students'],['health','Health'],['money','Money'],['people','People I meet and helping others']];
-function secOn(k){ return ((S.settings||{}).sections||{})[k]!==false; }
+function secOn(k){ const sc=((S.settings||{}).sections||{}); return k==='secretary' ? sc.secretary===true && S.settings.sectionLock==null : sc[k]!==false; }
 const B32='23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 function pin16(pin){ return strHash('lc:'+pin) & 0xffff; }
 function makeCode(secs, pin){
@@ -1428,7 +1446,7 @@ function readCode(code){
   return {secs, lock: body&(1<<6) ? (body>>7)&0xffff : null};
 }
 function applyCode(r){
-  S.settings.sections = r.secs; S.settings.sectionLock = r.lock; S.settings.setupAsked=true; save();
+  S.settings.sections = {...r.secs, secretary:false}; S.settings.sectionLock = r.lock; S.settings.setupAsked=true; save();
   tab='today'; closeSheet(); render(); window.scrollTo(0,0);
   toast('Set up: '+SECTIONS.filter(([k])=>r.secs[k]).map(x=>x[1].split(' ')[0]).join(', '));
 }
@@ -1464,16 +1482,321 @@ function sectionsHTML(){
   return `<div class="area" style="margin-top:20px">What this app shows</div>
     ${locked?`<p class="muted" style="margin:0 0 8px">Set up by someone else. Showing: ${SECTIONS.filter(([k])=>secOn(k)).map(x=>esc(x[1])).join(', ')}.</p><button class="btn ghost" data-a="unlocksec">Change (needs PIN)</button>`
       :`${SECTIONS.map(([k,l])=>`<label class="row" style="cursor:pointer"><span class="lbl">${l}</span><input type="checkbox" class="secTog" value="${k}" ${secOn(k)?'checked':''} style="width:22px;height:22px"></label>`).join('')}`}
+    ${locked?'':`<label class="row" style="cursor:pointer"><span class="lbl">Congregation secretary<small>Only for you. Never included when you share the app.</small></span><input type="checkbox" class="secTog" value="secretary" ${secOn('secretary')?'checked':''} style="width:22px;height:22px"></label>`}
     <div class="btns" style="margin-top:10px"><button class="btn ghost" style="flex:1" data-a="shareapp">Share the app</button><button class="btn ghost" style="flex:1" data-a="setupcode">Enter setup code</button></div>`;
 }
 document.addEventListener('change', e=>{
   const t=e.target;
   if(t.classList.contains('secTog')){
     const secs={...(S.settings.sections||{})}; secs[t.value]=t.checked;
-    if(!SECTIONS.some(([k])=>secs[k]!==false)){ t.checked=true; toast('Keep at least one part on'); return; }
+    if(t.value!=='secretary' && !SECTIONS.some(([k])=>secs[k]!==false)){ t.checked=true; toast('Keep at least one part on'); return; }
     S.settings.sections=secs; save(); renderNav(); toast(t.checked?'Shown':'Hidden');
   }
 });
+
+/* ================= CONGREGATION SECRETARY (off by default, never shared, stays on this phone) ================= */
+const PTYPES = [['pub','Publisher'],['unbap','Unbaptized publisher'],['rp','Regular pioneer'],['sp','Special pioneer'],['fm','Field missionary']];
+const PSTATUS = [['active','Active'],['inactive','Inactive'],['moved','Moved away']];
+const FREQ = [['1','Every month'],['3','Every 3 months'],['6','Every 6 months'],['12','Every year'],['0','Once']];
+let secTab='reports', secMonth=null, secGroup='all';
+function SEC(){
+  S.sec = S.sec || {};
+  const d=S.sec;
+  d.pubs=d.pubs||[]; d.reports=d.reports||{}; d.duties=d.duties||[]; d.remits=d.remits||[]; d.purchases=d.purchases||[]; d.bank=d.bank||[]; d.notes=d.notes||[]; d.co=d.co||{date:'',notes:''};
+  if(!d.seeded){
+    const m=addDays(TODAY(),0).slice(0,8);
+    d.duties=[
+      {id:uid(), name:'Send the remittance to the branch', freq:'1', due:m+'05', list:'Count contributions\nRecord in the accounts\nSend and keep the reference', notes:'', log:[]},
+      {id:uid(), name:'Collect and check group reports', freq:'1', due:m+'10', list:'Paste each group\'s report\nRemind anyone missing\nCheck who needs encouragement', notes:'', log:[]},
+      {id:uid(), name:'Accounts audit (every 3 months)', freq:'3', due:'', list:'', notes:'', log:[]},
+      {id:uid(), name:'Accounts audit (every 6 months)', freq:'6', due:'', list:'', notes:'', log:[]}
+    ];
+    d.seeded=true;
+  }
+  return d;
+}
+const secMonthDefault = () => { const d=parse(TODAY()); d.setDate(1); d.setMonth(d.getMonth()-1); return ymd(d).slice(0,7); };
+const prevMonth = m => { const d=parse(m+'-01'); d.setMonth(d.getMonth()-1); return ymd(d).slice(0,7); };
+const isPioneer = p => p.type==='rp'||p.type==='sp'||p.type==='fm';
+function activePubs(){ return SEC().pubs.filter(p=>p.status!=='moved' && p.status!=='inactive'); }
+function rep(m,id){ return (SEC().reports[m]||{})[id]; }
+function repState(r){ if(!r) return 'missing'; return r.shared===false ? 'none' : 'in'; }
+function groupsList(){ return [...new Set(SEC().pubs.map(p=>p.group||'').filter(Boolean))].sort(); }
+function monthTotals(m){
+  const list=activePubs(), t={total:list.length, in:0, missing:0, none:0, pub:{n:0,st:0}, aux:{n:0,h:0,st:0}, rp:{n:0,h:0,st:0}};
+  list.forEach(p=>{ const r=rep(m,p.id), s=repState(r); t[s]++; if(s!=='in') return;
+    const k = isPioneer(p) ? 'rp' : r.aux ? 'aux' : 'pub'; t[k].n++; t[k].st+=n(r.studies); if(k!=='pub') t[k].h+=n(r.hours); });
+  return t;
+}
+function needsAttention(m){ const m1=prevMonth(m); return activePubs().filter(p=>repState(rep(m,p.id))!=='in' && repState(rep(m1,p.id))!=='in' && (p.since||'0000')<m1); }
+function newlyBaptized(){ const lim=addDays(TODAY(),-365); return SEC().pubs.filter(p=>p.baptized && p.baptized>=lim && p.status!=='moved').sort((a,b)=>a.baptized.localeCompare(b.baptized)); }
+function lastVisit(p){ const v=(p.visits||[]).map(x=>x.date).sort(); return v[v.length-1]||null; }
+function nextDue(d){ return d.due||''; }
+function dutyClass(d){ if(!d.due) return 'off'; const k=daysSince(d.due); return k>0?'red':k>=-7?'orange':'green'; }
+function advanceDue(d){ if(!d.due || d.freq==='0'){ d.due=''; return; } const x=parse(d.due); x.setMonth(x.getMonth()+n(d.freq)); d.due=ymd(x); }
+function money2(v){ return money(n(v)); }
+
+/* ---------- the Secretary tab ---------- */
+V.sec = () => {
+  const segs=[['reports','Reports'],['pubs','Publishers'],['att','Meetings'],['duties','Duties'],['committee','Committee']];
+  let html=`<div class="seg">${segs.map(([k,l])=>`<button class="${k===secTab?'on':''}" data-a="sectab" data-k="${k}">${l}</button>`).join('')}</div>`;
+  if(!curProfile().pin) html+=`<div class="banner"><span style="flex:1">These are confidential congregation records. They stay only on this phone. Set a passcode so nobody else can open them.</span><button class="btn sm" data-a="pinsheet">Set passcode</button></div>`;
+  html += secTab==='reports'?secReports(): secTab==='pubs'?secPubs(): secTab==='att'?secAttendance(): secTab==='duties'?secDuties(): secCommittee();
+  return html;
+};
+function secReports(){
+  const d=SEC(); if(!secMonth) secMonth=secMonthDefault();
+  const m=secMonth, t=monthTotals(m), months=[...new Set([MONTH(), secMonthDefault(), prevMonth(secMonthDefault()), ...Object.keys(d.reports)])].sort().reverse().slice(0,14);
+  if(!d.pubs.length) return `<div class="card"><div class="empty">Start by adding your publishers on the <b>Publishers</b> tab. You can paste a whole list at once.</div><button class="btn" data-a="sectab" data-k="pubs" style="margin-top:10px">Go to Publishers</button></div>`;
+  const att=needsAttention(m), groups=groupsList();
+  const list=activePubs().filter(p=>secGroup==='all'||(p.group||'')===secGroup).sort((a,b)=>(a.group||'').localeCompare(b.group||'')||a.name.localeCompare(b.name));
+  const missing=list.filter(p=>repState(rep(m,p.id))==='missing');
+  let html=`<div class="card"><h2>Reports for<span class="sp"></span><select id="secMonth" style="width:auto">${months.map(x=>`<option value="${x}" ${x===m?'selected':''}>${monthName(x)}</option>`).join('')}</select></h2>
+    <div class="stat"><div><small>Reports in</small><b>${t.in+t.none} / ${t.total}</b></div><div><small>Still missing</small><b style="color:${t.missing?'var(--bad)':'var(--ok)'}">${t.missing}</b></div></div>
+    ${bar(pct(t.in+t.none,t.total))}
+    <table class="tot"><tr><th></th><th>Number</th><th>Hours</th><th>Studies</th></tr>
+      <tr><td>Publishers</td><td>${t.pub.n}</td><td>—</td><td>${t.pub.st}</td></tr>
+      <tr><td>Auxiliary pioneers</td><td>${t.aux.n}</td><td>${r1(t.aux.h)}</td><td>${t.aux.st}</td></tr>
+      <tr><td>Regular pioneers</td><td>${t.rp.n}</td><td>${r1(t.rp.h)}</td><td>${t.rp.st}</td></tr></table>
+    <p class="muted" style="margin:6px 0 0;font-size:12.5px">${t.none?t.none+' did not share in the ministry. ':''}Counts only publishers marked Active.</p>
+    <div class="btns" style="margin-top:10px"><button class="btn" style="flex:1" data-a="secpaste">Paste a group's report</button><button class="btn ghost" style="flex:1" data-a="seccopy">Copy totals</button></div>
+    <button class="btn ghost" data-a="printsheet" data-k="s21" style="margin-top:8px">Print publisher records for the service year (S-21)</button></div>`;
+  if(att.length) html+=`<div class="card"><h2>Needs encouragement<span class="sp"></span><span class="chip" style="background:#FBEAEA;color:#A32D2D">${att.length}</span></h2>
+    <p class="muted" style="margin:0 0 6px">No report or no ministry for 2 months in a row.</p>
+    <div class="list">${att.map(p=>`<div class="it"><span class="wdot red" style="margin-top:6px"></span><div class="x"><b>${esc(p.name)}</b><small>${esc(p.group||'No group')}</small></div>${p.phone?`<button class="btn sm ghost" data-a="secenc" data-id="${p.id}">Encourage</button>`:''}</div>`).join('')}</div></div>`;
+  html+=`${groups.length?`<div class="nfilter" style="margin:0 0 10px">${[['all','All groups'],...groups.map(g=>[g,g])].map(([k,l])=>`<button class="${k===secGroup?'on':''}" data-a="secgroup" data-k="${esc(k)}">${esc(l)}</button>`).join('')}</div>`:''}
+    <div class="card"><h2>${secGroup==='all'?'Everyone':esc(secGroup)}<span class="sp"></span>${missing.length?`<button class="btn sm ghost" data-a="secremind">Remind ${missing.length} missing</button>`:'<span class="chip">All in ✓</span>'}</h2>
+    <div class="list">${list.map(p=>{ const r=rep(m,p.id), s=repState(r);
+      const txt = s==='missing'?'Missing': s==='none'?'Did not share': (isPioneer(p)||r.aux ? r1(n(r.hours))+' h · ' : 'Shared · ')+n(r.studies)+' stud'+(n(r.studies)===1?'y':'ies')+(r.aux?' · Aux':'');
+      return `<div class="it rep" data-a="secrep" data-id="${p.id}"><span class="wdot ${s==='in'?'green':s==='none'?'orange':'red'}" style="margin-top:6px"></span><div class="x"><b>${esc(p.name)}</b><small>${esc((PTYPES.find(x=>x[0]===p.type)||['',''])[1])}${p.group&&secGroup==='all'?' · '+esc(p.group):''}</small></div><span class="wchip ${s==='in'?'green':s==='none'?'orange':'red'}">${txt}</span></div>`; }).join('')}</div></div>`;
+  return html;
+}
+function reportSheet(id){
+  const p=SEC().pubs.find(x=>x.id===id), m=secMonth, r=rep(m,id)||{}, pio=isPioneer(p);
+  openSheet(`<h3>${esc(p.name)} · ${monthName(m)}</h3>
+    <p class="muted" style="margin:-6px 0 10px">${esc((PTYPES.find(x=>x[0]===p.type)||['',''])[1])}${p.group?' · '+esc(p.group):''}</p>
+    <div class="f"><label>Shared in the ministry this month?</label><div class="chips2"><button type="button" class="${r.shared!==false&&r.got?'on':''}" data-a="rpyes">Yes</button><button type="button" class="${r.shared===false?'on':''}" data-a="rpno">No</button></div></div>
+    ${pio?'':`<label class="row" style="cursor:pointer;border:0;padding-top:0"><span class="lbl">Auxiliary pioneer this month</span><input type="checkbox" id="rpAux" ${r.aux?'checked':''} style="width:22px;height:22px"></label>`}
+    <div class="f2"><div class="f" id="rpHoursBox" ${pio||r.aux?'':'hidden'}><label>Hours</label><input type="text" inputmode="decimal" id="rpHours" value="${r.hours??''}"></div>
+      <div class="f"><label>Bible studies</label><input type="text" inputmode="numeric" id="rpStudies" value="${r.studies??''}" placeholder="0"></div></div>
+    <div class="f"><label>Remarks</label><input type="text" id="rpRem" value="${esc(r.remarks||'')}"></div>
+    <input type="hidden" id="rpShared" value="${r.got?(r.shared===false?'no':'yes'):''}">
+    <div class="btns" style="flex-direction:column"><button class="btn" data-a="rpsave" data-id="${id}" data-next="1">Save and next missing</button>
+      <div class="btns"><button class="btn ghost" style="flex:1" data-a="rpsave" data-id="${id}">Save</button>${r.got?`<button class="btn danger" style="flex:1" data-a="rpclear" data-id="${id}">Clear report</button>`:`<button class="btn ghost" style="flex:1" data-a="close">Cancel</button>`}</div></div>`, null);
+  const aux=document.getElementById('rpAux'); if(aux) aux.addEventListener('change',()=>{ document.getElementById('rpHoursBox').hidden=!aux.checked; });
+  ['rpHours','rpStudies'].forEach(i=>document.getElementById(i).addEventListener('input',()=>{ if(!val('rpShared')){ document.getElementById('rpShared').value='yes'; document.querySelector('[data-a=rpyes]').classList.add('on'); } }));
+}
+function saveReport(id){
+  const sh=val('rpShared'); if(!sh){ toast('Choose Yes or No first'); return false; }
+  const d=SEC(), m=secMonth; d.reports[m]=d.reports[m]||{};
+  const aux=document.getElementById('rpAux');
+  d.reports[m][id]={got:TODAY(), shared:sh==='yes', aux:!!(aux&&aux.checked), hours:sh==='yes'&&val('rpHours')!==''?n(val('rpHours')):null, studies:sh==='yes'?n(val('rpStudies')):0, remarks:val('rpRem').trim()};
+  save(); return true;
+}
+
+/* ---------- paste a group's report ---------- */
+function matchPub(name, pool){
+  const k=name.toLowerCase().replace(/[^a-z ]/g,' ').replace(/\s+/g,' ').trim(); if(k.length<2) return null;
+  const words=k.split(' ');
+  return pool.find(p=>p.name.toLowerCase()===k)
+    || pool.find(p=>{ const pn=p.name.toLowerCase(); return words.every(w=>pn.includes(w)); })
+    || (words.length===1 ? (pool.filter(p=>p.name.toLowerCase().split(/\s+/).includes(k)).length===1 ? pool.find(p=>p.name.toLowerCase().split(/\s+/).includes(k)) : null) : null);
+}
+function parseReportLine(line, pool){
+  const raw=line.replace(/^[\s\d]+[.)]\s+/,'').trim(); if(!raw) return null;
+  const nm=(raw.match(/^[^\d:,\-–(|✓✔✗×]+/)||[''])[0].replace(/\b(yes|no|shared|did|not|none|nil)\b.*$/i,'').trim();
+  const rest=raw.slice(nm.length).toLowerCase();
+  const p=matchPub(nm, pool);
+  const hrs=(rest.match(/(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)\b/)||[])[1];
+  let st=(rest.match(/(\d+)\s*(?:bs|st|stud|studies|study|b\.s)\b/)||[])[1];
+  const nums=(rest.replace(/(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)\b/,'').match(/\d+/g)||[]);
+  if(st==null && nums.length) st=nums[nums.length-1];
+  const no=/\b(no|not|didn'?t|did not|none|nil)\b|✗|×|\bx\b/.test(rest) && !hrs && !(st>0);
+  const yes=!no && (/\b(yes|y|shared|did|✓|✔|ok)\b|✓|✔/.test(rest) || hrs!=null || st!=null);
+  return {line:raw, name:nm, p, shared: yes?true: no?false: null, hours:hrs!=null?n(hrs):null, studies:st!=null?n(st):0, aux:/\baux/.test(rest)};
+}
+function pasteSheet(){
+  openSheet(`<h3>Paste a group's report</h3>
+    <p class="muted" style="margin:0 0 8px">Copy the message the group overseer sent you on WhatsApp and paste it here. One person per line works best, for example:<br><b>Kofi Mensah - yes - 2 studies</b><br><b>Ama Owusu - 52 hrs - 3 studies</b><br><b>Yaw Boateng - no</b></p>
+    <div class="f"><textarea id="psText" style="min-height:170px" placeholder="Paste here"></textarea></div>
+    <div id="psPrev"></div>
+    <div class="btns"><button class="btn ghost" style="flex:1" data-a="close">Cancel</button><button class="btn" style="flex:1" data-a="psapply">Add to ${monthName(secMonth)}</button></div>`, null);
+  const upd=()=>{
+    const rows=val('psText').split(/\n+/).map(l=>parseReportLine(l, activePubs())).filter(Boolean);
+    const ok=rows.filter(r=>r.p && r.shared!==null), bad=rows.filter(r=>!r.p || r.shared===null);
+    document.getElementById('psPrev').innerHTML = rows.length ? `<div class="area">${ok.length} ready${bad.length?' · '+bad.length+' need checking':''}</div><div class="list">${rows.map(r=>`<div class="it"><span class="wdot ${r.p&&r.shared!==null?'green':'red'}" style="margin-top:6px"></span><div class="x"><b>${r.p?esc(r.p.name):'Not found: '+esc(r.name||r.line)}</b><small>${!r.p?'Skipped: no publisher with this name':r.shared===null?'Could not tell if they shared':r.shared?('Shared'+(r.hours!=null?' · '+r.hours+' h':'')+' · '+r.studies+' stud'+(r.studies===1?'y':'ies')+(r.aux?' · Aux':'')):'Did not share'}</small></div></div>`).join('')}</div>${bad.length?'<p class="muted" style="font-size:12.5px">Lines in red are skipped. Fix the name to match your Publishers list, or enter those reports by hand.</p>':''}` : '';
+  };
+  document.getElementById('psText').addEventListener('input',upd);
+}
+function applyPaste(){
+  const d=SEC(), m=secMonth; d.reports[m]=d.reports[m]||{};
+  const rows=val('psText').split(/\n+/).map(l=>parseReportLine(l, activePubs())).filter(r=>r&&r.p&&r.shared!==null);
+  rows.forEach(r=>{ d.reports[m][r.p.id]={got:TODAY(), shared:r.shared, aux:r.aux&&!isPioneer(r.p), hours:r.shared?r.hours:null, studies:r.shared?r.studies:0, remarks:''}; });
+  save(); closeSheet(); render(); toast(rows.length+' report'+(rows.length===1?'':'s')+' added');
+}
+function totalsText(m){
+  const t=monthTotals(m);
+  return `Field service report — ${monthName(m)}\nReports in: ${t.in+t.none} of ${t.total}${t.missing?' ('+t.missing+' missing)':''}\n\nPublishers: ${t.pub.n} · Bible studies ${t.pub.st}\nAuxiliary pioneers: ${t.aux.n} · Hours ${r1(t.aux.h)} · Bible studies ${t.aux.st}\nRegular pioneers: ${t.rp.n} · Hours ${r1(t.rp.h)} · Bible studies ${t.rp.st}`;
+}
+const REMIND = ['Hi {name}, hope you\'re keeping well! Just a gentle reminder to send your field service report for {month} when you get a moment. Thank you 🙏',
+  'Hello {name}! Hope your week is going well. When you have a minute, please send me your report for {month}. Thanks a lot!',
+  'Good day {name}, I hope all is well with you and the family. A small reminder about your {month} report. Thank you so much!'];
+function remindSheet(){
+  const m=secMonth, miss=activePubs().filter(p=>(secGroup==='all'||(p.group||'')===secGroup) && repState(rep(m,p.id))==='missing');
+  openSheet(`<h3>Remind about ${monthName(m)} reports</h3>
+    <p class="muted" style="margin:0 0 8px">Each person gets a friendly message. Tap Send for each one.</p>
+    <div class="list">${miss.map((p,i)=>{ const msg=REMIND[(i+dayNum())%REMIND.length].replace('{name}',firstName(p.name)).replace('{month}',monthName(m).split(' ')[0]);
+      return `<div class="it"><div class="x"><b>${esc(p.name)}</b><small>${p.phone?esc(p.phone):'No phone number'}${p.reminded===m?' · reminded ✓':''}</small></div>${p.phone?`<a class="btn sm" href="https://wa.me/${phoneIntl(p.phone)}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener" data-a="secreminded" data-id="${p.id}">WhatsApp</a><a class="btn sm ghost" href="sms:+${phoneIntl(p.phone)}?body=${encodeURIComponent(msg)}" data-a="secreminded" data-id="${p.id}">SMS</a>`:''}</div>`; }).join('')}</div>
+    <button class="btn ghost" data-a="close" style="margin-top:12px">Close</button>`, null);
+}
+
+/* ---------- publishers ---------- */
+function secPubs(){
+  const d=SEC(), nb=newlyBaptized(), groups=groupsList();
+  let html=`<div class="card"><div class="stat"><div><small>Active publishers</small><b>${activePubs().length}</b></div><div><small>Regular pioneers</small><b>${activePubs().filter(isPioneer).length}</b></div></div>
+    <div class="btns" style="margin-top:10px"><button class="btn" style="flex:1" data-a="pubsheet">Add a publisher</button><button class="btn ghost" style="flex:1" data-a="pubbulk">Paste a list</button></div>
+    <button class="btn ghost" data-a="printsheet" data-k="s21" style="margin-top:8px">Print publisher records (S-21)</button></div>`;
+  if(nb.length) html+=`<div class="card"><h2>Newly baptized (first year)</h2><div class="list">${nb.map(p=>{ const lv=lastVisit(p), dd=lv?daysSince(lv):null; const w=lv===null?'red':dd>90?'orange':'green';
+    return `<div class="it"><span class="wdot ${w}" style="margin-top:6px"></span><div class="x" data-a="pubsheet" data-id="${p.id}" style="cursor:pointer"><b>${esc(p.name)}</b><small>Baptized ${nice(p.baptized)} · ${(p.visits||[]).length} visit${(p.visits||[]).length===1?'':'s'}${lv?' · last '+nice(lv):' · not visited yet'}</small></div><button class="btn sm ghost" data-a="pubvisit" data-id="${p.id}">Log visit</button></div>`; }).join('')}</div></div>`;
+  if(!d.pubs.length) return html+`<div class="card"><div class="empty">Add each publisher with their group. To save time, use <b>Paste a list</b>: one person per line, like <b>Kofi Mensah, Group 1, pioneer</b>.</div></div>`;
+  const by={}; d.pubs.forEach(p=>(by[p.group||'No group']=by[p.group||'No group']||[]).push(p));
+  Object.keys(by).sort().forEach(g=>{
+    html+=`<div class="card"><h2>${esc(g)}<span class="sp"></span><span class="chip">${by[g].filter(p=>p.status==='active'||!p.status).length}</span></h2><div class="list">${by[g].sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<div class="it" data-a="pubsheet" data-id="${p.id}" style="cursor:pointer"><div class="x"><b>${esc(p.name)}</b><small>${esc((PTYPES.find(x=>x[0]===p.type)||['',''])[1])}${p.status&&p.status!=='active'?' · '+esc((PSTATUS.find(x=>x[0]===p.status)||['',''])[1]):''}${p.phone?' · '+esc(p.phone):''}</small></div></div>`).join('')}</div></div>`;
+  });
+  return html;
+}
+function pubSheet(id){
+  const d=SEC(), p = id ? d.pubs.find(x=>x.id===id) : {name:'',phone:'',group:secGroup!=='all'?secGroup:'',type:'pub',status:'active',baptized:'',notes:'',visits:[]};
+  openSheet(`<h3>${id?esc(p.name):'Add a publisher'}</h3>
+    <div class="f"><label>Name</label><input type="text" id="puName" value="${esc(p.name)}"></div>
+    <div class="f2"><div class="f"><label>Phone</label><input type="tel" id="puPhone" value="${esc(p.phone||'')}"></div>
+      <div class="f"><label>Group</label><input type="text" id="puGroup" value="${esc(p.group||'')}" list="grpList" placeholder="Group 1"><datalist id="grpList">${groupsList().map(g=>`<option>${esc(g)}</option>`).join('')}</datalist></div></div>
+    <div class="f2"><div class="f"><label>Type</label><select id="puType">${PTYPES.map(([k,l])=>`<option value="${k}" ${k===p.type?'selected':''}>${l}</option>`).join('')}</select></div>
+      <div class="f"><label>Status</label><select id="puStatus">${PSTATUS.map(([k,l])=>`<option value="${k}" ${k===(p.status||'active')?'selected':''}>${l}</option>`).join('')}</select></div></div>
+    <div class="f2"><div class="f"><label>Date of birth</label><input type="date" id="puDob" value="${p.dob||''}"></div>
+      <div class="f"><label>Baptism date</label><input type="date" id="puBap" value="${p.baptized||''}"></div></div>
+    <div class="f2"><div class="f"><label>Gender</label><select id="puSex"><option value="">—</option><option value="m" ${p.gender==='m'?'selected':''}>Male</option><option value="f" ${p.gender==='f'?'selected':''}>Female</option></select></div>
+      <div class="f"><label>Hope</label><select id="puHope"><option value="">—</option><option value="os" ${p.hope==='os'?'selected':''}>Other sheep</option><option value="an" ${p.hope==='an'?'selected':''}>Anointed</option></select></div></div>
+    <div class="f2"><label class="row" style="cursor:pointer;border:0"><span class="lbl">Elder</span><input type="checkbox" id="puElder" ${p.elder?'checked':''} style="width:22px;height:22px"></label>
+      <label class="row" style="cursor:pointer;border:0"><span class="lbl">Ministerial servant</span><input type="checkbox" id="puMs" ${p.ms?'checked':''} style="width:22px;height:22px"></label></div>
+    <div class="f"><label>Notes</label><textarea id="puNotes">${esc(p.notes||'')}</textarea></div>
+    ${actions}
+    ${id?pubYearHTML(p):''}
+    ${id&&(p.visits||[]).length?`<div class="area">Visits</div><div class="list">${[...p.visits].reverse().map(v=>`<div class="it"><div class="x"><b>${nice(v.date)}${v.by?' · '+esc(v.by):''}</b><small>${esc(v.note||'')}</small></div></div>`).join('')}</div>`:''}
+    ${id?`<div class="btns" style="margin-top:12px"><button class="btn ghost" style="flex:1" data-a="pubvisit" data-id="${id}">Log a visit</button><button class="btn danger" style="flex:1" data-a="delpub" data-id="${id}">Delete</button></div>`:''}`, ()=>{
+      const nm=val('puName').trim(); if(!nm) return fail('puName','Enter the name');
+      const rec = id ? p : {id:uid(), visits:[], since:MONTH()};
+      Object.assign(rec,{name:nm, phone:val('puPhone').trim(), group:val('puGroup').trim(), type:val('puType'), status:val('puStatus'), baptized:val('puBap'), dob:val('puDob'), gender:val('puSex'), hope:val('puHope'), elder:document.getElementById('puElder').checked, ms:document.getElementById('puMs').checked, notes:val('puNotes').trim()});
+      if(!id) d.pubs.push(rec); return true;
+    });
+}
+function pubVisitSheet(id){
+  const p=SEC().pubs.find(x=>x.id===id);
+  openSheet(`<h3>Visit to ${esc(p.name)}</h3>
+    <div class="f2"><div class="f"><label>Date</label><input type="date" id="pvDate" value="${TODAY()}" max="${TODAY()}"></div><div class="f"><label>Who visited</label><input type="text" id="pvBy" placeholder="Me and Bro. Mensah"></div></div>
+    <div class="f"><label>Notes</label><textarea id="pvNote" placeholder="How they are doing, what we discussed"></textarea></div>
+    ${actions}`, ()=>{ p.visits=p.visits||[]; p.visits.push({id:uid(), date:val('pvDate')||TODAY(), by:val('pvBy').trim(), note:val('pvNote').trim()}); return true; });
+}
+function pubBulkSheet(){
+  openSheet(`<h3>Paste a list of publishers</h3>
+    <p class="muted" style="margin:0 0 8px">One person per line: <b>Name, Group, type</b>. Type can be <b>pioneer</b>, <b>unbaptized</b> or left empty for publisher.<br>Example: <b>Kofi Mensah, Group 1, pioneer</b></p>
+    <div class="f"><textarea id="pbText" style="min-height:200px"></textarea></div>
+    <div class="btns"><button class="btn ghost" style="flex:1" data-a="close">Cancel</button><button class="btn" style="flex:1" data-a="pbapply">Add them</button></div>`, null);
+}
+function applyBulk(){
+  const d=SEC(); let added=0, skipped=0;
+  val('pbText').split(/\n+/).forEach(l=>{
+    const parts=l.split(/[,;\t|]/).map(x=>x.trim()).filter(Boolean); if(!parts.length) return;
+    const nm=parts[0].replace(/^\d+[.)]\s*/,''); if(nm.length<2) return;
+    if(d.pubs.some(p=>p.name.toLowerCase()===nm.toLowerCase())){ skipped++; return; }
+    const rest=parts.slice(1), tp=rest.find(x=>/pioneer|unbap|special/i.test(x))||'';
+    const grp=rest.find(x=>x!==tp)||'';
+    d.pubs.push({id:uid(), name:nm, group:grp, type:/special/i.test(tp)?'sp':/pioneer/i.test(tp)?'rp':/unbap/i.test(tp)?'unbap':'pub', status:'active', visits:[], since:MONTH()}); added++;
+  });
+  save(); closeSheet(); render(); toast(added+' added'+(skipped?', '+skipped+' already in the list':''));
+}
+
+/* ---------- duties and the circuit overseer's visit ---------- */
+function secDuties(){
+  const d=SEC(), list=[...d.duties].sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999'));
+  const co=d.co, cd=co.date?-daysSince(co.date):null;
+  let html=`<div class="card"><h2>Circuit overseer's visit</h2>
+    ${co.date?`<div class="codebox" style="font-size:24px;margin-top:4px">${cd>0?cd+' day'+(cd===1?'':'s')+' to go':cd===0?'Starts today':'Visit week of '+nice(co.date)}</div>`:''}
+    <div class="f"><label>Visit starts</label><input type="date" id="coDate" value="${co.date||''}"></div>
+    <div class="f"><label>To prepare</label><textarea id="coNotes" placeholder="Reports up to date&#10;Accounts audited&#10;Hospitality arranged">${esc(co.notes||'')}</textarea></div></div>`;
+  html+=`<div class="card"><h2>My duties<span class="sp"></span><button class="btn sm ghost" data-a="dutysheet">${svg('plus',15)} Add</button></h2>
+    <div class="list">${list.map(x=>{ const c=dutyClass(x), k=x.due?daysSince(x.due):null;
+      return `<div class="it"><span class="wdot ${c}" style="margin-top:6px"></span><div class="x" data-a="dutysheet" data-id="${x.id}" style="cursor:pointer"><b>${esc(x.name)}</b><small>${esc((FREQ.find(f=>f[0]===x.freq)||['',''])[1])} · ${x.due?(k>0?'<span style="color:var(--bad)">Overdue since '+nice(x.due)+'</span>':k===0?'Due today':'Due '+nice(x.due)):'Set a due date'}${x.log.length?' · last done '+nice(x.log[x.log.length-1].date):''}</small></div>${x.due?`<button class="btn sm" data-a="dutydone" data-id="${x.id}">Done</button>`:''}</div>`; }).join('')}</div>
+    <p class="muted" style="margin:8px 0 0;font-size:12.5px">Each duty rings a reminder at 9 am on its due day. Tap a duty to change its dates or checklist.</p></div>`;
+  return html;
+}
+function dutySheet(id){
+  const d=SEC(), x = id ? d.duties.find(z=>z.id===id) : {name:'',freq:'1',due:'',list:'',notes:'',log:[]};
+  openSheet(`<h3>${id?'Edit duty':'New duty'}</h3>
+    <div class="f"><label>Duty</label><input type="text" id="duName" value="${esc(x.name)}" placeholder="Send the remittance to the branch"></div>
+    <div class="f2"><div class="f"><label>How often</label><select id="duFreq">${FREQ.map(([k,l])=>`<option value="${k}" ${k===x.freq?'selected':''}>${l}</option>`).join('')}</select></div>
+      <div class="f"><label>Next due</label><input type="date" id="duDue" value="${x.due||''}"></div></div>
+    <div class="f"><label>Checklist (one step per line)</label><textarea id="duList" style="min-height:100px">${esc(x.list||'')}</textarea></div>
+    <div class="f"><label>Notes</label><textarea id="duNotes">${esc(x.notes||'')}</textarea></div>
+    ${actions}
+    ${id&&x.log.length?`<div class="area">Done on</div><div class="list">${[...x.log].reverse().slice(0,12).map(l=>`<div class="it"><div class="x"><b>${nice(l.date)}</b><small>${esc(l.note||'')}</small></div></div>`).join('')}</div>`:''}
+    ${id?`<button class="btn danger" data-a="delduty" data-id="${id}" style="margin-top:12px">Delete duty</button>`:''}`, ()=>{
+      const nm=val('duName').trim(); if(!nm) return fail('duName','Name the duty');
+      const rec = id ? x : {id:uid(), log:[]};
+      Object.assign(rec,{name:nm, freq:val('duFreq'), due:val('duDue'), list:val('duList').trim(), notes:val('duNotes').trim()});
+      if(!id) d.duties.push(rec); return true;
+    });
+}
+function dutyDoneSheet(id){
+  const x=SEC().duties.find(z=>z.id===id), steps=(x.list||'').split('\n').map(s=>s.trim()).filter(Boolean);
+  openSheet(`<h3>${esc(x.name)}</h3>
+    ${steps.length?`<div class="area">Checklist</div>${steps.map((s,i)=>`<label class="row" style="cursor:pointer"><span class="lbl">${esc(s)}</span><input type="checkbox" class="duStep" style="width:22px;height:22px"></label>`).join('')}`:''}
+    <div class="f" style="margin-top:10px"><label>Note (optional)</label><input type="text" id="ddNote" placeholder="Reference number, who helped"></div>
+    ${/remit/i.test(x.name)?`<p class="muted" style="font-size:12.5px;margin:0 0 8px">Tip: record the amount and reference under Committee → Remittances.</p>`:''}
+    <div class="btns"><button class="btn ghost" style="flex:1" data-a="close">Cancel</button><button class="btn" style="flex:1" data-a="ddsave" data-id="${id}">Mark as done</button></div>`, null);
+}
+
+/* ---------- operating committee: remittances, purchases, bank, meeting notes ---------- */
+function secCommittee(){
+  const d=SEC(), y=YEAR();
+  const remY=d.remits.filter(r=>r.date.slice(0,4)===y).reduce((a,r)=>a+n(r.amount),0);
+  const card=(title, add, rows, empty)=>`<div class="card"><h2>${title}<span class="sp"></span><button class="btn sm ghost" data-a="${add}">${svg('plus',15)} Add</button></h2>${rows||`<div class="empty">${empty}</div>`}</div>`;
+  let html=card(`Remittances<small class="muted" style="font-weight:400;margin-left:6px">${y}: ${money(remY)}</small>`, 'remitsheet',
+    d.remits.length?`<div class="list">${[...d.remits].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,12).map(r=>`<div class="it" data-a="remitsheet" data-id="${r.id}" style="cursor:pointer"><div class="x"><b>${nice(r.date)}</b><small>${esc([r.ref&&'Ref '+r.ref, r.notes].filter(Boolean).join(' · '))}</small></div><span class="amt">${money2(r.amount)}</span></div>`).join('')}</div>`:'', 'Record each remittance sent to the branch: date, amount and reference.');
+  const st={requested:'Requested',approved:'Approved',bought:'Bought'};
+  html+=card('Things to buy','buysheet', d.purchases.length?`<div class="list">${[...d.purchases].sort((a,b)=>(a.status==='bought')-(b.status==='bought')||b.date.localeCompare(a.date)).map(x=>`<div class="it"><div class="x" data-a="buysheet" data-id="${x.id}" style="cursor:pointer"><b>${esc(x.item)}</b><small>${nice(x.date)}${x.notes?' · '+esc(x.notes):''}</small></div><span class="amt">${money2(x.cost)}</span><button class="wchip ${x.status==='bought'?'green':x.status==='approved'?'orange':''}" data-a="buystatus" data-id="${x.id}" style="border:0">${st[x.status]}</button></div>`).join('')}</div>`:'', 'List items the committee needs to buy. Tap the status to move it from Requested to Approved to Bought.');
+  const bal=d.bank.reduce((a,b)=>a+(b.type==='in'?1:-1)*n(b.amount),0);
+  html+=card('Bank log','banksheet', d.bank.length?`<p class="muted" style="margin:-4px 0 6px">Money in minus money out so far: <b>${money(bal)}</b></p><div class="list">${[...d.bank].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,15).map(b=>`<div class="it" data-a="banksheet" data-id="${b.id}" style="cursor:pointer"><div class="x"><b>${b.type==='in'?'Deposit':'Withdrawal'} · ${nice(b.date)}</b><small>${esc([b.purpose,b.ref&&'Ref '+b.ref].filter(Boolean).join(' · '))}</small></div><span class="amt ${b.type==='in'?'':'neg'}">${b.type==='in'?'+':'−'}${money2(b.amount)}</span></div>`).join('')}</div>`:'', 'Record money taken from or paid into the bank, with the purpose.');
+  html+=card('Meeting notes','mnsheet', d.notes.length?`<div class="list">${[...d.notes].sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<div class="it" data-a="mnsheet" data-id="${x.id}" style="cursor:pointer"><div class="x"><b>${esc(x.title||'Meeting')}</b><small>${nice(x.date)}</small><div style="font-size:14px;margin-top:2px">${esc((x.text||'').slice(0,120))}${(x.text||'').length>120?'…':''}</div></div></div>`).join('')}</div>`:'', 'Notes from committee meetings and preparation for the circuit overseer\'s visit.');
+  return html;
+}
+function simpleSheet(listKey, id, title, fields, defaults){
+  const d=SEC(), x = id ? d[listKey].find(z=>z.id===id) : {...defaults};
+  const inp=f=> f.type==='select' ? `<select id="sf_${f.k}">${f.opts.map(([v,l])=>`<option value="${v}" ${v===x[f.k]?'selected':''}>${l}</option>`).join('')}</select>`
+    : f.type==='textarea' ? `<textarea id="sf_${f.k}" style="min-height:${f.h||90}px">${esc(x[f.k]||'')}</textarea>`
+    : `<input type="${f.type||'text'}" ${f.num?'inputmode="decimal"':''} id="sf_${f.k}" value="${esc(x[f.k]??'')}" placeholder="${esc(f.ph||'')}">`;
+  openSheet(`<h3>${id?'Edit':'Add'}: ${title}</h3>${fields.map(f=>`<div class="f"><label>${f.l}</label>${inp(f)}</div>`).join('')}${actions}
+    ${id?`<button class="btn danger" data-a="sfdel" data-list="${listKey}" data-id="${id}" style="margin-top:8px">Delete</button>`:''}`, ()=>{
+      const req=fields.find(f=>f.req && !val('sf_'+f.k).trim()); if(req) return fail('sf_'+req.k,'Fill this in');
+      const rec = id ? x : {id:uid()}; fields.forEach(f=>{ const v=val('sf_'+f.k); rec[f.k]= f.num ? n(v) : v.trim(); });
+      if(!id) d[listKey].push(rec); return true;
+    });
+}
+const remitSheet = id => simpleSheet('remits', id, 'remittance', [{k:'date',l:'Date sent',type:'date',req:1},{k:'amount',l:'Amount ('+S.settings.currency+')',num:1,req:1},{k:'ref',l:'Reference number'},{k:'notes',l:'Notes',type:'textarea',h:70}], {date:TODAY()});
+const buySheet = id => simpleSheet('purchases', id, 'thing to buy', [{k:'item',l:'Item',req:1,ph:'Microphone batteries'},{k:'cost',l:'Estimated cost ('+S.settings.currency+')',num:1},{k:'status',l:'Status',type:'select',opts:[['requested','Requested'],['approved','Approved'],['bought','Bought']]},{k:'date',l:'Date',type:'date'},{k:'notes',l:'Notes',type:'textarea',h:70}], {date:TODAY(), status:'requested'});
+const bankSheet = id => simpleSheet('bank', id, 'bank entry', [{k:'type',l:'Type',type:'select',opts:[['out','Withdrawal'],['in','Deposit']]},{k:'date',l:'Date',type:'date',req:1},{k:'amount',l:'Amount ('+S.settings.currency+')',num:1,req:1},{k:'purpose',l:'Purpose',ph:'Repairs to the hall'},{k:'ref',l:'Reference'}], {date:TODAY(), type:'out'});
+const mnSheet = id => simpleSheet('notes', id, 'meeting notes', [{k:'title',l:'Title',ph:'Operating committee meeting'},{k:'date',l:'Date',type:'date',req:1},{k:'text',l:'Notes',type:'textarea',h:200,req:1}], {date:TODAY()});
+
+/* ---------- Secretary card on the Today page ---------- */
+function secTodayCard(){
+  const d=SEC(), m=secMonthDefault(), t=monthTotals(m), soon=d.duties.filter(x=>x.due && daysSince(x.due)>=-7).sort((a,b)=>a.due.localeCompare(b.due));
+  const nbv=newlyBaptized().filter(p=>{ const lv=lastVisit(p); return !lv || daysSince(lv)>90; });
+  if(!d.pubs.length && !soon.length) return `<div class="card"><h2>Secretary</h2><div class="empty">Add your publishers to start tracking reports.</div><button class="btn ghost" data-a="gosec" data-k="pubs" style="margin-top:8px">Open Secretary</button></div>`;
+  return `<div class="card"><h2>Secretary<span class="sp"></span><button class="btn sm ghost" data-a="gosec" data-k="reports">Open</button></h2>
+    ${d.pubs.length?`<div class="row" style="border:0;padding-top:0"><div class="lbl">${monthName(m)} reports<small>${t.missing?t.missing+' still missing':'All reports in ✓'}</small></div><b>${t.in+t.none}/${t.total}</b></div>`:''}
+    ${soon.map(x=>`<div class="row"><span class="wdot ${dutyClass(x)}" style="margin:0 8px 0 0"></span><div class="lbl">${esc(x.name)}<small>${daysSince(x.due)>0?'Overdue':daysSince(x.due)===0?'Due today':'Due '+nice(x.due)}</small></div><button class="btn sm ghost" data-a="dutydone" data-id="${x.id}">Done</button></div>`).join('')}
+    ${nbv.length?`<p class="muted" style="margin:8px 0 0">Newly baptized to visit: <b>${nbv.map(p=>esc(p.name)).join(', ')}</b></p>`:''}</div>`;
+}
 
 /* ---------- field service timer (uses the phone's clock; works offline) ---------- */
 function T(){ return S.timer || (S.timer={running:false, startedAt:null, sessionMs:0, segments:0}); }
@@ -1532,13 +1855,314 @@ function encouragement(t){
 function goalRow(g){
   const p = goalPct(g);
   const prog = g.target>0 ? `${r1(g.progress||0)} / ${g.target}${g.unit?' '+esc(g.unit):''}` : (g.done?'Done':'Not done yet');
-  return `<div class="goal ${g.done?'done':''}"><div class="t">${checkBox(g.done,'goaldone','data-id="'+g.id+'"')}<span data-a="goalsheet" data-id="${g.id}">${esc(g.title)}<br><small class="muted">${AREAS[g.area].label} · ${prog}</small></span></div>${g.target>0?bar(p,g.done):''}</div>`;
+  return `<div class="goal ${g.done?'done':''}"><div class="t">${checkBox(g.done,'goaldone','data-id="'+g.id+'"')}<span data-a="goalsheet" data-id="${g.id}" style="flex:1">${esc(g.title)}<br><small class="muted">${AREAS[g.area].label} · ${prog}${goalStepsText(g)?' · '+goalStepsText(g):''}</small></span>${g.done?'':`<button class="btn sm ghost" data-a="sgsheet" data-id="${g.id}" style="width:auto;flex:none">Steps</button>`}</div>${g.target>0?bar(p,g.done):''}</div>`;
+}
+
+/* ================= SERVICE YEAR, ATTENDANCE AND PRINTED FORMS (S-21, S-88) ================= */
+const SY_MONTHS = ['09','10','11','12','01','02','03','04','05','06','07','08'];
+const MONTH_NAMES = ['September','October','November','December','January','February','March','April','May','June','July','August'];
+function syOf(m){ const [y,mm]=m.split('-').map(Number); return mm>=9 ? y+1 : y; }           // service year named by the year it ends
+function syMonthList(sy){ return SY_MONTHS.map(mm=>(n(mm)>=9?sy-1:sy)+'-'+mm); }
+function syLabel(sy){ return 'Sept '+(sy-1)+' – Aug '+sy; }
+const curSY = () => syOf(MONTH());
+
+/* one publisher's year, the way the S-21 card shows it */
+function pubYear(p, sy){
+  const rows=syMonthList(sy).map(m=>{ const r=rep(m,p.id); return {m, r, shared:r&&r.shared!==false, studies:r&&r.shared!==false?n(r.studies):'', aux:!!(r&&r.aux), hours:r&&r.hours!=null&&(isPioneer(p)||r.aux||p.type==='fm')?n(r.hours):'', remarks:r?(r.remarks||''):''}; });
+  return {rows, hours:rows.reduce((a,x)=>a+(x.hours===''?0:x.hours),0), studies:rows.reduce((a,x)=>a+(x.studies===''?0:x.studies),0), months:rows.filter(x=>x.shared).length};
+}
+/* the congregation's totals for each month of the year (for the total cards) */
+function catYear(cat, sy){
+  return syMonthList(sy).map(m=>{ const t=monthTotals(m), c=t[cat]; return {m, n:c.n, studies:c.st, hours:cat==='pub'?'':r1(c.h||0)}; });
+}
+
+/* ---------- meeting attendance ---------- */
+function meetingsIn(m, kind){ return (SEC().meetings||[]).filter(x=>x.date.slice(0,7)===m && x.kind===kind); }
+function attMonth(m, kind){ const l=meetingsIn(m,kind), tot=l.reduce((a,x)=>a+n(x.count),0); return {n:l.length, total:tot, avg:l.length?Math.round(tot/l.length):''}; }
+function attYearAvg(sy, kind){ const a=syMonthList(sy).map(m=>attMonth(m,kind)).filter(x=>x.n); return a.length?Math.round(a.reduce((s,x)=>s+x.avg,0)/a.length):''; }
+function guessKind(d){ const wd=parse(d).getDay(), st=SEC().meetDays||{}; if(st.wk!=null) return wd===n(st.wk)?'wk':'mid'; return wd===0||wd===6?'wk':'mid'; }
+function secAttendance(){
+  const d=SEC(); d.meetings=d.meetings||[];
+  const sy=curSY(), months=syMonthList(sy).filter(m=>m<=MONTH()).reverse();
+  let html=`<div class="card"><h2>Add attendance</h2>
+    <div class="f2"><div class="f"><label>Date</label><input type="date" id="atDate" value="${TODAY()}" max="${TODAY()}"></div>
+      <div class="f"><label>Meeting</label><select id="atKind"><option value="mid" ${guessKind(TODAY())==='mid'?'selected':''}>Midweek</option><option value="wk" ${guessKind(TODAY())==='wk'?'selected':''}>Weekend</option></select></div></div>
+    <div class="f"><label>Attendance (include those joining by phone or video)</label><input type="text" inputmode="numeric" id="atCount" placeholder="85"></div>
+    <button class="btn" data-a="atadd">Save attendance</button></div>`;
+  html+=`<div class="card"><h2>Service year ${sy}<span class="sp"></span><span class="muted" style="font-weight:400;font-size:13px">${syLabel(sy)}</span></h2>
+    <table class="tot"><tr><th>Month</th><th>Midweek avg</th><th>Weekend avg</th></tr>
+    ${syMonthList(sy).map((m,i)=>{ const a=attMonth(m,'mid'), b=attMonth(m,'wk'); return `<tr><td>${MONTH_NAMES[i]}</td><td>${a.n?a.avg+' <small class="muted">('+a.n+')</small>':'—'}</td><td>${b.n?b.avg+' <small class="muted">('+b.n+')</small>':'—'}</td></tr>`; }).join('')}
+    <tr><td><b>Average each month</b></td><td><b>${attYearAvg(sy,'mid')||'—'}</b></td><td><b>${attYearAvg(sy,'wk')||'—'}</b></td></tr></table>
+    <p class="muted" style="font-size:12.5px;margin:6px 0 0">The number in brackets is how many meetings were held.</p>
+    <button class="btn ghost" data-a="printsheet" data-k="s88" style="margin-top:10px">Print attendance record (S-88)</button></div>`;
+  months.forEach(m=>{ const l=[...meetingsIn(m,'mid'),...meetingsIn(m,'wk')].sort((a,b)=>b.date.localeCompare(a.date)); if(!l.length) return;
+    html+=`<div class="card"><h2>${monthName(m)}</h2><div class="list">${l.map(x=>`<div class="it"><div class="x"><b>${nice(x.date)} · ${x.kind==='mid'?'Midweek':'Weekend'}</b></div><span class="amt">${x.count}</span><button class="icon-btn" data-a="atdel" data-id="${x.id}" aria-label="Delete">${svg('trash',17)}</button></div>`).join('')}</div></div>`; });
+  return html;
+}
+
+/* ---------- loading the PDF tool (downloaded once, then kept on the phone) ---------- */
+const PDFLIB_URL='https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js';
+async function loadPdfLib(){
+  if(window.PDFLib) return window.PDFLib;
+  let code=null; try{ code=await photoGet('lib:pdf-lib'); }catch(e){}
+  if(!code){
+    if(!navigator.onLine) throw new Error('Connect to the internet once so the app can get its printing tool. After that, printing works offline.');
+    const r=await fetch(PDFLIB_URL); if(!r.ok) throw new Error('Could not download the printing tool. Try again with data on.');
+    code=await r.text(); try{ await photoPut('lib:pdf-lib', code); }catch(e){}
+  }
+  await new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=URL.createObjectURL(new Blob([code],{type:'text/javascript'})); s.onload=res; s.onerror=()=>rej(new Error('The printing tool did not load.')); document.head.appendChild(s); });
+  return window.PDFLib;
+}
+const FORM_KEY={s21:'form:S-21', s88:'form:S-88'};
+function b64ToBytes(b64){ const s=atob(b64.split(',').pop()); const u=new Uint8Array(s.length); for(let i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return u; }
+function bytesToB64(u){ let s=''; for(let i=0;i<u.length;i+=0x8000) s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000)); return btoa(s); }
+async function savePdfFile(bytes, name){
+  if(NATIVE){
+    const F=window.Capacitor.Plugins.Filesystem, Sh=window.Capacitor.Plugins.Share;
+    const r=await F.writeFile({path:name, data:bytesToB64(bytes), directory:'CACHE'});
+    await Sh.share({title:name, files:[r.uri], dialogTitle:'Open or send the PDF'});
+    return;
+  }
+  const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'})), a=document.createElement('a');
+  a.href=url; a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },1500);
+}
+
+/* ---------- S-21: one page per publisher, filled onto your blank card ---------- */
+const S21 = { rows:[628,608,588,568,549,529,509,489,469,450,430,410], shareX:130, auxX:271, studiesX:207, hoursX:348, remarksX:388, totalY:387,
+  name:[56,762], dob:[93,746], bap:[110,730], male:384, female:485, os:384, an:485, sexY:746, hopeY:730, roleY:714, roles:{elder:17, ms:81, rp:216, sp:336, fm:455} };
+function tick(page, x, y, rgb, s=1){ page.drawLine({start:{x:x+2*s,y:y+5*s}, end:{x:x+5*s,y:y+1.5*s}, thickness:1.5, color:rgb}); page.drawLine({start:{x:x+5*s,y:y+1.5*s}, end:{x:x+11.5*s,y:y+10*s}, thickness:1.5, color:rgb}); }
+const htick=(pg,x,y,ink)=>tick(pg,x+0.5,y+2.5,ink,0.75);
+async function makeS21(people, sy, totals){
+  const L=await loadPdfLib(), blank=await photoGet(FORM_KEY.s21); if(!blank) throw new Error('Add your blank S-21 card first.');
+  const src=await L.PDFDocument.load(b64ToBytes(blank)), out=await L.PDFDocument.create();
+  const font=await out.embedFont(L.StandardFonts.Helvetica), bold=await out.embedFont(L.StandardFonts.HelveticaBold), ink=L.rgb(0.05,0.13,0.35);
+  const fit=(t,max,size)=>{ t=String(t||''); while(t && font.widthOfTextAtSize(t,size)>max) t=t.slice(0,-1); return t; };
+  const centre=(page,t,cx,y,size=10,f=font)=>{ t=String(t); page.drawText(t,{x:cx-f.widthOfTextAtSize(t,size)/2, y, size, font:f, color:ink}); };
+  const add = async (fillFn) => { const [pg]=await out.copyPages(src,[0]); out.addPage(pg); fillFn(pg); };
+  for(const p of people){
+    const y=pubYear(p, sy);
+    await add(pg=>{
+      pg.drawText(fit(p.name,300,11),{x:S21.name[0],y:S21.name[1],size:11,font:bold,color:ink});
+      if(p.dob) pg.drawText(nice(p.dob).replace(/^\w+, /,'')+' '+p.dob.slice(0,4),{x:S21.dob[0],y:S21.dob[1],size:10,font,color:ink});
+      if(p.baptized) pg.drawText(nice(p.baptized).replace(/^\w+, /,'')+' '+p.baptized.slice(0,4),{x:S21.bap[0],y:S21.bap[1],size:10,font,color:ink});
+      if(p.gender==='m') htick(pg,S21.male,S21.sexY,ink); if(p.gender==='f') htick(pg,S21.female,S21.sexY,ink);
+      if(p.hope==='os') htick(pg,S21.os,S21.hopeY,ink); if(p.hope==='an') htick(pg,S21.an,S21.hopeY,ink);
+      if(p.elder) htick(pg,S21.roles.elder,S21.roleY,ink); if(p.ms) htick(pg,S21.roles.ms,S21.roleY,ink);
+      if(p.type==='rp') htick(pg,S21.roles.rp,S21.roleY,ink); if(p.type==='sp') htick(pg,S21.roles.sp,S21.roleY,ink); if(p.type==='fm') htick(pg,S21.roles.fm,S21.roleY,ink);
+      pg.drawText(String(sy),{x:22,y:650,size:10,font:bold,color:ink});
+      y.rows.forEach((r,i)=>{ const yy=S21.rows[i];
+        if(r.shared) tick(pg,S21.shareX,yy,ink);
+        if(r.aux) tick(pg,S21.auxX,yy,ink);
+        if(r.studies!=='' && r.shared) centre(pg,r.studies,S21.studiesX,yy+1);
+        if(r.hours!=='') centre(pg,r1(r.hours),S21.hoursX,yy+1);
+        if(r.remarks) pg.drawText(fit(r.remarks,186,8),{x:S21.remarksX,y:yy+2,size:8,font,color:ink});
+      });
+      if(y.hours) centre(pg,r1(y.hours),S21.hoursX,S21.totalY,10,bold);
+    });
+  }
+  for(const [cat,label] of totals){
+    const rows=catYear(cat, sy);
+    await add(pg=>{
+      pg.drawText(label,{x:S21.name[0],y:S21.name[1],size:11,font:bold,color:ink});
+      pg.drawText(String(sy),{x:22,y:650,size:10,font:bold,color:ink});
+      rows.forEach((r,i)=>{ const yy=S21.rows[i]; if(!r.n) return;
+        centre(pg,r.studies,S21.studiesX,yy+1);
+        if(r.hours!=='' ) centre(pg,r.hours,S21.hoursX,yy+1);
+        pg.drawText(r.n+' report'+(r.n===1?'':'s'),{x:S21.remarksX,y:yy+2,size:8,font,color:ink}); });
+      const th=rows.reduce((a,r)=>a+(r.hours===''?0:n(r.hours)),0); if(cat!=='pub' && th) centre(pg,r1(th),S21.hoursX,S21.totalY,10,bold);
+    });
+  }
+  return out.save();
+}
+/* ---------- S-88: attendance, filled into the form's own boxes ---------- */
+async function makeS88(sy){
+  const L=await loadPdfLib(), blank=await photoGet(FORM_KEY.s88); if(!blank) throw new Error('Add your blank S-88 form first.');
+  const doc=await L.PDFDocument.load(b64ToBytes(blank)), form=doc.getForm();
+  const set=(nm,v)=>{ try{ form.getTextField(nm).setText(v===''||v==null?'':String(v)); }catch(e){} };
+  [[1,'mid',sy-1],[2,'mid',sy],[3,'wk',sy-1],[4,'wk',sy]].forEach(([blk,kind,y])=>{
+    set('Service Year_'+blk, String(y));
+    syMonthList(y).forEach((m,i)=>{ const a=attMonth(m,kind); if(!a.n) return; set(blk+'-Meeting_'+(i+1),a.n); set(blk+'-Attendance_'+(i+1),a.total); set(blk+'-Average_'+(i+1),a.avg); });
+    set(blk+'-Average_Total', attYearAvg(y,kind));
+  });
+  try{ form.updateFieldAppearances(await doc.embedFont(L.StandardFonts.Helvetica)); }catch(e){}
+  return doc.save();
+}
+function printSheet(kind){
+  const d=SEC(), sy=curSY(), groups=groupsList();
+  openSheet(`<h3>${kind==='s88'?'Print attendance record (S-88)':'Print publisher records (S-21)'}</h3>
+    <div class="area" style="margin-top:0">Your blank form</div>
+    <p class="muted" style="margin:0 0 8px" id="pfState">Checking…</p>
+    <label class="btn ghost" style="width:100%">${svg('plus',16)}&nbsp; Choose the blank ${kind==='s88'?'S-88':'S-21'} PDF<input type="file" accept="application/pdf,.pdf" hidden data-formfile="${kind}"></label>
+    <p class="muted" style="font-size:12.5px;margin:6px 0 10px">Use the blank PDF from your congregation (like the one you sent me). The app keeps it on this phone and fills it in each time.</p>
+    <div class="f"><label>Service year</label><select id="prSY">${[sy,sy-1,sy-2].map(y=>`<option value="${y}">${y} (${syLabel(y)})</option>`).join('')}</select></div>
+    ${kind==='s21'?`<div class="f"><label>Who</label><select id="prWho"><option value="all">Everyone active (${activePubs().length})</option>${groups.map(g=>`<option value="g:${esc(g)}">${esc(g)}</option>`).join('')}${d.pubs.map(p=>`<option value="p:${p.id}">${esc(p.name)}</option>`).join('')}</select></div>
+      <div class="area">Also add total cards</div>
+      ${[['pub','Publishers'],['aux','Auxiliary pioneers'],['rp','Regular pioneers']].map(([k,l])=>`<label class="row" style="cursor:pointer"><span class="lbl">${l}</span><input type="checkbox" class="prTot" value="${k}" checked style="width:22px;height:22px"></label>`).join('')}`:''}
+    <p class="muted" style="font-size:12.5px;margin:8px 0">You get a PDF to print or send. The first time, the app needs data to download its printing tool.</p>
+    <button class="btn" data-a="printgo" data-k="${kind}">Make the PDF</button>`, null);
+  photoGet(FORM_KEY[kind]).then(b=>{ const el=document.getElementById('pfState'); if(el) el.innerHTML = b ? '✓ Blank form saved on this phone. Choose again only to replace it.' : '<span style="color:var(--bad)">Not added yet. Choose the blank PDF below.</span>'; });
+}
+async function printGo(kind){
+  const btn=document.querySelector('[data-a=printgo]'); btn.textContent='Making the PDF…'; btn.disabled=true;
+  try{
+    const sy=n(val('prSY'));
+    if(kind==='s88'){ await savePdfFile(await makeS88(sy), 'S-88 attendance '+sy+'.pdf'); }
+    else {
+      const who=val('prWho'), all=activePubs();
+      const people = who==='all'?all : who.startsWith('g:')?all.filter(p=>(p.group||'')===who.slice(2)) : SEC().pubs.filter(p=>p.id===who.slice(2));
+      const labels={pub:'Publishers',aux:'Auxiliary pioneers',rp:'Regular pioneers'};
+      const totals=[...document.querySelectorAll('.prTot:checked')].map(c=>[c.value,labels[c.value]]);
+      if(!people.length && !totals.length) throw new Error('Nobody chosen.');
+      people.sort((a,b)=>(a.group||'').localeCompare(b.group||'')||a.name.localeCompare(b.name));
+      await savePdfFile(await makeS21(people, sy, totals), 'S-21 publisher records '+sy+'.pdf');
+    }
+    toast('PDF ready'); closeSheet();
+  }catch(e){ toast(e.message||'Could not make the PDF'); btn.textContent='Make the PDF'; btn.disabled=false; }
+}
+document.addEventListener('change', async e=>{
+  const t=e.target; if(!t.dataset.formfile || !t.files || !t.files[0]) return;
+  const f=t.files[0], data=await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(f); });
+  try{
+    const L=await loadPdfLib(), doc=await L.PDFDocument.load(b64ToBytes(data));
+    if(t.dataset.formfile==='s88'){ const names=doc.getForm().getFields().map(x=>x.getName()); if(!names.includes('1-Meeting_1')) throw new Error('This is not the fillable S-88 form. Use the PDF version of S-88-E.'); }
+    else if(doc.getPageCount()<1) throw new Error('That PDF is empty.');
+  }catch(err){ toast(err.message||'That file could not be read'); t.value=''; return; }
+  await photoPut(FORM_KEY[t.dataset.formfile], data);
+  const el=document.getElementById('pfState'); if(el) el.innerHTML='✓ Blank form saved on this phone.'; toast('Blank form saved');
+});
+
+/* ---------- a publisher's service year, shown in the app ---------- */
+function pubYearHTML(p){
+  const sy=curSY(), y=pubYear(p, sy);
+  return `<div class="area">Service year ${sy}</div><table class="tot sy"><tr><th>Month</th><th>Shared</th><th>Studies</th><th>Aux</th><th>Hours</th></tr>
+    ${y.rows.map((r,i)=>`<tr><td>${MONTH_NAMES[i].slice(0,3)}</td><td>${r.r?(r.shared?'✓':'✗'):''}</td><td>${r.studies}</td><td>${r.aux?'✓':''}</td><td>${r.hours===''?'':r1(r.hours)}</td></tr>`).join('')}
+    <tr><td><b>Total</b></td><td><b>${y.months}</b></td><td><b>${y.studies}</b></td><td></td><td><b>${y.hours?r1(y.hours):''}</b></td></tr></table>`;
+}
+
+/* ================= GOALS: suggested steps for this month ================= */
+function monthsLeft(g){ if(g.horizon==='1m') return 1; if(g.horizon==='1y') return 12-parse(TODAY()).getMonth(); const end=n(S.settings.started.slice(0,4))+5; return Math.max(1,(end-n(YEAR()))*12+12-parse(TODAY()).getMonth()); }
+function sundaysLeft(){ const out=[]; let d=TODAY(); const m=MONTH(); while(d.slice(0,7)===m){ if(parse(d).getDay()===0) out.push(d); d=addDays(d,1); } return out; }
+function suggestSteps(g){
+  const t=(g.title||'').toLowerCase(), num=n((t.match(/(\d[\d,.]*)/)||[])[1])||n(g.target), left=monthsLeft(g), monthNeed=num?Math.ceil(num/left):0;
+  const m=MONTH(), d=k=>{ const x=parse(m+'-01'); x.setDate(k); return ymd(x)<TODAY()?TODAY():ymd(x); };
+  const last=ymd(new Date(parse(m+'-01').getFullYear(), parse(m+'-01').getMonth()+1, 0));
+  const sundays=sundaysLeft(), steps=[];
+  const add=(text,date,kind='todo',extra={})=>steps.push({text,date,kind,...extra});
+  const weekly=(text)=>sundays.forEach(s=>add(text,s));
+  if(/pioneer|hours|ministry|field service|preach/.test(t)){
+    const h=monthNeed || (/aux/.test(t)?30:/regular/.test(t)?50:15), perWeek=r1(h/4.3);
+    if(/aux/.test(t)) add('Hand in the auxiliary pioneer application', d(3));
+    add(`Plan my month: about ${perWeek} hours each week to reach ${h} hours`, d(1));
+    add('Field service', '', 'routine', {type:'service', days:[6], time:'08:30', title:'Field service'});
+    add(`Midway check: aim for ${Math.round(h/2)} hours by today`, d(15));
+    add('Invite someone to work with me in service this week', d(5));
+    weekly('Check my hours on Faith → Ministry');
+  } else if(/bible|chapter|read the|scripture/.test(t) && !/study with|student|bible stud/.test(t)){
+    const ch = /whole bible|entire bible|1189/.test(t) ? Math.ceil(1189/(left*30)) : monthNeed ? Math.ceil(monthNeed/30) : 1;
+    add('Daily Bible reading', '', 'routine', {type:'bible', days:[0,1,2,3,4,5,6], time:'05:30', title:'Daily Bible reading'});
+    add(`Read about ${ch} chapter${ch===1?'':'s'} each day`, d(1));
+    weekly('Write one thought from this week\'s reading in My notes');
+    add('Look back: how many chapters did I read this month?', last);
+  } else if(/student|bible stud|study with/.test(t)){
+    add('Offer a free Bible study to 3 people I meet in service', d(7));
+    add('Follow up everyone in red on the People tab', d(3));
+    add('Ask an experienced publisher to come with me to a study', d(10));
+    weekly('Send each Bible student a friendly message');
+  } else if(/personal study|watchtower|meeting|prepare|comment/.test(t)){
+    add('Personal study', '', 'routine', {type:'study', days:[1,3], time:'19:00', title:'Personal study'});
+    add('Meeting preparation', '', 'routine', {type:'meeting', days:[2,5], time:'19:30', title:'Meeting preparation'});
+    weekly('Prepare one comment for the weekend meeting');
+  } else if(/weight|kg|lose|fit|exercise|walk|run|gym|health/.test(t)){
+    const kg=/kg|weight|lose/.test(t)&&num?Math.min(num/left, 2):0;
+    add('Exercise', '', 'routine', {type:'exercise', days:[1,3,5], time:'06:00', title:'Exercise (30 minutes)'});
+    if(kg) add(`Aim to lose about ${r1(kg)} kg this month (about 0.5 kg a week is healthy)`, d(1));
+    add('Swap sugary drinks for water this week', d(2));
+    weekly('Weigh myself and note it on the Today page');
+    add('See a doctor before starting hard exercise if I have a health condition', d(1));
+  } else if(/save|saving|money|cedi|gh|debt|budget/.test(t)){
+    const amt=monthNeed, wk=amt?Math.ceil(amt/4.3):0;
+    add('Create this savings goal on Money → Savings', d(1));
+    if(amt) add(`Put ${money(wk)} into savings every week (${money(amt)} this month)`, d(1));
+    weekly('Check my spending for the week on Money → Expenses');
+    add('Look for one expense I can cut this month', d(7));
+  } else if(/business|shop|customer|sales|farm|egg|bread/.test(t)){
+    add('Write the 3 things that would help this most this month', d(1));
+    add('Do the first one', d(7));
+    weekly('Check progress and write the numbers down');
+    add('Talk to one person who has done this before', d(14));
+  } else {
+    add('Write why this goal matters to me', d(1));
+    add('Break it into 3 smaller steps', d(2));
+    add('Do the first small step', d(7));
+    weekly('Weekly check: what did I do this week toward this goal?');
+    add('Tell one person who can encourage me', d(4));
+  }
+  return steps;
+}
+function suggestSheet(id){
+  const g=S.goals.find(x=>x.id===id), steps=suggestSteps(g);
+  const exists=st=> st.kind==='routine' ? S.reminders.some(r=>r.type===st.type) : S.todos.some(x=>x.text===st.text && x.date===st.date);
+  const ask=`Help me plan this goal for ${monthName(MONTH())}: "${g.title}"${g.target?' (target '+g.target+(g.unit?' '+g.unit:'')+')':''}. Give me 5 to 8 practical weekly steps.`;
+  openSheet(`<h3>Steps for ${monthName(MONTH())}</h3><p class="muted" style="margin:-6px 0 10px">${esc(g.title)}</p>
+    <p class="muted" style="font-size:12.5px;margin:0 0 8px">These are built-in suggestions based on your goal's words and numbers. Untick anything that doesn't fit, then add the rest to your plan.</p>
+    ${steps.map((st,i)=>`<label class="row" style="cursor:pointer;align-items:flex-start"><input type="checkbox" class="sgStep" value="${i}" ${exists(st)?'':'checked'} style="width:22px;height:22px;margin-top:2px"><span class="lbl">${esc(st.text)}<small>${st.kind==='routine'?'Routine: '+esc(daysText(st.days))+' at '+fmtTime(st.time)+(exists(st)?' · you already have one':''):nice(st.date)+(exists(st)?' · already in your plan':'')}</small></span></label>`).join('')}
+    <div class="btns" style="flex-direction:column;margin-top:10px"><button class="btn" data-a="sgadd" data-id="${id}">Add ticked steps to my plan</button>
+      <a class="btn ghost" href="https://claude.ai/new?q=${encodeURIComponent(ask)}" target="_blank" rel="noopener">Ask Claude for a more detailed plan ↗</a>
+      <button class="btn ghost" data-a="close">Close</button></div>`, null);
+  suggestSheet.steps=steps;
+}
+function addSuggested(id){
+  const g=S.goals.find(x=>x.id===id), steps=suggestSheet.steps||[]; let n1=0, n2=0;
+  g.steps=g.steps||[];
+  document.querySelectorAll('.sgStep:checked').forEach(c=>{ const st=steps[n(c.value)];
+    if(st.kind==='routine'){ if(!S.reminders.some(r=>r.type===st.type)){ S.reminders.push({id:uid(), type:st.type, title:st.title, time:st.time, days:st.days, ring:true, on:true, beep:AL().beep, created:Date.now()}); n2++; } }
+    else { const td={id:uid(), text:st.text, date:st.date, time:'', alarm:true, done:false, created:TODAY(), createdAt:Date.now(), goal:id}; S.todos.push(td); g.steps.push(td.id); n1++; }
+  });
+  save(); closeSheet(); render(); toast((n1?n1+' to-do'+(n1===1?'':'s'):'')+(n1&&n2?' and ':'')+(n2?n2+' routine'+(n2===1?'':'s'):'')+(n1||n2?' added':'Nothing new added'));
+}
+function goalStepsText(g){ const ids=g.steps||[]; if(!ids.length) return ''; const l=S.todos.filter(t=>ids.includes(t.id)); const dn=l.filter(t=>t.done).length; return dn+' of '+l.length+' steps done'; }
+
+/* ================= HISTORY: look back at any month ================= */
+let histMonth=null;
+function monthStats(m){
+  const days=Object.keys(S.days).filter(k=>k.slice(0,7)===m), D=k=>S.days[k]||{};
+  const inM=x=>x&&x.slice(0,7)===m;
+  const sleeps=days.map(k=>n(D(k).sleep)).filter(x=>x>0), weights=days.filter(k=>n(D(k).weight)>0).sort();
+  const spends=S.money.filter(e=>e.type==='spend'&&inM(e.date)), pays=S.money.filter(e=>e.type==='pay'&&inM(e.date));
+  return {
+    bible: days.filter(k=>D(k).bible).length, chapters: S.bible.log.filter(x=>inM(x.date)).length,
+    study: S.study.journal.filter(j=>inM(j.date)).reduce((a,j)=>a+n(j.mins),0),
+    hours: ministryMonth(m), studies: studiesInMonth(m).length, people: S.contacts.reduce((a,c)=>a+(c.log||[]).filter(l=>inM(l.date)).length,0),
+    sleep: sleeps.length?r1(sleeps.reduce((a,b)=>a+b,0)/sleeps.length):null, exercise: days.reduce((a,k)=>a+n(D(k).exercise),0), exDays: days.filter(k=>n(D(k).exercise)>0).length,
+    wFirst: weights.length?n(D(weights[0]).weight):null, wLast: weights.length?n(D(weights[weights.length-1]).weight):null,
+    paid: pays.reduce((a,e)=>a+n(e.amount),0), spent: spends.reduce((a,e)=>a+n(e.amount),0),
+    saved: S.money.filter(e=>(e.type==='save'||e.type==='withdraw')&&inM(e.date)).reduce((a,e)=>a+(e.type==='save'?1:-1)*n(e.amount),0),
+    goals: S.goals.filter(g=>g.horizon==='1m'&&g.period===m), todos: S.todos.filter(t=>t.done&&inM(t.doneDate)).length,
+    diary: Object.keys(S.diary||{}).filter(k=>inM(k)&&(S.diary[k]||'').trim()).length, review: S.reviews[m]||null
+  };
+}
+function historyView(){
+  if(!histMonth) histMonth=prevMonth(MONTH());
+  const m=histMonth, s=monthStats(m), first=[S.settings.started.slice(0,7), ...Object.keys(S.days).map(k=>k.slice(0,7))].sort()[0]||MONTH();
+  const line=(l,v)=>`<div class="row"><div class="lbl">${l}</div><b>${v}</b></div>`;
+  let html=`<div class="card"><div style="display:flex;align-items:center;gap:8px"><button class="btn sm ghost" data-a="histnav" data-m="${prevMonth(m)}" ${m<=first?'disabled style="opacity:.35"':''} aria-label="Previous month">‹</button>
+    <select id="histPick" style="flex:1">${(()=>{ const out=[]; let x=MONTH(); for(let i=0;i<36 && x>=first;i++){ out.push(x); x=prevMonth(x); } return out; })().map(x=>`<option value="${x}" ${x===m?'selected':''}>${monthName(x)}</option>`).join('')}</select>
+    <button class="btn sm ghost" data-a="histnav" data-m="${(()=>{ const d=parse(m+'-01'); d.setMonth(d.getMonth()+1); return ymd(d).slice(0,7); })()}" ${m>=MONTH()?'disabled style="opacity:.35"':''} aria-label="Next month">›</button></div></div>`;
+  if(secOn('faith')||secOn('ministry')) html+=`<div class="card"><h2>${svg('faith',18)} Faith</h2>${secOn('faith')?line('Bible reading days',s.bible)+line('Chapters read',s.chapters)+line('Personal study',hoursText(s.study/60)):''}${secOn('ministry')?line('Ministry',hoursText(s.hours))+line('Bible studies',s.studies):''}${secOn('faith')?calendar(m):''}</div>`;
+  if(secOn('health')) html+=`<div class="card"><h2>${svg('health',18)} Health</h2>${line('Average sleep',s.sleep!=null?s.sleep+' h':'—')}${line('Exercise',s.exDays+' day'+(s.exDays===1?'':'s')+' · '+s.exercise+' min')}${s.wLast!=null?line('Weight',s.wLast+' kg'+(s.wFirst!==s.wLast?' ('+(s.wLast-s.wFirst>0?'+':'')+r1(s.wLast-s.wFirst)+')':'')):''}</div>`;
+  if(secOn('money')) html+=`<div class="card"><h2>${svg('money',18)} Money</h2>${line('Paid to myself',money(s.paid))}${line('Spent',money(s.spent))}${line('Saved',money(s.saved))}</div>`;
+  html+=`<div class="card"><h2>${svg('goals',18)} Goals and plan</h2>${s.goals.length?s.goals.map(g=>`<div class="row"><div class="lbl">${esc(g.title)}${g.target?`<small>${r1(g.progress||0)} / ${g.target} ${esc(g.unit||'')}</small>`:''}</div><b style="color:${g.done?'var(--ok)':'var(--muted)'}">${g.done?'Done ✓':'Not done'}</b></div>`).join(''):'<div class="empty">No monthly goals were set.</div>'}
+    ${line('To-dos completed',s.todos)}${line('Diary entries',s.diary)}${secOn('people')?line('Messages and visits to people I met',s.people):''}</div>`;
+  if(s.review && (s.review.well||s.review.improve||s.review.focus)) html+=`<div class="card"><h2>My review of ${monthName(m).split(' ')[0]}</h2>${s.review.well?`<div class="area">What went well</div><div class="vision">${esc(s.review.well)}</div>`:''}${s.review.improve?`<div class="area">What to improve</div><div class="vision">${esc(s.review.improve)}</div>`:''}${s.review.focus?`<div class="area">Focus for next month</div><div class="vision">${esc(s.review.focus)}</div>`:''}</div>`;
+  html+=`<button class="btn ghost" data-a="gonotes">See my notes from ${monthName(m).split(' ')[0]} in My notes</button>`;
+  return html;
 }
 
 V.goals = () => {
-  const list = currentGoals(goalH);
+  const list = goalH==='hist'?[]:currentGoals(goalH);
   const label = goalH==='1m'?monthName(MONTH()):goalH==='1y'?YEAR():'Your 5-year plan (to '+(n(S.settings.started.slice(0,4))+5)+')';
-  let html = `<div class="seg">${Object.entries(HORIZONS).map(([k,l])=>`<button class="${k===goalH?'on':''}" data-a="horizon" data-h="${k}">${l}</button>`).join('')}</div>`;
+  let html = `<div class="seg">${[...Object.entries(HORIZONS),['hist','History']].map(([k,l])=>`<button class="${k===goalH?'on':''}" data-a="horizon" data-h="${k}">${l}</button>`).join('')}</div>`;
+  if(goalH==='hist') return html+historyView();
   if(goalH==='5y'){
     html += `<div class="card"><h2>My vision<span class="sp"></span><button class="btn sm ghost" data-a="visionsheet">Edit</button></h2>
       ${Object.entries(AREAS).map(([k,a])=>`<div class="area">${a.label}</div><div class="vision">${S.vision[k]?esc(S.vision[k]):'<span class="muted">Where do you want to be in 5 years?</span>'}</div>`).join('')}</div>`;
@@ -2091,7 +2715,7 @@ function goalSheet(id, h, area){
       rec.horizon=hz;
       if(id && document.getElementById('gProg')) rec.progress=n(val('gProg'));
       if(rec.target>0){ const was=rec.done; rec.done = rec.progress>=rec.target; if(rec.done&&!was) rec.doneDate=TODAY(); if(!rec.done) rec.doneDate=null; }
-      if(!id) S.goals.push(rec);
+      if(!id){ S.goals.push(rec); if(!rec.done) setTimeout(()=>suggestSheet(rec.id), 250); }
       return true;
     });
 }
@@ -2295,7 +2919,7 @@ function startFresh(withBackup){
 /* ---------- backup ---------- */
 async function backup(){
   S.settings.lastBackup = Date.now(); save();
-  let photos={}; try{ photos=await photoAll(); }catch(e){}
+  let photos={}; try{ photos=await photoAll(); delete photos['lib:pdf-lib']; }catch(e){}
   const out = JSON.stringify(Object.keys(photos).length ? {...S, __photos:photos} : S, null, 1);
   if(NATIVE){
     const F=window.Capacitor.Plugins.Filesystem, Sh=window.Capacitor.Plugins.Share, name='life-compass-backup-'+TODAY()+'.json';
@@ -2369,6 +2993,47 @@ document.addEventListener('click', e => {
     case 'restore': document.getElementById('restoreFile').click(); break;
     case 'freshsheet': freshSheet(); break;
     case 'forceupdate': forceUpdate(); break;
+    case 'sectab': secTab=t.dataset.k; render(); window.scrollTo(0,0); break;
+    case 'atadd': { const c=n(val('atCount')), dt=val('atDate')||TODAY(); if(c<=0){ toast('Enter the number who attended'); break; } const d=SEC(); d.meetings=d.meetings||[]; const k=val('atKind'); const ex=d.meetings.find(x=>x.date===dt&&x.kind===k); if(ex) ex.count=c; else d.meetings.push({id:uid(), date:dt, kind:k, count:c}); if(k==='wk'){ d.meetDays=d.meetDays||{}; d.meetDays.wk=parse(dt).getDay(); } save(); render(); toast(ex?'Updated':'Attendance saved'); break; }
+    case 'atdel': if(confirm('Delete this attendance?')){ SEC().meetings=SEC().meetings.filter(x=>x.id!==id); save(); render(); } break;
+    case 'printsheet': printSheet(t.dataset.k); break;
+    case 'printgo': printGo(t.dataset.k); break;
+    case 'sgsheet': suggestSheet(id); break;
+    case 'sgadd': addSuggested(id); break;
+    case 'histnav': histMonth=t.dataset.m; render(); break;
+    case 'gosec': tab='sec'; secTab=t.dataset.k||'reports'; render(); window.scrollTo(0,0); break;
+    case 'secgroup': secGroup=t.dataset.k; render(); break;
+    case 'secrep': reportSheet(id); break;
+    case 'rpyes': case 'rpno': { document.getElementById('rpShared').value=a==='rpyes'?'yes':'no'; document.querySelectorAll('[data-a=rpyes],[data-a=rpno]').forEach(b=>b.classList.toggle('on', b===t)); break; }
+    case 'rpsave': {
+      if(!saveReport(id)) break;
+      if(t.dataset.next){ const m=secMonth, cur=SEC().pubs.find(p=>p.id===id), pool=activePubs().filter(p=>(secGroup==='all'||(p.group||'')===secGroup) && repState(rep(m,p.id))==='missing').sort((a,b)=>(a.group||'').localeCompare(b.group||'')||a.name.localeCompare(b.name));
+        const nxt=pool.find(p=>(p.group||'')===(cur.group||''))||pool[0];
+        render(); if(nxt){ reportSheet(nxt.id); toast('Saved. Next: '+nxt.name); } else { closeSheet(); toast('Saved. Everyone has reported ✓'); } }
+      else { closeSheet(); render(); toast('Report saved'); }
+      break; }
+    case 'rpclear': if(confirm('Clear this report?')){ delete (SEC().reports[secMonth]||{})[id]; save(); closeSheet(); render(); } break;
+    case 'secpaste': pasteSheet(); break;
+    case 'psapply': applyPaste(); break;
+    case 'seccopy': { const txt=totalsText(secMonth); (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast('Totals copied'),()=>openSheet(`<h3>Totals</h3><textarea style="min-height:200px">${esc(txt)}</textarea><button class="btn ghost" data-a="close" style="margin-top:8px">Close</button>`,null)); break; }
+    case 'secremind': remindSheet(); break;
+    case 'secreminded': { const pp=SEC().pubs.find(p=>p.id===id); if(pp){ pp.reminded=secMonth; save(); } setTimeout(remindSheet,500); return; }
+    case 'secenc': { const pp=SEC().pubs.find(p=>p.id===id); let c=S.contacts.find(x=>x.pubId===id); if(!c){ c={id:uid(), pubId:id, name:pp.name, phone:pp.phone, type:'friend', status:'interested', log:[], sent:[], met:'', created:TODAY()}; S.contacts.push(c); save(); } composeSheet('contact', c.id); CM.style='encourage'; CM.situation='slowing'; renderCompose(); break; }
+    case 'pubsheet': pubSheet(id); break;
+    case 'pubbulk': pubBulkSheet(); break;
+    case 'pbapply': applyBulk(); break;
+    case 'pubvisit': pubVisitSheet(id); break;
+    case 'delpub': if(confirm('Delete this publisher and their reports?')){ const d=SEC(); d.pubs=d.pubs.filter(p=>p.id!==id); Object.values(d.reports).forEach(m=>delete m[id]); save(); closeSheet(); render(); } break;
+    case 'dutysheet': dutySheet(id); break;
+    case 'dutydone': dutyDoneSheet(id); break;
+    case 'ddsave': { const x=SEC().duties.find(z=>z.id===id); x.log.push({date:TODAY(), note:val('ddNote').trim(), due:x.due}); advanceDue(x); save(); closeSheet(); render(); toast(x.due?'Done ✓ Next due '+nice(x.due):'Done ✓'); break; }
+    case 'delduty': if(confirm('Delete this duty?')){ const d=SEC(); d.duties=d.duties.filter(z=>z.id!==id); save(); closeSheet(); render(); } break;
+    case 'remitsheet': remitSheet(id); break;
+    case 'buysheet': buySheet(id); break;
+    case 'banksheet': bankSheet(id); break;
+    case 'mnsheet': mnSheet(id); break;
+    case 'buystatus': { const x=SEC().purchases.find(z=>z.id===id), order=['requested','approved','bought']; x.status=order[(order.indexOf(x.status)+1)%3]; save(); render(); break; }
+    case 'sfdel': if(confirm('Delete this entry?')){ const d=SEC(), k=t.dataset.list; d[k]=d[k].filter(z=>z.id!==id); save(); closeSheet(); render(); } break;
     case 'sssave': { const sess=saveStudy(id); if(!sess) break; render(); if(t.dataset.send){ summarySheet(id, sess.id); } else { closeSheet(); toast('Study saved'); } break; }
     case 'sumsheet': summarySheet(id, t.dataset.sid); break;
     case 'smsend': { const x=S.students.find(s=>s.id===id), sess=(x.sessions||[]).find(s=>s.id===t.dataset.sid); if(sess) sess.sent=TODAY(); recordSend('student', id, t.dataset.via, val('smText'), '', sess?sess.ref:'', '', ''); toast('Opening '+(t.dataset.via==='wa'?'WhatsApp':'messages')+'…'); setTimeout(()=>{ closeSheet(); render(); },600); return; }
@@ -2507,6 +3172,10 @@ document.addEventListener('change', e => {
   const t=e.target;
   if(t.dataset.f){ const d=day(); if(t.value.trim()==='') delete d[t.dataset.f]; else d[t.dataset.f]=n(t.value); save(); t.value = d[t.dataset.f]??''; toast('Saved'); }
   if(t.id==='moneyMonth'){ moneyMonth=t.value; render(); }
+  if(t.id==='secMonth'){ secMonth=t.value; render(); }
+  if(t.id==='histPick'){ histMonth=t.value; render(); }
+  if(t.id==='atDate'){ const k=document.getElementById('atKind'); if(k) k.value=guessKind(t.value||TODAY()); }
+  if(t.id==='coDate'){ SEC().co.date=t.value; save(); render(); }
   if(t.id==='stMat'){ const bib=t.value==='Bible chapter'; document.getElementById('stBibleRow').hidden=!bib; document.getElementById('stTitleRow').hidden=bib; if(!bib) document.getElementById('stTitle').focus(); }
   if(t.id==='stBook'){ const c=document.getElementById('stCh'); c.innerHTML=Array.from({length:BOOKS[n(t.value)-1][1]},(_,i)=>`<option>${i+1}</option>`).join(''); }
   if(t.dataset.remon){ const r=S.reminders.find(z=>z.id===t.dataset.remon); r.on=t.checked; save(); toast(t.checked?'Alarm on':'Alarm off'); if(!document.getElementById('sheet').innerHTML) render(); }
@@ -2527,6 +3196,7 @@ document.addEventListener('input', e => {
   if(t.classList.contains('bp')) updBk();
   if(t.dataset.ans){ S.answers[t.dataset.ans]=t.value; save(); }
   if(t.dataset.diary){ S.diary[t.dataset.diary]=t.value; save(); }
+  if(t.id==='coNotes'){ SEC().co.notes=t.value; save(); }
   if(t.id==='peopleSearch'){ peopleQuery=t.value; clearTimeout(notesSearchT); notesSearchT=setTimeout(()=>{ const pos=t.selectionStart; render(); const n=document.getElementById('peopleSearch'); if(n){ n.focus(); try{ n.setSelectionRange(pos,pos); }catch(e){} } }, 300); }
   if(t.dataset.bdraft){ S.bible.drafts=S.bible.drafts||{}; if(t.value.trim()) S.bible.drafts[t.dataset.bdraft]=t.value; else delete S.bible.drafts[t.dataset.bdraft]; save(); }
   if(t.id==='notesSearch'){ notesQuery=t.value; clearTimeout(notesSearchT); notesSearchT=setTimeout(()=>{ const pos=t.selectionStart; render(); const n=document.getElementById('notesSearch'); if(n){ n.focus(); try{ n.setSelectionRange(pos,pos); }catch(e){} } }, 300); }
@@ -2586,6 +3256,7 @@ function handleNativeAction(a){
     toast('Snoozed for 10 minutes');
   } else if(ex.kind==='diary'){ tab='today'; setTimeout(()=>{ const b=document.getElementById('diaryBox'); if(b){ b.scrollIntoView({block:'center'}); b.focus(); } }, 300); }
   else if(ex.kind==='study'){ tab='faith'; faithTab='study'; }
+  else if(ex.kind==='duty'){ tab='sec'; secTab='duties'; }
   else if(ex.kind==='followup'){ tab='others'; peopleTab='met'; peopleFilter='due'; }
   save(); render();
 }
