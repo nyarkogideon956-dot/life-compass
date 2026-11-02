@@ -46,7 +46,7 @@ nav button.on svg{stroke:var(--navy)}
 .step{display:flex;align-items:center;gap:6px}
 .step button{width:34px;height:34px;border-radius:10px;border:1px solid var(--sky2);background:var(--sky);color:var(--navy);font-size:20px;line-height:1}
 .step b{min-width:34px;text-align:center}
-input[type=number],input[type=text],input[type=search],input[type=tel],input[type=time],input[type=date],input[type=month],select,textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 10px;background:#fff;outline:none}
+input[type=number],input[type=text],input[type=search],input[type=tel],input[type=url],input[type=password],input[type=time],input[type=date],input[type=month],select,textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 10px;background:#fff;outline:none}
 input:focus,select:focus,textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--sky)}
 .mini{width:84px!important;text-align:center}
 .btn{border:0;border-radius:11px;padding:11px 14px;background:var(--navy);color:#fff;font-weight:600;width:100%}
@@ -170,6 +170,19 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .note .nt{font-weight:600;margin-top:2px}
 .note .nx{white-space:pre-wrap;font-size:15px;margin-top:4px}
 .note.diary .nk{color:#5B3A99}.note.question .nk{color:#1E7F52}.note.bible .nk{color:var(--navy)}
+.wdot{width:12px;height:12px;border-radius:50%;flex:none;margin-top:5px;background:#B8C4D3}
+.wdot.green{background:#1E8E5A}.wdot.orange{background:#E08A00}.wdot.red{background:#C0392B}
+.wchip{font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap;background:#EEF1F5;color:#5F6B7A}
+.wchip.green{background:#E3F4EB;color:#1E7F52}.wchip.orange{background:#FFF1DA;color:#8A5A00}.wchip.red{background:#FBEAEA;color:#A32D2D}
+.person{border-left:4px solid #B8C4D3;border-radius:0 var(--r) var(--r) 0}
+.person.green{border-left-color:#1E8E5A}.person.orange{border-left-color:#E08A00}.person.red{border-left-color:#C0392B}
+.person [data-a=contactsheet]{cursor:pointer}
+.legend i.wdot{width:10px;height:10px;margin:0 4px 0 0;vertical-align:-1px}
+.chips2{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.chips2 button{border:1.5px solid var(--sky2);background:#fff;border-radius:999px;padding:7px 13px;font-size:14px;color:var(--navy)}
+.chips2 button.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.btn.wa{background:#1E8E5A}
+.codebox{font-size:30px;font-weight:700;letter-spacing:.08em;text-align:center;color:var(--navy);background:var(--sky);border-radius:14px;padding:14px;margin:14px 0 8px;font-variant-numeric:tabular-nums}
 .linkbtn{background:none;border:0;padding:0;color:var(--blue);text-decoration:underline;font-size:12px}
 .sndrow{display:grid;grid-template-columns:1fr 48px;gap:6px}
 .sndrow .btn{height:40px;padding:0;display:flex;align-items:center;justify-content:center}
@@ -212,7 +225,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 17;
+const APP_VERSION = 18;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -250,7 +263,7 @@ function fresh(){
     bible:{book:1, chapter:1, read:{}, log:[]}, answers:{},
     savings:[], students:[],
     todos:[], reminders:[], meds:[], medTaken:{}, food:{eat:[],avoid:[]}, diary:{}, fired:{}, snooze:[],
-    study:{active:null, journal:[]}, routineDone:{}, notes:[]
+    study:{active:null, journal:[]}, routineDone:{}, notes:[], contacts:[]
   };
 }
 
@@ -445,12 +458,17 @@ function barPlain(p,color){ return `<div class="bar"><i style="width:${Math.max(
 function bar(p,done){ return `<div class="bar ${done||p>=100?'done':''}"><i style="width:${p}%"></i></div>`; }
 
 /* ---------- navigation ---------- */
-const TABS = [['today','Today'],['goals','Goals'],['faith','Faith'],['health','Health'],['money','Money'],['others','Others']];
+const TABS = [['today','Today'],['goals','Goals'],['faith','Faith'],['health','Health'],['money','Money'],['others','People']];
+const TAB_SEC = {goals:['goals'], faith:['faith','ministry'], health:['health'], money:['money'], others:['people']};
+function tabOn(k){ return !TAB_SEC[k] || TAB_SEC[k].some(secOn); }
 let tab = 'today', goalH = '1m', moneyMonth = MONTH();
 function renderNav(){
-  document.getElementById('nav').innerHTML = TABS.map(([k,l])=>`<button class="${k===tab?'on':''}" data-tab="${k}">${svg(k)}<span>${l}</span></button>`).join('');
+  const vis=TABS.filter(([k])=>tabOn(k)), nav=document.getElementById('nav');
+  nav.style.gridTemplateColumns='repeat('+vis.length+',1fr)';
+  nav.innerHTML = vis.map(([k,l])=>`<button class="${k===tab?'on':''}" data-tab="${k}">${svg(k)}<span>${l}</span></button>`).join('');
 }
 function render(){
+  if(tab!=='notes' && !tabOn(tab)) tab='today';
   renderNav();
   document.getElementById('title').textContent = tab==='today'?'Life Compass':tab==='notes'?'My notes':TABS.find(t=>t[0]===tab)[1];
   document.getElementById('main').innerHTML = V[tab]();
@@ -474,23 +492,26 @@ V.today = () => {
     <div class="big">${greet}${st.name?', '+esc(st.name):''}</div>
     <div class="sub">${parse(t).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
     <div class="chips">
-      <span class="chip">Bible reading streak: ${bStreak} day${bStreak===1?'':'s'}</span>
-      <span class="chip">Ministry this month: ${r1(mm)} / ${st.ministryTarget} h</span>
+      ${secOn('faith')?`<span class="chip">Bible reading streak: ${bStreak} day${bStreak===1?'':'s'}</span>`:''}
+      ${secOn('ministry')?`<span class="chip">Ministry this month: ${r1(mm)} / ${st.ministryTarget} h</span>`:''}
     </div></div>`;
   if(hasData && (sinceBackup===null || sinceBackup>=7))
     html += `<div class="banner"><span style="flex:1">${sinceBackup===null?'You haven\'t made a backup yet.':'Last backup was '+sinceBackup+' days ago.'} Your data lives only on this phone.</span><button class="btn sm" data-a="backup">Back up</button></div>`;
   if(SA()) html += `<div class="banner" style="background:var(--sky);border-color:var(--sky2);color:var(--navy)"><span style="flex:1"><b>Studying:</b> ${esc(studyTitle(SA()))} · ${hoursText(studyMs()/3.6e6)}</span><button class="btn sm" data-a="gostudy">Open</button></div>`;
+  if(!st.setupAsked && !hasData && !S.contacts.length)
+    html += `<div class="banner" style="background:var(--sky);border-color:var(--sky2);color:var(--navy)"><span style="flex:1">Did someone share Life Compass with you and give you a setup code?</span><button class="btn sm" data-a="setupcode">Enter code</button><button class="btn sm ghost" data-a="nosetup">No</button></div>`;
   html += planCard(t);
+  if(secOn('people')) html += followCard(t);
   html += weekCard(t);
-  html += timerCard();
-  html += encouragement(t);
-  html += `<div class="card"><h2>${svg('faith',18)} Faith today</h2>
-    ${[['bible','Daily Bible reading',''],['study','Personal study',''],['prayer','Prayer and meditation',''],['meeting','Meeting preparation','']].map(([k,l])=>`
-    <div class="row"><div class="lbl">${l}</div>${checkBox(d[k],'tick','data-k="'+k+'"')}</div>`).join('')}
-    <div class="row"><div class="lbl">Ministry today<small>${hoursText(todayMin)} logged</small></div>
-      <div class="btns"><button class="btn sm ghost" data-a="addmin" data-h="0.5">+30 min</button><button class="btn sm ghost" data-a="addmin" data-h="1">+1 h</button><button class="btn sm ghost" data-a="minsheet">More</button></div></div>
+  if(secOn('ministry')) html += timerCard();
+  if(secOn('faith')) html += encouragement(t);
+  if(secOn('faith')||secOn('ministry')) html += `<div class="card"><h2>${svg('faith',18)} Faith today</h2>
+    ${secOn('faith')?[['bible','Daily Bible reading',''],['study','Personal study',''],['prayer','Prayer and meditation',''],['meeting','Meeting preparation','']].map(([k,l])=>`
+    <div class="row"><div class="lbl">${l}</div>${checkBox(d[k],'tick','data-k="'+k+'"')}</div>`).join(''):''}
+    ${secOn('ministry')?`<div class="row"><div class="lbl">Ministry today<small>${hoursText(todayMin)} logged</small></div>
+      <div class="btns"><button class="btn sm ghost" data-a="addmin" data-h="0.5">+30 min</button><button class="btn sm ghost" data-a="addmin" data-h="1">+1 h</button><button class="btn sm ghost" data-a="minsheet">More</button></div></div>`:''}
   </div>`;
-  html += `<div class="card"><h2>${svg('health',18)} Health today</h2>
+  if(secOn('health')) html += `<div class="card"><h2>${svg('health',18)} Health today</h2>
     <div class="row"><div class="lbl">Water<small>Target ${st.waterTarget} glasses</small></div>
       <div class="step"><button data-a="water" data-d="-1">−</button><b>${d.water||0}</b><button data-a="water" data-d="1">+</button></div></div>
     <div class="row"><div class="lbl">Sleep last night (hours)</div><input class="mini" type="text" inputmode="decimal" step="0.5" min="0" max="24" data-f="sleep" value="${d.sleep??''}" placeholder="${st.sleepTarget}"></div>
@@ -498,18 +519,18 @@ V.today = () => {
     <div class="row"><div class="lbl">Weight (kg)<small>Optional</small></div><input class="mini" type="text" inputmode="decimal" step="0.1" min="0" data-f="weight" value="${d.weight??''}"></div>
     ${medCard(t,true)}
   </div>`;
-  html += todayMoneyCard(t);
-  if(S.students.some(x=>x.status!=='stopped')){
+  if(secOn('money')) html += todayMoneyCard(t);
+  if(secOn('ministry') && S.students.some(x=>x.status!=='stopped')){
     const act=S.students.filter(x=>x.phone&&x.status!=='stopped'), sent=act.filter(x=>x.lastMsg===t).length;
     const dueStudy=S.students.filter(x=>x.status==='steady' && x.day && x.day.toLowerCase().startsWith(parse(t).toLocaleDateString('en',{weekday:'long'}).toLowerCase().slice(0,3)));
     html += `<div class="card"><h2>${svg('others',18)} Bible students<span class="sp"></span><span class="chip">${sent}/${act.length} encouraged today</span></h2>
       ${dueStudy.length?`<p style="margin:0 0 8px">Study today: <b>${dueStudy.map(x=>esc(x.name)+(x.day?' ('+esc(x.day)+')':'')).join(', ')}</b></p>`:''}
       <div class="btns"><button class="btn sm" data-a="encourageall">Send today's encouragement</button><button class="btn sm ghost" data-a="gostudents">My students</button></div></div>`;
   }
-  html += `<div class="card"><h2>${svg('others',18)} Helping others</h2>
+  if(secOn('people')) html += `<div class="card"><h2>${svg('others',18)} Helping others</h2>
     ${followups.length?`<div class="list">${followups.map(x=>`<div class="it"><div class="x"><b>Follow up: ${esc(x.person)}</b><small>${esc(x.how)}</small></div>${checkBox(false,'followdone','data-id="'+x.id+'"')}</div>`).join('')}</div>`:''}
     <button class="btn ghost" data-a="helpsheet" style="margin-top:${followups.length?10:0}px">I helped someone today</button></div>`;
-  html += `<div class="card"><h2>${svg('goals',18)} This month's goals<span class="sp"></span><button class="btn sm ghost" data-a="go" data-t="goals">See all</button></h2>
+  if(secOn('goals')) html += `<div class="card"><h2>${svg('goals',18)} This month's goals<span class="sp"></span><button class="btn sm ghost" data-a="go" data-t="goals">See all</button></h2>
     ${monthGoals.length?monthGoals.slice(0,6).map(goalRow).join(''):`<div class="empty">No goals for ${monthName(MONTH())} yet.</div><button class="btn" data-a="goalsheet" data-h="1m">Set a goal for this month</button>`}
   </div>`;
   html += diaryCard(t);
@@ -546,6 +567,7 @@ function weekStats(ws, maxDays=7){
     saved: S.money.filter(e=>(e.type==='save'||e.type==='withdraw')&&inW(e.date)).reduce((a,e)=>a+(e.type==='save'?1:-1)*n(e.amount),0),
     topCat: (()=>{ const c={}; S.money.filter(e=>e.type==='spend'&&inW(e.date)).forEach(e=>c[catOf(e)]=(c[catOf(e)]||0)+n(e.amount)); const k=Object.keys(c).sort((a,b)=>c[b]-c[a])[0]; return k?[k,c[k]]:null; })(),
     helped: S.helps.filter(x=>inW(x.date)).length,
+    contacted: S.contacts.reduce((a,c)=>a+(c.log||[]).filter(l=>inW(l.date)).length,0),
     studyMins: S.study.journal.filter(j=>inW(j.date)).reduce((a,j)=>a+n(j.mins),0),
     routinePct: (()=>{ let due=0,dn=0; days.forEach(s=>routinesOn(s).forEach(r=>{ due++; if(routineDone(s,r.id)) dn++; })); return due?Math.round(dn/due*100):null; })(),
     todosDone: S.todos.filter(x=>x.done && x.doneDate && inW(x.doneDate)).length,
@@ -560,7 +582,7 @@ function weekLabel(ws){ const a=parse(ws), b=parse(addDays(ws,6)); const o={day:
 function weekCard(t){
   const w = weekStats(weekStart(t)), sunday = parse(t).getDay()===0;
   return `<div class="card"><h2>${sunday?'Your week is ending':'This week so far'}<span class="sp"></span><span class="chip">${weekLabel(w.ws)}</span></h2>
-    <div class="wkmini"><span><b>${w.bible}/${w.count}</b> Bible days</span><span><b>${w.minHours} h</b> ministry</span><span><b>${w.exDays}</b> exercise days</span><span><b>${w.helped}</b> helped</span></div>
+    <div class="wkmini">${secOn('faith')?`<span><b>${w.bible}/${w.count}</b> Bible days</span>`:''}${secOn('ministry')?`<span><b>${w.minHours} h</b> ministry</span>`:''}${secOn('health')?`<span><b>${w.exDays}</b> exercise days</span>`:''}${secOn('people')?`<span><b>${w.helped+w.contacted}</b> people reached</span>`:''}<span><b>${w.todosDone}</b> to-dos done</span></div>
     <button class="btn ghost" data-a="weeksheet" style="margin-top:10px">${sunday?'Review my week and back up':'See weekly summary'}</button></div>`;
 }
 function delta(a,b,unit='',lessIsBetter=false){ if(b===null||b===undefined) return ''; const d=r1(a-b); const good=(d>0)!==lessIsBetter; if(!d) return '<small class="muted"> same as '+(delta.vs||'last week')+'</small>'; return `<small class="${good?'up':'down'}"> ${d>0?'▲ +':'▼ '}${d}${unit} vs ${delta.vs||'last week'}</small>`; }
@@ -603,6 +625,7 @@ function weekSheet(ws){
     ${line('Saved', money(w.saved))}
     <div class="area">Helping others and goals</div>
     ${line('Times I helped someone', w.helped, delta(w.helped,p.helped))}
+    ${line('Messages and visits to people I met', w.contacted, delta(w.contacted,p.contacted))}
     ${line('Goals completed', w.goalsDone.length)}
     ${w.routinePct!==null?line('Routine kept', w.routinePct+'%'):''}
     ${line('To-do items done', w.todosDone, w.todosLeft?'<small class="muted">'+w.todosLeft+' still open</small>':'')}
@@ -639,6 +662,7 @@ function dueOn(date){
   S.reminders.filter(r=>r.on!==false && r.ring!==false && (r.days||[]).includes(wd) && !routineDone(date,r.id)).forEach(r=>out.push({key:'rem:'+r.id, time:r.time, title:r.title, kind:r.type||'other', id:r.id, beep:r.beep, sound:r.sound||'', created:r.created||0}));
   S.meds.filter(m=>m.on!==false && (!m.until || date<=m.until)).forEach(m=>(m.times||[]).forEach(tm=>out.push({key:'med:'+m.id+':'+tm, time:tm, title:'Take '+m.name+(m.dose?' ('+m.dose+')':''), kind:'med', id:m.id, slot:tm, sound:m.sound||AL().medSound||'', created:m.created||0})));
   S.todos.filter(x=>x.time && x.alarm!==false && !x.done && (x.date===date || (x.date<date && date===TODAY()))).forEach(x=>out.push({key:'todo:'+x.id, time:x.time, title:x.text, kind:'todo', id:x.id, sound:x.sound||'', created:x.date<date?0:(x.createdAt||0), quietMiss:x.date<date}));
+  if(secOn('people')){ const fu=S.contacts.filter(c=>warmth(c)!=='off' && c.follow && (c.follow===date || (date===TODAY() && c.follow<date))); if(fu.length) out.push({key:'fu:'+fu.map(c=>c.id).sort().join(','), time:AL().followTime||'10:00', title:'Follow up: '+fu.slice(0,3).map(c=>firstName(c.name)).join(', ')+(fu.length>3?' and '+(fu.length-3)+' more':''), kind:'followup', created:Date.now(), quietMiss:true}); }
   if(AL().diaryOn) out.push({key:'diary', time:AL().diaryTime, title:'Write about your day', kind:'diary', sound:AL().diarySound||'', created:Date.now(), quietMiss:true});
   return out.sort((a,b)=>mins(a.time)-mins(b.time));
 }
@@ -709,6 +733,7 @@ function ring(item){
   const el=document.getElementById('alarm');
   const extra = item.kind==='med'?`<button class="btn" data-al="taken">I've taken it</button>`
     : item.kind==='todo'?`<button class="btn" data-al="done">Mark as done</button>`
+    : item.kind==='followup'?`<button class="btn" data-al="people">See who to message</button>`
     : item.kind==='diary'?`<button class="btn" data-al="diary">Write now</button>`
     : item.kind==='study'?`<button class="btn" data-al="studied">OK, I'm starting</button>`
     : item.key && item.key.startsWith('rem:')?`<button class="btn" data-al="rdone">Mark as done</button>`:'';
@@ -726,6 +751,7 @@ document.addEventListener('click', e=>{
   if(a==='snooze'){ S.snooze.push({key:it.key+':s'+Date.now(), at:Date.now()+10*60000, item:it}); save(); toast('Snoozed for 10 minutes'); }
   if(a==='taken'){ const m=S.medTaken[TODAY()]||(S.medTaken[TODAY()]={}); m[it.id+':'+it.slot]=true; save(); toast('Marked as taken'); }
   if(a==='done'){ const x=S.todos.find(t=>t.id===it.id); if(x){ x.done=true; x.doneDate=TODAY(); save(); } toast('Done'); }
+  if(a==='people'){ tab='others'; peopleTab='met'; peopleFilter='due'; }
   if(a==='rdone'){ const r=S.reminders.find(z=>z.id===it.id); if(r){ setRoutineDone(TODAY(), r, true); save(); toast('Done ✓'); } }
   if(a==='diary'){ tab='today'; setTimeout(()=>{ const d=document.getElementById('diaryBox'); if(d){ d.scrollIntoView({block:'center'}); d.focus(); } },120); }
   if(a==='studied'){ const r=S.reminders.find(z=>z.id===it.id); if(r) setRoutineDone(TODAY(), r, true); save(); tab='faith'; faithTab='study'; if(!SA()) startStudy(true); }
@@ -835,6 +861,8 @@ function alarmsSheet(){
     <div class="f" style="margin-top:8px"><label>Default sound for study and other alarms</label>${soundSelect('aSound', a.sound, false)}</div>
     <div class="f"><label>Sound for medicine</label>${soundSelect('aMedSound', a.medSound||'chimes', false)}</div>
     <div class="f"><label>Sound for the diary reminder</label>${soundSelect('aDiarySound', a.diarySound||'piano', false)}</div>
+    <div class="area">Follow-up reminder</div>
+    <div class="f"><label>Remind me about people to follow up at</label><input type="time" id="aFollowTime" value="${a.followTime||'10:00'}"></div>
     <div class="area">Diary reminder</div>
     <div class="row" style="border:0"><div class="lbl">Remind me to write about my day</div><label class="switch"><input type="checkbox" id="aDiaryOn" ${a.diaryOn?'checked':''}><span></span></label></div>
     <div class="f2"><div class="f"><label>At</label><input type="time" id="aDiaryTime" value="${a.diaryTime}"></div>
@@ -850,8 +878,8 @@ function alarmsSheet(){
     ${NATIVE?'':`<div class="area">Important</div>
     <p class="muted" style="margin:0">The beep works offline, but only while Life Compass is open (on screen or recently used). Phones stop web apps that are fully closed. For alarms you must not miss, use <b>Set phone alarm</b> or <b>Add to Google Calendar</b> inside each alarm. <b>For alarms that always ring, install the Life Compass Android app</b> (gear menu → Android app).</p>`}
     <button class="btn ghost" data-a="close" style="margin-top:14px">Close</button>`, null);
-  const upd=()=>{ a.diaryOn=document.getElementById('aDiaryOn').checked; a.diaryTime=val('aDiaryTime')||'21:00'; a.beep=n(val('aBeep'))||30; a.sound=val('aSound')||'marimba'; a.medSound=val('aMedSound'); a.diarySound=val('aDiarySound'); delete firedMap().diary; save(); };
-  ['aDiaryOn','aDiaryTime','aBeep','aSound','aMedSound','aDiarySound'].forEach(i=>document.getElementById(i).addEventListener('change',upd));
+  const upd=()=>{ a.diaryOn=document.getElementById('aDiaryOn').checked; a.diaryTime=val('aDiaryTime')||'21:00'; a.beep=n(val('aBeep'))||30; a.sound=val('aSound')||'marimba'; a.medSound=val('aMedSound'); a.diarySound=val('aDiarySound'); a.followTime=val('aFollowTime')||'10:00'; delete firedMap().diary; save(); };
+  ['aDiaryOn','aDiaryTime','aBeep','aSound','aMedSound','aDiarySound','aFollowTime'].forEach(i=>document.getElementById(i).addEventListener('change',upd));
 }
 
 /* ---- to-do list with automatic carry-forward ---- */
@@ -1066,6 +1094,386 @@ function finishStudy(){
 }
 setInterval(()=>{ const el=document.getElementById('stClock'); if(el && SA() && SA().running) el.textContent=clock(studyMs()); }, 1000);
 
+/* ================= FRIENDLY MESSAGES: natural texts for people you met, students and friends ================= */
+/* Placeholders: {name} first name, {me} your first name, {place} where you met, {topic} what you talked about,
+   {ask} something to ask about, {lesson} current lesson, {day} study day. A message is only offered when its details are filled in. */
+const GREET = {
+  morning:['Good morning {name}!','Morning {name}!','Hi {name}, good morning!','Good morning {name}, hope you slept well.','Hello {name}, good morning 🙂'],
+  afternoon:['Good afternoon {name}!','Hi {name}, good afternoon.','Hello {name}!','Hey {name}, hope your day is going well.','Afternoon {name}!'],
+  evening:['Good evening {name}!','Hi {name}, good evening.','Evening {name}!','Hello {name}, hope you had a good day.']
+};
+const CLOSE = {
+  morning:['Have a lovely day!','Wishing you a great day ahead.','Have a blessed day.','Enjoy your day!'],
+  afternoon:['Hope the rest of your day goes well.','Enjoy the rest of your afternoon.','Take care!','Have a good one!'],
+  evening:['Have a restful night.','Sleep well!','Enjoy your evening.','Rest well tonight.']
+};
+const TPL = {
+  met:{
+    friendly:[
+      {t:'It was really nice meeting you at {place}. Just checking in to say hi. How\'s your week going?'},
+      {t:'I\'ve been thinking about our chat on {topic}. I really enjoyed it. How are you doing?'},
+      {t:'It\'s {me}, we met at {place}. Just saying hello! How are you and the family?'},
+      {t:'How is {ask}? You mentioned it when we met, so I thought I\'d ask.'},
+      {t:'Hope things are going well on your side. Is there anything I can help with this week?'},
+      {t:'Just thinking about you today and wanted to say hello. How\'s everything?'},
+      {t:'Hope work isn\'t too stressful this week. Remember to rest a bit too!'},
+      {t:'It\'s been a few days! How have you been?'},
+      {t:'I really enjoyed our conversation the other day. You asked good questions. How are you?'},
+      {t:'Hope this week has been kind to you. How are you keeping?'}
+    ],
+    scripture:[
+      {t:'I read Psalm 37:11 today. It talks about the earth being full of peace one day, and it made me think of our chat on {topic}. What do you think of that promise?', ref:'Psalm 37:11'},
+      {t:'Something in Revelation 21:4 stuck with me today: God promises to wipe away every tear, and pain and death will be gone. I thought you\'d like it. How are you?', ref:'Revelation 21:4'},
+      {t:'You asked a good question about {topic}. I found a verse that helps: Isaiah 33:24 says a time is coming when no one will say "I am sick." Can we talk about it more sometime?', ref:'Isaiah 33:24'},
+      {t:'Just sharing a verse that encouraged me: Philippians 4:6, 7 says we can tell God about anything that worries us, and he gives a peace that guards our hearts. Hope you\'re well!', ref:'Philippians 4:6, 7'},
+      {t:'Did you know God has a personal name? Psalm 83:18 tells us what it is. I\'d be happy to show you sometime. How\'s your week been?', ref:'Psalm 83:18'},
+      {t:'I keep thinking about Matthew 6:9, 10, where Jesus taught us to pray for God\'s Kingdom to come. That Kingdom is really good news. Could we chat about it this week?', ref:'Matthew 6:9, 10'},
+      {t:'I read John 17:3 today, about how getting to know God leads to real life. That\'s why I enjoy our chats so much. How are you?', ref:'John 17:3'},
+      {t:'Psalm 145:18 says Jehovah is near to all who call on him. Whatever you\'re facing this week, you\'re not alone. How are things?', ref:'Psalm 145:18'}
+    ]
+  },
+  student:{
+    friendly:[
+      {t:'Really enjoyed our study last time. You ask such good questions! Looking forward to {day}.'},
+      {t:'Just checking in. How\'s your week going so far?'},
+      {t:'Did you get a chance to look at lesson {lesson}? I think you\'ll like it.'},
+      {t:'Well done for reaching lesson {lesson}! You\'re doing great. Keep it up.'},
+      {t:'How is {ask}? I\'ve been thinking about you.'},
+      {t:'Are we still good for our study {day}? Let me know if the time needs to change, no problem at all.'},
+      {t:'We have our meeting at the Kingdom Hall this week. I\'d love for you to come with me. I can pick you up if that helps.'},
+      {t:'Thank you for always making time for our study. It means a lot to me.'}
+    ],
+    scripture:[
+      {t:'Remember what we read in 1 Peter 5:7? You can throw all your worries on Jehovah because he really cares about you. Keep that in mind today.', ref:'1 Peter 5:7'},
+      {t:'I loved how you understood Psalm 1:2, 3 last time. Reading God\'s word every day makes us like a strong tree. How\'s your reading going?', ref:'Psalm 1:2, 3'},
+      {t:'James 4:8 says when we come close to God, he comes close to us. That\'s exactly what you\'re doing with our study. I\'m proud of you.', ref:'James 4:8'},
+      {t:'Thought of you when I read Isaiah 41:10. Jehovah says he will strengthen us and help us. Hold on to that this week.', ref:'Isaiah 41:10'},
+      {t:'Revelation 21:3, 4 is one of my favourite verses: no more pain, no more tears. That\'s the hope we\'re learning about together.', ref:'Revelation 21:3, 4'},
+      {t:'Proverbs 3:5, 6 came to mind for you today. Trust Jehovah with your whole heart and he\'ll make your path straight.', ref:'Proverbs 3:5, 6'},
+      {t:'Psalm 65:2 calls Jehovah the Hearer of prayer. Anytime, anywhere, you can talk to him.', ref:'Psalm 65:2'},
+      {t:'Hebrews 6:10 says God doesn\'t forget the good we do. All the effort you\'re putting in counts.', ref:'Hebrews 6:10'}
+    ]
+  },
+  friend:{
+    friendly:[
+      {t:'Just thinking about you and wanted to say hi. How\'s everything?'},
+      {t:'How is {ask}? I\'ve been meaning to ask.'},
+      {t:'Missed you at the meeting. Hope all is well with you and the family.'},
+      {t:'Would you like to go out in service together this week? I\'d really enjoy your company.'},
+      {t:'Thanks for your comment at the meeting. It really encouraged me.'},
+      {t:'Hope your week is going well. Let me know if you need anything, I\'m just a call away.'},
+      {t:'It\'s been a while since we caught up properly. Can I come by for a short visit this week?'}
+    ],
+    scripture:[
+      {t:'Read Isaiah 40:31 today and thought of you: those hoping in Jehovah will regain power. Hope you\'re feeling strong this week.', ref:'Isaiah 40:31'},
+      {t:'Hebrews 10:24, 25 reminded me how much we need each other. So glad to have you as a friend.', ref:'Hebrews 10:24, 25'},
+      {t:'Galatians 6:9 says don\'t give up doing good, we\'ll reap if we don\'t tire out. Keep going, you\'re doing well.', ref:'Galatians 6:9'},
+      {t:'Proverbs 17:17 says a true friend shows love at all times. Just want you to know I\'m here for you.', ref:'Proverbs 17:17'},
+      {t:'Psalm 55:22 says throw your burden on Jehovah and he will sustain you. Whatever you\'re carrying this week, he\'s got you.', ref:'Psalm 55:22'}
+    ]
+  }
+};
+const SITUATIONS = [['discouraged','Discouraged'],['sick','Sick'],['busy','Busy or stressed'],['grieving','Grieving'],['slowing','Slowing down'],['lonely','Lonely']];
+const SHEPHERD = {
+  discouraged:[
+    {t:'I know things have been heavy lately. Psalm 34:18 says Jehovah is close to the brokenhearted. He hasn\'t forgotten you, and neither have I.', ref:'Psalm 34:18'},
+    {t:'Just a reminder that you matter to Jehovah and to us. Isaiah 41:13 says he holds our hand. Can I call you later?', ref:'Isaiah 41:13'},
+    {t:'Some days are just hard, and that\'s okay. 2 Corinthians 4:16 says we don\'t give up; we\'re renewed day by day. One day at a time.', ref:'2 Corinthians 4:16'},
+    {t:'Thinking of you. Remember Psalm 55:22: throw your burden on Jehovah and he\'ll carry you. Want to chat this week?', ref:'Psalm 55:22'}
+  ],
+  sick:[
+    {t:'Sorry to hear you\'re not feeling well. I\'m praying you feel better soon. Do you need anything, food, medicine, or a ride to the hospital?'},
+    {t:'Hope you\'re getting some rest. Isaiah 33:24 reminds me that a time is coming when no one will say "I am sick." Hold on to that hope.', ref:'Isaiah 33:24'},
+    {t:'Thinking of you today. Psalm 41:3 says Jehovah supports us on our sickbed. Let me know if I can bring you anything.', ref:'Psalm 41:3'},
+    {t:'Get well soon! Don\'t worry about missing meetings for now, just rest. We\'ll share the highlights with you.'}
+  ],
+  busy:[
+    {t:'I know you\'ve had a lot on your plate. Don\'t forget to take care of yourself too. In Matthew 11:28 Jesus offers us rest.', ref:'Matthew 11:28'},
+    {t:'Busy weeks can be tiring. Even 10 minutes of Bible reading can refresh you. Psalm 1:2, 3 compares it to a tree by streams of water.', ref:'Psalm 1:2, 3'},
+    {t:'Just checking in. If there\'s anything I can help with so you have a bit more time, let me know.'},
+    {t:'Ecclesiastes 4:6 says a handful of rest is better than two handfuls of hard work. Hope you get some rest this weekend!', ref:'Ecclesiastes 4:6'}
+  ],
+  grieving:[
+    {t:'I\'m so sorry for your loss. There are no easy words, but I\'m here for you. John 11:35 shows that even Jesus wept.', ref:'John 11:35'},
+    {t:'Thinking of you today. Jehovah promises in Acts 24:15 that there will be a resurrection. We will see our loved ones again.', ref:'Acts 24:15'},
+    {t:'No need to reply, I just want you to know I\'m praying for you and your family. Psalm 147:3 says Jehovah heals the brokenhearted.', ref:'Psalm 147:3'},
+    {t:'If you\'d like company or someone to talk to, I\'m free this week. Please don\'t hesitate.'}
+  ],
+  slowing:[
+    {t:'We\'ve really missed you! No pressure at all, I just wanted you to know you\'re loved.'},
+    {t:'I remember how much your comments at the meetings encouraged me. Hope we can see you soon.'},
+    {t:'Luke 15:4-7 talks about the shepherd searching for the one lost sheep. That\'s how much Jehovah cares about each one of us. You\'re important to him.', ref:'Luke 15:4-7'},
+    {t:'Would you like to have a meal with us this week? Just to catch up, nothing formal.'}
+  ],
+  lonely:[
+    {t:'Just thinking about you and wanted to say hi. Would you like to come over for lunch this weekend?'},
+    {t:'You\'re never alone. Hebrews 13:5 says Jehovah will never leave us. And you have friends here too!', ref:'Hebrews 13:5'},
+    {t:'Shall we go out in service together this week? I\'d love the company.'},
+    {t:'Psalm 68:6 says God gives the lonely a home to live in. Our congregation is that home for you.', ref:'Psalm 68:6'}
+  ]
+};
+const TOPICS = [['','No article'],['family','Family and marriage'],['anxiety','Stress and worry'],['what happens when we die','Death and hope'],['why does God allow suffering','Why God allows suffering'],['young people','Young people'],['prayer','Prayer'],['money','Money and work'],['illness','Sickness and health'],['paradise earth','The future paradise'],['who is Jesus','Who is Jesus?'],['God\'s name Jehovah','God\'s name'],['depression','Depression and loneliness'],['Bible study','Free Bible study']];
+const ARTICLE_INTRO = ['I came across this and thought of you:','Here\'s something I think you\'ll find interesting:','You might like this short article:','This helped me, maybe it\'ll help you too:'];
+const timeOfDay = () => { const h=new Date().getHours(); return h<12?'morning':h<17?'afternoon':'evening'; };
+const firstName = s => String(s||'').trim().split(/\s+/)[0]||'';
+function seededOrder(len, seed){ const a=[...Array(len).keys()]; let x=(seed>>>0)||1; for(let i=len-1;i>0;i--){ x=(Math.imul(x,1103515245)+12345)>>>0; const j=x%(i+1); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function strHash(s){ let h=2166136261; for(const c of String(s)){ h^=c.charCodeAt(0); h=Math.imul(h,16777619)>>>0; } return h; }
+function fillVals(p){ return {name:firstName(p.name), me:firstName(S.settings.name), place:p.place||'', topic:p.topic||'', ask:p.ask||'', lesson:p.lesson?String(p.lesson):'', day:p.day?'on '+p.day:''}; }
+function canFill(t, v){ return (t.match(/\{(\w+)\}/g)||[]).every(k=>v[k.slice(1,-1)]); }
+function fillT(t, v){ return t.replace(/\{(\w+)\}/g,(m,k)=>v[k]??''); }
+/* who: {kind:'contact'|'student', p:person}; style: 'friendly'|'scripture'|'encourage'|'mine' */
+function pickMessage(who, style, situation, time, offset){
+  const p=who.p, v=fillVals(p), aud = who.kind==='student'?'student':(p.type==='met'?'met':'friend');
+  let pool, key;
+  if(style==='encourage'){ pool=SHEPHERD[situation||'discouraged']; key='sh-'+(situation||'discouraged'); }
+  else if(style==='mine'){ pool=(S.settings.myTemplates||[]).map(t=>({t})); key='mine'; }
+  else { pool=TPL[aud][style]||TPL[aud].friendly; key=aud+'-'+style; }
+  const ok=pool.map((x,i)=>({...x,i})).filter(x=>canFill(x.t,v));
+  if(!ok.length) return {text:'', mid:'', ref:''};
+  const seed=dayNum()*7 + strHash(p.id||p.name), order=seededOrder(ok.length, seed).map(i=>ok[i]);
+  const sent=new Set(p.sent||[]), fresh=order.filter(x=>!sent.has(key+':'+x.i)), list=fresh.length?fresh:order;
+  const pick=list[offset % list.length];
+  const g=GREET[time][(seed+offset)%GREET[time].length], c=CLOSE[time][(seed+offset*3+1)%CLOSE[time].length];
+  const body=fillT(pick.t, v);
+  const text = style==='mine' ? body : fillT(g, v)+' '+body+' '+c;
+  return {text, mid:key+':'+pick.i, ref:pick.ref||''};
+}
+
+/* ================= PEOPLE I MET IN SERVICE ================= */
+const CTYPES = [['met','Met in service'],['friend','Publisher or friend']];
+const CSTATUS = [['interested','Interested'],['study','Bible study started'],['not','Not interested'],['moved','Moved away']];
+let peopleTab='met', peopleFilter='all', peopleQuery='';
+function lastTouch(c){ const l=(c.log||[]).map(x=>x.date).sort(); return l[l.length-1] || c.met || null; }
+function daysSince(d){ return d ? Math.round((parse(TODAY())-parse(d))/864e5) : 999; }
+function warmth(c){
+  if(c.status==='not'||c.status==='moved') return 'off';
+  const d=daysSince(lastTouch(c)); return d<=7?'green':d<=21?'orange':'red';
+}
+const WARM_TXT = {green:'In touch', orange:'A while ago', red:'Check on them', off:'Not following up'};
+function contactDue(c, t=TODAY()){ return warmth(c)!=='off' && ((c.follow && c.follow<=t) || warmth(c)==='red'); }
+function touchText(c){
+  const d=daysSince(lastTouch(c));
+  if(!(c.log||[]).length) return c.met ? 'Met '+(d===0?'today':d===1?'yesterday':d+' days ago')+', no message yet' : 'No message yet';
+  return 'Last in touch '+(d===0?'today':d===1?'yesterday':d+' days ago');
+}
+function contactCard(c){
+  const w=warmth(c), t=TODAY(), tel=phoneIntl(c.phone);
+  const due = c.follow ? (c.follow<t?'Follow-up was due '+nice(c.follow):c.follow===t?'Follow up today':'Next follow-up '+nice(c.follow)) : '';
+  return `<div class="card person ${w}"><div style="display:flex;gap:10px;align-items:flex-start">
+      <span class="wdot ${w}" title="${WARM_TXT[w]}"></span>
+      <div style="flex:1;min-width:0" data-a="contactsheet" data-id="${c.id}"><b style="font-size:16.5px">${esc(c.name)}</b>
+        <div class="muted">${[c.place?'Met at '+esc(c.place):'', (CSTATUS.find(s=>s[0]===c.status)||['',''])[1]].filter(Boolean).join(' · ')}</div></div>
+      <span class="wchip ${w}">${WARM_TXT[w]}</span></div>
+    <p class="muted" style="margin:8px 0 0">${touchText(c)}${due?' · <b style="color:'+(c.follow<=t?'var(--bad)':'inherit')+'">'+due+'</b>':''}</p>
+    ${c.topic?`<p style="margin:4px 0 0;font-size:14.5px">Talked about: ${esc(c.topic)}</p>`:''}
+    <div class="btns" style="margin-top:10px"><button class="btn sm" data-a="compose" data-kind="contact" data-id="${c.id}">Message</button>
+      ${tel?`<a class="btn sm ghost" href="tel:+${tel}" data-a="calllog" data-id="${c.id}">Call</a>`:''}
+      <button class="btn sm ghost" data-a="logtouch" data-id="${c.id}">Log a visit</button></div></div>`;
+}
+function metView(){
+  const all=S.contacts, t=TODAY(), q=peopleQuery.trim().toLowerCase();
+  const act=all.filter(c=>warmth(c)!=='off'), due=all.filter(c=>contactDue(c,t));
+  const filt={all:()=>true, due:c=>contactDue(c,t), interested:c=>c.status==='interested', study:c=>c.status==='study', off:c=>warmth(c)==='off'};
+  const order={red:0,orange:1,green:2,off:3};
+  const list=all.filter(filt[peopleFilter]||filt.all).filter(c=>!q||(c.name+' '+(c.place||'')+' '+(c.topic||'')+' '+(c.notes||'')).toLowerCase().includes(q))
+    .sort((a,b)=>(contactDue(b,t)-contactDue(a,t))||(order[warmth(a)]-order[warmth(b)])||a.name.localeCompare(b.name));
+  let html=`<div class="card"><div class="stat"><div><small>People I'm following up</small><b>${act.length}</b></div><div><small>Need a message now</small><b style="color:${due.length?'var(--bad)':'inherit'}">${due.length}</b></div></div>
+    <button class="btn" data-a="contactsheet" style="margin-top:12px">${svg('plus',18)}&nbsp; Add someone I met</button>
+    <div class="legend" style="margin-top:10px;flex-wrap:wrap"><span><i class="wdot green" style="display:inline-block"></i>Within a week</span><span><i class="wdot orange" style="display:inline-block"></i>1–3 weeks</span><span><i class="wdot red" style="display:inline-block"></i>Over 3 weeks</span></div></div>`;
+  if(!all.length) return html+`<div class="card"><div class="empty">When you meet someone in service and get their number, add them here: where you met, what you talked about, and when to follow up. Each name turns orange, then red, as time passes, so nobody is forgotten.</div></div>`;
+  html+=`<input type="search" id="peopleSearch" value="${esc(peopleQuery)}" placeholder="Search names, places, topics…" style="margin-bottom:8px">
+    <div class="nfilter" style="margin:0 0 10px">${[['all','All'],['due','Need a message'],['interested','Interested'],['study','Studying'],['off','Not following']].map(([k,l])=>`<button class="${k===peopleFilter?'on':''}" data-a="pfilter" data-k="${k}">${l}</button>`).join('')}</div>`;
+  html+= list.length? list.map(contactCard).join('') : '<div class="card"><div class="empty">Nobody here.</div></div>';
+  return html;
+}
+V.others = () => {
+  let html=`<div class="seg">${[['met','Met in service'],['help','Helping others']].map(([k,l])=>`<button class="${k===peopleTab?'on':''}" data-a="peopletab" data-k="${k}">${l}</button>`).join('')}</div>`;
+  return html + (peopleTab==='met' ? metView() : helpView());
+};
+function contactSheet(id){
+  const c = id ? S.contacts.find(x=>x.id===id) : {name:'',phone:'',type:'met',place:'',met:TODAY(),topic:'',ask:'',follow:addDays(TODAY(),3),status:'interested',notes:''};
+  openSheet(`<h3>${id?esc(c.name):'Someone I met'}</h3>
+    <div class="f"><label>Name</label><input type="text" id="cName" value="${esc(c.name)}" placeholder="Kwame Asante"></div>
+    <div class="f"><label>Phone (WhatsApp)</label><input type="tel" id="cPhone" value="${esc(c.phone)}" placeholder="024 123 4567"></div>
+    <div class="f2"><div class="f"><label>Who is this?</label><select id="cType">${CTYPES.map(([k,l])=>`<option value="${k}" ${k===c.type?'selected':''}>${l}</option>`).join('')}</select></div>
+      <div class="f"><label>Status</label><select id="cStatus">${CSTATUS.map(([k,l])=>`<option value="${k}" ${k===c.status?'selected':''}>${l}</option>`).join('')}</select></div></div>
+    <div class="f2"><div class="f"><label>Where we met</label><input type="text" id="cPlace" value="${esc(c.place||'')}" placeholder="Kaneshie market"></div>
+      <div class="f"><label>Date we met</label><input type="date" id="cMet" value="${c.met||''}"></div></div>
+    <div class="f"><label>What we talked about</label><input type="text" id="cTopic" value="${esc(c.topic||'')}" placeholder="why there is so much suffering"></div>
+    <div class="f"><label>Something to ask about next time</label><input type="text" id="cAsk" value="${esc(c.ask||'')}" placeholder="your exams, the new baby, your shop"></div>
+    <div class="f"><label>Next follow-up</label><input type="date" id="cFollow" value="${c.follow||''}">
+      <div class="btns" style="margin-top:6px">${[[2,'In 2 days'],[7,'In a week'],[14,'In 2 weeks']].map(([d,l])=>`<button type="button" class="btn sm ghost" data-a="setfollow" data-d="${d}">${l}</button>`).join('')}</div></div>
+    <div class="f"><label>Notes (family, job, questions they asked)</label><textarea id="cNotes">${esc(c.notes||'')}</textarea></div>
+    <p class="muted" style="margin:-4px 0 10px;font-size:12.5px">"What we talked about" and "something to ask about" are used to make your messages personal, so write them the way you'd say them in a sentence.</p>
+    ${actions}
+    ${id&&(c.log||[]).length?`<div class="area">History</div><div class="list">${[...c.log].reverse().slice(0,15).map(l=>`<div class="it"><div class="x"><b>${nice(l.date)} · ${l.via==='wa'?'WhatsApp':l.via==='sms'?'SMS':l.via==='call'?'Call':l.via==='visit'?'Visit':'Message'}</b><small>${esc((l.text||l.note||'').slice(0,140))}${(l.text||'').length>140?'…':''}</small>${l.ref||l.article?`<small style="color:var(--blue)">${[l.ref,l.article?'Article: '+(l.topicName||'link'):''].filter(Boolean).map(esc).join(' · ')}</small>`:''}</div></div>`).join('')}</div>`:''}
+    ${id?`<button class="btn danger" data-a="delcontact" data-id="${id}" style="margin-top:12px">Delete</button>`:''}`, ()=>{
+      const nm=val('cName').trim(); if(!nm) return fail('cName','Enter the name');
+      const rec = id ? c : {id:uid(), log:[], sent:[], created:TODAY()};
+      Object.assign(rec,{name:nm, phone:val('cPhone').trim(), type:val('cType'), status:val('cStatus'), place:val('cPlace').trim(), met:val('cMet'), topic:val('cTopic').trim(), ask:val('cAsk').trim(), follow:val('cFollow'), notes:val('cNotes').trim()});
+      if(!id) S.contacts.push(rec); return true;
+    });
+}
+function logTouchSheet(id){
+  const c=S.contacts.find(x=>x.id===id);
+  openSheet(`<h3>Log a visit or call with ${esc(firstName(c.name))}</h3>
+    <div class="f2"><div class="f"><label>How</label><select id="ltVia"><option value="visit">Visit</option><option value="call">Call</option><option value="other">Other</option></select></div>
+      <div class="f"><label>Date</label><input type="date" id="ltDate" value="${TODAY()}" max="${TODAY()}"></div></div>
+    <div class="f"><label>What did you talk about?</label><textarea id="ltNote" placeholder="Showed Revelation 21:4, left a tract"></textarea></div>
+    <div class="f"><label>Next follow-up</label><input type="date" id="cFollow" value="${addDays(TODAY(),7)}">
+      <div class="btns" style="margin-top:6px">${[[2,'In 2 days'],[7,'In a week'],[14,'In 2 weeks']].map(([d,l])=>`<button type="button" class="btn sm ghost" data-a="setfollow" data-d="${d}">${l}</button>`).join('')}</div></div>
+    ${actions}`, ()=>{
+      c.log=c.log||[]; c.log.push({id:uid(), date:val('ltDate')||TODAY(), via:val('ltVia'), note:val('ltNote').trim()});
+      c.follow=val('cFollow'); return true;
+    });
+}
+function followCard(t){
+  const due=S.contacts.filter(c=>contactDue(c,t)).sort((a,b)=>daysSince(lastTouch(b))-daysSince(lastTouch(a)));
+  if(!due.length) return '';
+  return `<div class="card"><h2>${svg('others',18)} People to follow up<span class="sp"></span><span class="chip">${due.length}</span></h2>
+    <div class="list">${due.slice(0,5).map(c=>`<div class="it"><span class="wdot ${warmth(c)}" style="margin-top:6px"></span><div class="x"><b>${esc(c.name)}</b><small>${c.follow&&c.follow<=t?(c.follow===t?'Follow up today':'Follow-up was due '+nice(c.follow)):touchText(c)}</small></div>
+      <button class="btn sm" data-a="compose" data-kind="contact" data-id="${c.id}">Message</button></div>`).join('')}</div>
+    ${due.length>5?`<button class="btn sm ghost" data-a="gopeople" style="margin-top:8px">See all ${due.length}</button>`:''}</div>`;
+}
+
+/* ---------- the message composer ---------- */
+let CM=null;
+function whoOf(kind,id){ const p = kind==='student' ? S.students.find(x=>x.id===id) : S.contacts.find(x=>x.id===id); return p?{kind,p}:null; }
+function composeSheet(kind, id, opts={}){
+  const who=whoOf(kind,id); if(!who) return;
+  CM = {kind, id, time:timeOfDay(), style:opts.style||((who.p.sent||[]).length%2?'scripture':'friendly'), situation:'discouraged', offset:0, topic:'', link:'', edited:false};
+  renderCompose();
+}
+function composeText(){
+  const who=whoOf(CM.kind,CM.id), m=pickMessage(who, CM.style, CM.situation, CM.time, CM.offset);
+  CM.mid=m.mid; CM.ref=m.ref;
+  let t=m.text;
+  if(CM.link) t += '\n\n'+ARTICLE_INTRO[(dayNum()+CM.offset)%ARTICLE_INTRO.length]+' '+CM.link;
+  return t;
+}
+function renderCompose(){
+  const who=whoOf(CM.kind,CM.id); if(!who) return; const p=who.p, ph=phoneIntl(p.phone);
+  const styles=[['friendly','Friendly chat'],['scripture','With a scripture'],['encourage','Encourage']].concat((S.settings.myTemplates||[]).length?[['mine','My messages']]:[]);
+  const text = CM.edited && CM.text!=null ? CM.text : composeText(); CM.text=text;
+  const hist=(p.log||[]).filter(l=>l.text||l.article||l.ref).slice(-3).reverse();
+  openSheet(`<h3>Message ${esc(p.name)}</h3>
+    ${!ph?`<div class="f"><label>Phone number (to send directly)</label><input type="tel" id="cmPhone" placeholder="024 123 4567"></div>`:`<p class="muted" style="margin:-6px 0 10px">${esc(p.phone)}</p>`}
+    <div class="chips2">${[['morning','Morning'],['afternoon','Afternoon'],['evening','Evening']].map(([k,l])=>`<button class="${k===CM.time?'on':''}" data-a="cmset" data-f="time" data-v="${k}">${l}</button>`).join('')}</div>
+    <div class="chips2">${styles.map(([k,l])=>`<button class="${k===CM.style?'on':''}" data-a="cmset" data-f="style" data-v="${k}">${l}</button>`).join('')}</div>
+    ${CM.style==='encourage'?`<div class="f"><label>Their situation</label><select id="cmSit">${SITUATIONS.map(([k,l])=>`<option value="${k}" ${k===CM.situation?'selected':''}>${l}</option>`).join('')}</select></div>`:''}
+    <div class="f"><label style="display:flex;align-items:center"><span style="flex:1">Message (you can change anything)</span><button class="linkbtn" data-a="cmnext" style="font-size:13px">↻ Another message</button></label>
+      <textarea id="cmText" style="min-height:150px">${esc(text)}</textarea></div>
+    ${text?'':'<p class="err" style="margin-top:-6px">Fill in more details about this person to get messages here, or write your own.</p>'}
+    <div class="area">Add a jw.org article (optional)</div>
+    <div class="f2"><select id="cmTopic">${TOPICS.map(([q,l])=>`<option value="${esc(q)}" ${q===CM.topic?'selected':''}>${l}</option>`).join('')}</select>
+      <a class="btn ghost" id="cmFind" href="https://www.jw.org/en/search/?q=${encodeURIComponent(CM.topic||'')}" target="_blank" rel="noopener" ${CM.topic?'':'style="opacity:.45;pointer-events:none"'}>Find on jw.org ↗</a></div>
+    <div class="f" style="margin-top:8px"><input type="url" id="cmLink" value="${esc(CM.link)}" placeholder="Paste the article link here"></div>
+    <div class="btns" style="flex-direction:column;margin-top:4px">
+      <a class="btn wa" id="cmWa" href="#" target="_blank" rel="noopener" data-a="csend" data-via="wa">Send on WhatsApp</a>
+      <a class="btn ghost" id="cmSms" href="#" data-a="csend" data-via="sms">Send as text message (SMS)</a>
+      <div class="btns"><button class="btn ghost" style="flex:1" data-a="cmcopy">Copy</button><button class="btn ghost" style="flex:1" data-a="savetpl">Save as my message</button></div>
+      <button class="btn ghost" data-a="close">Close</button></div>
+    ${hist.length?`<div class="area">Already sent to ${esc(firstName(p.name))}</div><div class="list">${hist.map(l=>`<div class="it"><div class="x"><small>${nice(l.date)}${l.ref?' · '+esc(l.ref):''}${l.article?' · '+esc(l.topicName||'article'):''}</small><div style="font-size:14px">${esc((l.text||'').slice(0,120))}${(l.text||'').length>120?'…':''}</div></div></div>`).join('')}</div>`:''}`, null);
+  updCompose();
+}
+function updCompose(){
+  const who=whoOf(CM.kind,CM.id); if(!who) return;
+  const t=val('cmText'), ph=phoneIntl(who.p.phone||val('cmPhone'));
+  document.getElementById('cmWa').href = ph ? `https://wa.me/${ph}?text=${encodeURIComponent(t)}` : `https://wa.me/?text=${encodeURIComponent(t)}`;
+  document.getElementById('cmSms').href = `sms:${ph?'+'+ph:''}?body=${encodeURIComponent(t)}`;
+}
+function recordSend(kind, id, via, text, mid, ref, link, topic){
+  const who=whoOf(kind,id); if(!who) return; const p=who.p;
+  p.sent=p.sent||[]; if(mid && !p.sent.includes(mid)) p.sent.push(mid);
+  p.log=p.log||[]; p.log.push({id:uid(), date:TODAY(), via, text:String(text||'').slice(0,600), mid:mid||'', ref:ref||'', article:link||'', topicName:topic||''});
+  if(kind==='student') p.lastMsg=TODAY();
+  else if(!p.follow || p.follow<=TODAY()) p.follow=addDays(TODAY(),7);
+  save();
+}
+document.addEventListener('input', e=>{
+  if(!CM) return; const t=e.target;
+  if(t.id==='cmText'){ CM.edited=true; CM.text=t.value; updCompose(); }
+  if(t.id==='cmPhone'){ updCompose(); }
+  if(t.id==='cmLink'){ CM.link=t.value.trim(); if(!CM.edited){ document.getElementById('cmText').value=composeText(); CM.text=val('cmText'); } else if(CM.link && !val('cmText').includes(CM.link)){ document.getElementById('cmText').value=val('cmText').replace(/\n\n[^\n]*https?:\/\/\S+$/,'')+'\n\n'+ARTICLE_INTRO[0]+' '+CM.link; CM.text=val('cmText'); } updCompose(); }
+});
+document.addEventListener('change', e=>{
+  if(!CM) return; const t=e.target;
+  if(t.id==='cmSit'){ CM.situation=t.value; CM.offset=0; CM.edited=false; renderCompose(); }
+  if(t.id==='cmTopic'){ CM.topic=t.value; const f=document.getElementById('cmFind'); f.href='https://www.jw.org/en/search/?q='+encodeURIComponent(CM.topic); f.style.opacity=CM.topic?'':'.45'; f.style.pointerEvents=CM.topic?'':'none'; }
+  if(t.id==='cmPhone' && t.value.trim()){ const who=whoOf(CM.kind,CM.id); who.p.phone=t.value.trim(); save(); }
+});
+
+/* ================= SECTIONS AND THE SETUP CODE ================= */
+const SECTIONS = [['goals','Goals'],['faith','Bible and personal study'],['ministry','Ministry and Bible students'],['health','Health'],['money','Money'],['people','People I meet and helping others']];
+function secOn(k){ return ((S.settings||{}).sections||{})[k]!==false; }
+const B32='23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+function pin16(pin){ return strHash('lc:'+pin) & 0xffff; }
+function makeCode(secs, pin){
+  let v=0; SECTIONS.forEach(([k],i)=>{ if(secs[k]) v|=1<<i; });
+  if(pin){ v|=1<<6; v|=pin16(pin)<<7; }
+  v += (v % 31) * 2**23;
+  let s=''; for(let i=0;i<6;i++){ s=B32[v%32]+s; v=Math.floor(v/32); }
+  return 'LC-'+s.slice(0,3)+'-'+s.slice(3);
+}
+function readCode(code){
+  let c=String(code||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(c.length===8 && c.startsWith('LC')) c=c.slice(2);
+  if(c.length!==6 || [...c].some(ch=>!B32.includes(ch))) return null;
+  let v=0; for(const ch of c) v=v*32+B32.indexOf(ch);
+  const body=v % 2**23, chk=Math.floor(v/2**23);
+  if(chk!==body%31) return null;
+  const secs={}; SECTIONS.forEach(([k],i)=>secs[k]=!!(body&(1<<i)));
+  if(!Object.values(secs).some(Boolean)) return null;
+  return {secs, lock: body&(1<<6) ? (body>>7)&0xffff : null};
+}
+function applyCode(r){
+  S.settings.sections = r.secs; S.settings.sectionLock = r.lock; S.settings.setupAsked=true; save();
+  tab='today'; closeSheet(); render(); window.scrollTo(0,0);
+  toast('Set up: '+SECTIONS.filter(([k])=>r.secs[k]).map(x=>x[1].split(' ')[0]).join(', '));
+}
+function setupCodeSheet(prefill){
+  openSheet(`<h3>Enter a setup code</h3>
+    <p class="muted" style="margin:0 0 10px">The person who shared Life Compass with you can give you a code like <b>LC-7QK-M4P</b>. It shows only the parts of the app meant for you.</p>
+    <div class="f"><input type="text" id="scCode" value="${esc(prefill||'')}" placeholder="LC-___-___" autocapitalize="characters" style="font-size:20px;letter-spacing:.08em;text-align:center"></div>
+    <div id="scPreview" class="muted" style="min-height:22px;margin-bottom:8px"></div>
+    <div class="btns"><button class="btn ghost" style="flex:1" data-a="close">Cancel</button><button class="btn" style="flex:1" data-a="scapply">Use this code</button></div>`, null);
+  const upd=()=>{ const r=readCode(val('scCode')), el=document.getElementById('scPreview'); el.innerHTML = r ? 'You will see: <b>'+SECTIONS.filter(([k])=>r.secs[k]).map(x=>esc(x[1])).join(', ')+'</b>'+(r.lock?' (locked)':'') : (val('scCode').replace(/[^A-Za-z0-9]/g,'').length>=6?'<span style="color:var(--bad)">That code is not right. Check it and try again.</span>':''); };
+  document.getElementById('scCode').addEventListener('input',upd); upd();
+}
+function shareAppSheet(){
+  openSheet(`<h3>Share Life Compass</h3>
+    <p class="muted" style="margin:0 0 10px">Choose what the other person will see. They get a code to type into their app.</p>
+    ${SECTIONS.map(([k,l])=>`<label class="row" style="cursor:pointer"><span class="lbl">${l}</span><input type="checkbox" class="shSec" value="${k}" ${['goals','faith','health'].includes(k)?'checked':''} style="width:22px;height:22px"></label>`).join('')}
+    <div class="f" style="margin-top:10px"><label>Lock PIN (optional, 4 numbers)</label><input type="password" inputmode="numeric" maxlength="8" id="shPin" placeholder="Leave empty for no lock" autocomplete="off">
+      <p class="muted" style="margin:4px 0 0;font-size:12.5px">With a PIN, they can't switch hidden parts back on unless they know it. It's a simple lock, not strong security.</p></div>
+    <button class="btn" data-a="shmake">Make the code</button>
+    <div id="shOut"></div>`, null);
+}
+function shareMessage(code){
+  return `Hi! I'd like to share Life Compass with you. It's the app I use to plan my day, track Bible reading and more. It works offline.\n\n1) Android: download and install it here:\n${APK_URL}\n(If your phone warns you, allow installing from Chrome, then tap Install anyway.)\n\n2) Open the app, tap the gear ⚙ at the top, then "Enter setup code", and type:\n${code}\n\niPhone or computer? Open this link instead:\n${WEB_URL}?setup=${code.replace(/-/g,'')}`;
+}
+function unlockSectionsSheet(){
+  openSheet(`<h3>Unlock sections</h3>
+    <p class="muted" style="margin:0 0 10px">The person who set up this app chose which parts you see. Enter their PIN to change it.</p>
+    <div class="f"><input type="password" inputmode="numeric" maxlength="8" id="ulPin" autocomplete="off" style="font-size:20px;text-align:center;letter-spacing:.3em"></div>
+    <div class="btns"><button class="btn ghost" style="flex:1" data-a="close">Cancel</button><button class="btn" style="flex:1" data-a="ulgo">Unlock</button></div>`, null);
+}
+function sectionsHTML(){
+  const st=S.settings, locked=st.sectionLock!=null;
+  return `<div class="area" style="margin-top:20px">What this app shows</div>
+    ${locked?`<p class="muted" style="margin:0 0 8px">Set up by someone else. Showing: ${SECTIONS.filter(([k])=>secOn(k)).map(x=>esc(x[1])).join(', ')}.</p><button class="btn ghost" data-a="unlocksec">Change (needs PIN)</button>`
+      :`${SECTIONS.map(([k,l])=>`<label class="row" style="cursor:pointer"><span class="lbl">${l}</span><input type="checkbox" class="secTog" value="${k}" ${secOn(k)?'checked':''} style="width:22px;height:22px"></label>`).join('')}`}
+    <div class="btns" style="margin-top:10px"><button class="btn ghost" style="flex:1" data-a="shareapp">Share the app</button><button class="btn ghost" style="flex:1" data-a="setupcode">Enter setup code</button></div>`;
+}
+document.addEventListener('change', e=>{
+  const t=e.target;
+  if(t.classList.contains('secTog')){
+    const secs={...(S.settings.sections||{})}; secs[t.value]=t.checked;
+    if(!SECTIONS.some(([k])=>secs[k]!==false)){ t.checked=true; toast('Keep at least one part on'); return; }
+    S.settings.sections=secs; save(); renderNav(); toast(t.checked?'Shown':'Hidden');
+  }
+});
+
 /* ---------- field service timer (uses the phone's clock; works offline) ---------- */
 function T(){ return S.timer || (S.timer={running:false, startedAt:null, sessionMs:0, segments:0}); }
 function hm(ms){ const m=Math.round(ms/60000); return Math.floor(m/60)+' h '+String(m%60).padStart(2,'0')+' min'; }
@@ -1157,7 +1565,9 @@ V.goals = () => {
 
 let faithTab='reading', reportMonth=null;
 V.faith = () => {
-  let html = `<div class="seg">${[['reading','Bible'],['study','Study'],['ministry','Ministry'],['students','Students']].map(([k,l])=>`<button class="${k===faithTab?'on':''}" data-a="faithtab" data-k="${k}">${l}</button>`).join('')}</div>`;
+  const segs=[...(secOn('faith')?[['reading','Bible'],['study','Study']]:[]), ...(secOn('ministry')?[['ministry','Ministry'],['students','Students']]:[])];
+  if(!segs.some(x=>x[0]===faithTab)) faithTab=segs[0][0];
+  let html = `<div class="seg">${segs.map(([k,l])=>`<button class="${k===faithTab?'on':''}" data-a="faithtab" data-k="${k}">${l}</button>`).join('')}</div>`;
   if(faithTab==='reading'){
     const m=MONTH(), readDays = Object.keys(S.days).filter(k=>k.slice(0,7)===m && S.days[k].bible).length, dayOfMonth=parse(TODAY()).getDate();
     html += bibleCard();
@@ -1292,7 +1702,8 @@ const MSGS = [
 function msgFor(x, tpl){ return tpl.replace(/\{name\}/g,(x.name||'').trim().split(/\s+/)[0]).replace(/\{lesson\}/g,x.lesson||'').replace(/\{day\}/g,x.day?'on '+x.day:'soon'); }
 function allTemplates(){ return [...(S.settings.myTemplates||[]), ...MSGS]; }
 function todayTpl(){ return MSGS[dayNum()%MSGS.length]; }
-function encourageSheet(id){
+function encourageSheet(id){ composeSheet('student', id); }
+function encourageSheetOld(id){
   const x=S.students.find(s=>s.id===id), tpls=allTemplates();
   const start = todayTpl();
   openSheet(`<h3>Encourage ${esc(x.name)}</h3>
@@ -1309,13 +1720,11 @@ function encourageSheet(id){
   document.getElementById('emText').addEventListener('input',upd); upd();
 }
 function encourageAllSheet(){
-  const list=S.students.filter(x=>x.phone && x.status!=='stopped');
-  const tpl=todayTpl();
+  const list=S.students.filter(x=>x.phone && x.status!=='stopped'), time=timeOfDay();
   openSheet(`<h3>Today's encouragement</h3>
-    <p class="muted" style="margin:0 0 8px">Today's message is ready for each student. Tap Send to open WhatsApp with it, or Edit to change it first.</p>
-    <div class="scripture" style="margin-bottom:10px">${esc(msgFor({name:'[name]',lesson:'[lesson]',day:''},tpl))}</div>
-    ${list.length?`<div class="list">${list.map(x=>{ const sent=x.lastMsg===TODAY(); return `<div class="it"><div class="x"><b>${esc(x.name)}</b><small>${sent?'Sent today ✓':x.lastMsg?'Last sent '+nice(x.lastMsg):'Not sent yet'}</small></div>
-      <button class="btn sm ghost" data-a="encourage" data-id="${x.id}">Edit</button><a class="btn sm ${sent?'ghost':''}" href="https://wa.me/${phoneIntl(x.phone)}?text=${encodeURIComponent(msgFor(x,tpl))}" target="_blank" rel="noopener" data-a="sendmsg" data-id="${x.id}" data-via="wa" data-refresh="1">Send</a></div>`;}).join('')}</div>`:'<div class="empty">Add phone numbers to your Bible students to send them messages.</div>'}
+    <p class="muted" style="margin:0 0 8px">Each student gets their own ${time} message, different from what you sent before. Tap Send to open WhatsApp, or Edit to change it first.</p>
+    ${list.length?`<div class="list">${list.map(x=>{ const sent=x.lastMsg===TODAY(), m=pickMessage({kind:'student',p:x}, dayNum()%2?'scripture':'friendly', '', time, 0); return `<div class="it"><div class="x"><b>${esc(x.name)}</b><small>${sent?'Sent today ✓':x.lastMsg?'Last sent '+nice(x.lastMsg):'Not sent yet'}</small><div style="font-size:13.5px;margin-top:2px">${esc(m.text.slice(0,110))}…</div></div>
+      <button class="btn sm ghost" data-a="encourage" data-id="${x.id}">Edit</button><a class="btn sm ${sent?'ghost':''}" href="https://wa.me/${phoneIntl(x.phone)}?text=${encodeURIComponent(m.text)}" target="_blank" rel="noopener" data-a="sendall" data-id="${x.id}" data-mid="${esc(m.mid)}" data-ref="${esc(m.ref)}" data-text="${esc(m.text)}">Send</a></div>`;}).join('')}</div>`:'<div class="empty">Add phone numbers to your Bible students to send them messages.</div>'}
     <button class="btn ghost" data-a="close" style="margin-top:12px">Close</button>`, null);
 }
 
@@ -1559,7 +1968,7 @@ V.money = () => {
   return html;
 };
 
-V.others = () => {
+function helpView(){
   const m = MONTH(), t=TODAY();
   const thisMonth = S.helps.filter(x=>x.date.slice(0,7)===m);
   const people = new Set(S.helps.map(x=>x.person.trim().toLowerCase())).size;
@@ -1571,7 +1980,7 @@ V.others = () => {
   html += `<div class="card"><h2>History</h2>${all.length?`<div class="list">${all.map(x=>`<div class="it"><div class="x"><b>${esc(x.person)}</b><small>${nice(x.date)} · ${esc(x.how)}</small></div><button class="icon-btn" data-a="helpsheet" data-id="${x.id}" aria-label="Edit">${svg('edit',18)}</button></div>`).join('')}</div>`:'<div class="empty">Each time you visit, call, encourage or give practical help, note it here.</div>'}</div>`;
   html += areaGoals('others');
   return html;
-};
+}
 
 /* ---------- sheets (forms) ---------- */
 function openSheet(html, onSave){
@@ -1581,7 +1990,7 @@ function openSheet(html, onSave){
   openSheet.save = onSave;
   const f = el.querySelector('input,select,textarea'); if(f && f.type!=='date') setTimeout(()=>f.focus(),60);
 }
-function closeSheet(){ if(!ringing) stopBeep(); if(typeof sheetAdded!=='undefined' && sheetAdded.length){ sheetAdded.forEach(photoDel); sheetAdded=[]; } document.getElementById('sheet').innerHTML=''; openSheet.save=null; weekSheet.open=null; }
+function closeSheet(){ CM=null; if(!ringing) stopBeep(); if(typeof sheetAdded!=='undefined' && sheetAdded.length){ sheetAdded.forEach(photoDel); sheetAdded=[]; } document.getElementById('sheet').innerHTML=''; openSheet.save=null; weekSheet.open=null; }
 function val(id){ const e=document.getElementById(id); return e?e.value:''; }
 function fail(id,msg){ const e=document.getElementById(id); e.insertAdjacentHTML('afterend',`<div class="err">${msg}</div>`); e.addEventListener('input',()=>{ const n=e.nextElementSibling; if(n&&n.classList.contains('err')) n.remove(); },{once:true}); e.focus(); return false; }
 const actions = `<div class="btns" style="margin-top:6px"><button class="btn ghost" style="flex:1" data-a="close">Cancel</button><button class="btn" style="flex:1" data-a="save">Save</button></div>`;
@@ -1756,6 +2165,7 @@ function settingsSheet(){
     <input type="file" id="restoreFile" accept=".json,application/json" hidden>
     <div class="area" style="margin-top:20px">Put it on your home screen</div>
     <p class="muted" style="margin:0">Android (Chrome): menu ⋮ → Add to Home screen / Install app. iPhone (Safari): Share → Add to Home Screen. It then opens like an app and works offline.</p>
+    ${sectionsHTML()}
     <div class="area" style="margin-top:20px">Android app</div>
     ${NATIVE?`<p class="muted" style="margin:0 0 8px">You are using the Life Compass Android app. Alarms ring even when the phone is locked.</p>`
       :`<p class="muted" style="margin:0 0 8px">Install the Android app so alarms ring even when the phone is locked. First tap <b>Back up</b> here, then in the app tap <b>Restore backup</b> to bring your entries.</p>
@@ -1882,6 +2292,37 @@ document.addEventListener('click', e => {
     case 'restore': document.getElementById('restoreFile').click(); break;
     case 'freshsheet': freshSheet(); break;
     case 'forceupdate': forceUpdate(); break;
+    case 'peopletab': peopleTab=t.dataset.k; render(); break;
+    case 'pfilter': peopleFilter=t.dataset.k; render(); break;
+    case 'gopeople': tab='others'; peopleTab='met'; peopleFilter='due'; render(); window.scrollTo(0,0); break;
+    case 'contactsheet': contactSheet(id); break;
+    case 'delcontact': if(confirm('Delete this person and their history?')){ S.contacts=S.contacts.filter(c=>c.id!==id); save(); closeSheet(); render(); } break;
+    case 'logtouch': logTouchSheet(id); break;
+    case 'calllog': { const c=S.contacts.find(x=>x.id===id); if(c){ c.log=c.log||[]; c.log.push({id:uid(), date:TODAY(), via:'call', note:'Phone call'}); if(!c.follow||c.follow<=TODAY()) c.follow=addDays(TODAY(),7); save(); setTimeout(render,300); } return; }
+    case 'setfollow': { const f=document.getElementById('cFollow'); if(f) f.value=addDays(TODAY(), n(t.dataset.d)); break; }
+    case 'compose': composeSheet(t.dataset.kind, id); break;
+    case 'cmset': CM[t.dataset.f]=t.dataset.v; CM.offset=0; CM.edited=false; renderCompose(); break;
+    case 'cmnext': CM.offset++; CM.edited=false; renderCompose(); break;
+    case 'cmcopy': { const txt=val('cmText'); (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast('Copied'),()=>{ const ta=document.getElementById('cmText'); ta.focus(); ta.select(); toast('Press and hold to copy'); }); break; }
+    case 'csend': { const txt=val('cmText'); if(!txt.trim()){ e.preventDefault(); toast('Write a message first'); break; } recordSend(CM.kind, CM.id, t.dataset.via, txt, CM.edited?'':CM.mid, CM.edited?'':CM.ref, CM.link, CM.link?(TOPICS.find(x=>x[0]===CM.topic)||['',''])[1]:''); toast('Opening '+(t.dataset.via==='wa'?'WhatsApp':'messages')+'…'); setTimeout(()=>{ closeSheet(); render(); }, 600); return; }
+    case 'sendall': recordSend('student', id, 'wa', t.dataset.text, t.dataset.mid, t.dataset.ref, '', ''); setTimeout(()=>{ encourageAllSheet(); render(); },400); return;
+    case 'setupcode': setupCodeSheet(); break;
+    case 'nosetup': S.settings.setupAsked=true; save(); render(); break;
+    case 'scapply': { const r=readCode(val('scCode')); if(!r){ fail('scCode','That code is not right'); break; } applyCode(r); break; }
+    case 'shareapp': shareAppSheet(); break;
+    case 'shmake': {
+      const secs={}; document.querySelectorAll('.shSec').forEach(c=>secs[c.value]=c.checked);
+      if(!Object.values(secs).some(Boolean)){ toast('Choose at least one part'); break; }
+      const pin=val('shPin').trim(); if(pin && !/^\d{4,8}$/.test(pin)){ fail('shPin','Use 4 to 8 numbers'); break; }
+      const code=makeCode(secs,pin), msg=shareMessage(code);
+      document.getElementById('shOut').innerHTML=`<div class="codebox">${code}</div>
+        <p class="muted" style="margin:0 0 8px;text-align:center">They will see: ${SECTIONS.filter(([k])=>secs[k]).map(x=>esc(x[1])).join(', ')}${pin?'. Locked with your PIN.':'.'}</p>
+        <div class="btns" style="flex-direction:column"><a class="btn wa" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">Send on WhatsApp</a>
+        <a class="btn ghost" href="sms:?body=${encodeURIComponent(msg)}">Send as text message</a></div>`;
+      break;
+    }
+    case 'unlocksec': unlockSectionsSheet(); break;
+    case 'ulgo': { const pin=val('ulPin').trim(); if(pin16(pin)===S.settings.sectionLock){ S.settings.sectionLock=null; save(); closeSheet(); settingsSheet(); toast('Unlocked. You can now change what the app shows.'); } else fail('ulPin','Wrong PIN'); break; }
     case 'gonotes': closeSheet(); tab='notes'; render(); window.scrollTo(0,0); break;
     case 'nfilter': notesFilter=t.dataset.k; render(); break;
     case 'notesheet': noteSheet(id); break;
@@ -1950,7 +2391,7 @@ document.addEventListener('click', e => {
     case 'encourage': encourageSheet(id); break;
     case 'encourageall': encourageAllSheet(); break;
     case 'sendmsg': { const x=S.students.find(s=>s.id===id); if(x){ x.lastMsg=TODAY(); save(); } if(t.dataset.refresh) setTimeout(()=>{ encourageAllSheet(); render(); },400); return; }
-    case 'savetpl': { let txt=val('emText'); const x=S.students.find(s=>txt.includes((s.name||'').split(' ')[0])); if(x&&x.name) txt=txt.split(x.name.trim().split(/\s+/)[0]).join('{name}'); S.settings.myTemplates=[txt,...(S.settings.myTemplates||[])].slice(0,30); save(); toast('Saved to your messages'); break; }
+    case 'savetpl': { let txt=val('cmText')||val('emText'); if(CM){ const who=whoOf(CM.kind,CM.id); const nm=who&&firstName(who.p.name); if(nm) txt=txt.split(nm).join('{name}'); S.settings.myTemplates=[txt,...(S.settings.myTemplates||[])].slice(0,30); save(); toast('Saved to My messages'); break; } const x=S.students.find(s=>txt.includes((s.name||'').split(' ')[0])); if(x&&x.name) txt=txt.split(x.name.trim().split(/\s+/)[0]).join('{name}'); S.settings.myTemplates=[txt,...(S.settings.myTemplates||[])].slice(0,30); save(); toast('Saved to your messages'); break; }
     case 'delstudent': if(confirm('Delete this student and their study history?')){ S.students=S.students.filter(x=>x.id!==id); save(); closeSheet(); render(); } break;
     case 'delsession': { const x=S.students.find(s=>s.id===id); x.sessions=x.sessions.filter(s=>s.id!==t.dataset.sid); save(); studentSheet(id); render(); break; }
     case 'copyreport': { const txt=reportText(t.dataset.m); (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast('Report copied'),()=>prompt('Copy your report:',txt)); break; }
@@ -2005,6 +2446,7 @@ document.addEventListener('input', e => {
   if(t.classList.contains('bp')) updBk();
   if(t.dataset.ans){ S.answers[t.dataset.ans]=t.value; save(); }
   if(t.dataset.diary){ S.diary[t.dataset.diary]=t.value; save(); }
+  if(t.id==='peopleSearch'){ peopleQuery=t.value; clearTimeout(notesSearchT); notesSearchT=setTimeout(()=>{ const pos=t.selectionStart; render(); const n=document.getElementById('peopleSearch'); if(n){ n.focus(); try{ n.setSelectionRange(pos,pos); }catch(e){} } }, 300); }
   if(t.dataset.bdraft){ S.bible.drafts=S.bible.drafts||{}; if(t.value.trim()) S.bible.drafts[t.dataset.bdraft]=t.value; else delete S.bible.drafts[t.dataset.bdraft]; save(); }
   if(t.id==='notesSearch'){ notesQuery=t.value; clearTimeout(notesSearchT); notesSearchT=setTimeout(()=>{ const pos=t.selectionStart; render(); const n=document.getElementById('notesSearch'); if(n){ n.focus(); try{ n.setSelectionRange(pos,pos); }catch(e){} } }, 300); }
   if(t.dataset.st && SA()){ SA()[t.dataset.st]=t.value; save(); }
@@ -2063,6 +2505,7 @@ function handleNativeAction(a){
     toast('Snoozed for 10 minutes');
   } else if(ex.kind==='diary'){ tab='today'; setTimeout(()=>{ const b=document.getElementById('diaryBox'); if(b){ b.scrollIntoView({block:'center'}); b.focus(); } }, 300); }
   else if(ex.kind==='study'){ tab='faith'; faithTab='study'; }
+  else if(ex.kind==='followup'){ tab='others'; peopleTab='met'; peopleFilter='due'; }
   save(); render();
 }
 async function nativeTest(){
@@ -2271,6 +2714,7 @@ function personSheet(){
 }
 
 if(needsLock()) showLock(); else render();
+try{ const sc=new URLSearchParams(location.search).get('setup'); if(sc){ history.replaceState(null,'',location.pathname); setTimeout(()=>setupCodeSheet(sc), 400); } }catch(e){}
 setTimeout(checkAlarms, 1500);
 if(!NATIVE && 'serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
 if(NATIVE) setTimeout(nativeInit, 300);
