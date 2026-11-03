@@ -219,6 +219,9 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .ptype button b{display:block;color:var(--navy);font-size:16px}.ptype button small{color:var(--muted);font-size:13px}
 .ptype button.on{border-color:var(--navy);background:var(--sky)}
 .glance .big{font-size:26px;font-weight:700;color:var(--navy)}
+body.formmode header button{display:none}
+body.formmode nav{display:none}
+body.formmode main{padding-bottom:40px}
 </style>
 </head>
 <body>
@@ -239,7 +242,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 27;
+const APP_VERSION = 28;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -321,7 +324,7 @@ function fresh(){
     bible:{book:1, chapter:1, read:{}, log:[]}, answers:{},
     savings:[], students:[],
     todos:[], reminders:[], meds:[], medTaken:{}, food:{eat:[],avoid:[]}, diary:{}, fired:{}, snooze:[],
-    study:{active:null, journal:[]}, routineDone:{}, notes:[], contacts:[], events:[]
+    study:{active:null, journal:[]}, routineDone:{}, notes:[], contacts:[], events:[], thanks:[]
   };
 }
 
@@ -534,6 +537,7 @@ function renderNav(){
   nav.innerHTML = vis.map(([k,l])=>`<button class="${k===tab?'on':''}" data-tab="${k}">${svg(k)}<span>${l}</span></button>`).join('');
 }
 function render(){
+  if(FORM){ renderForm(); return; }
   if(tab!=='notes' && !tabOn(tab)) tab='today';
   renderNav();
   document.getElementById('title').textContent = tab==='today'?'Life Compass':tab==='notes'?'My notes':TABS.find(t=>t[0]===tab)[1];
@@ -597,7 +601,7 @@ V.today = () => {
   }
   if(secOn('people')) html += `<div class="card"><h2>${svg('others',18)} Helping others</h2>
     ${followups.length?`<div class="list">${followups.map(x=>`<div class="it"><div class="x"><b>Follow up: ${esc(x.person)}</b><small>${esc(x.how)}</small></div>${checkBox(false,'followdone','data-id="'+x.id+'"')}</div>`).join('')}</div>`:''}
-    <button class="btn ghost" data-a="helpsheet" style="margin-top:${followups.length?10:0}px">I helped someone today</button></div>`;
+    <button class="btn ghost" data-a="helpsheet" style="margin-top:${followups.length?10:0}px">I helped someone today</button><button class="btn ghost" data-a="thanks" style="margin-top:8px">Encourage someone after an assignment</button></div>`;
   if(secOn('goals')) html += `<div class="card"><h2>${svg('goals',18)} This month's goals<span class="sp"></span><button class="btn sm ghost" data-a="go" data-t="goals">See all</button></h2>
     ${monthGoals.length?monthGoals.slice(0,6).map(goalRow).join(''):`<div class="empty">No goals for ${monthName(MONTH())} yet.</div><button class="btn" data-a="goalsheet" data-h="1m">Set a goal for this month</button>`}
   </div>`;
@@ -734,6 +738,7 @@ function dueOn(date){
   (S.events||[]).filter(ev=>ev.date>date && (date===addDays(ev.date,-n(ev.remind||14)) || date===addDays(ev.date,-1))).forEach(ev=>out.push({key:'ev:'+ev.id+':'+date, time:'09:00', title:'Invite people to the '+evShort(ev)+' ('+(date===addDays(ev.date,-1)?'tomorrow':nice(ev.date))+')', kind:'event', id:ev.id, created:Date.now(), quietMiss:true}));
   if(secOn('secretary') && S.sec) (S.sec.tasks||[]).filter(x=>!x.done && x.due && (date===x.due || date===addDays(x.due,-n(x.remind||0)))).forEach(x=>out.push({key:'task:'+x.id+':'+date, time:'09:00', title:(date===x.due?'Due today: ':'Coming up: ')+x.title+' ('+taskWho(x)+')', kind:'duty', id:x.id, created:Date.now(), quietMiss:true}));
   if(secOn('secretary') && S.sec) (S.sec.duties||[]).filter(x=>x.due && (x.due===date || (date===TODAY() && x.due<date))).forEach(x=>out.push({key:'duty:'+x.id+':'+x.due, time:'09:00', title:(x.due<date?'Overdue: ':'Due today: ')+x.name, kind:'duty', id:x.id, created:Date.now(), quietMiss:true}));
+  if(secOn('secretary') && S.sec && (S.sec.pubs||[]).length && date.slice(8)==='01') out.push({key:'links:'+date, time:'09:00', title:'Send the report links to the group overseers, and the attendance link', kind:'links', created:Date.now(), quietMiss:true});
   if(AL().diaryOn) out.push({key:'diary', time:AL().diaryTime, title:'Write about your day', kind:'diary', sound:AL().diarySound||'', created:Date.now(), quietMiss:true});
   return out.sort((a,b)=>mins(a.time)-mins(b.time));
 }
@@ -805,6 +810,7 @@ function ring(item){
   const extra = item.kind==='med'?`<button class="btn" data-al="taken">I've taken it</button>`
     : item.kind==='todo'?`<button class="btn" data-al="done">Mark as done</button>`
     : item.kind==='followup'?`<button class="btn" data-al="people">See who to message</button>`
+    : item.kind==='links'?`<button class="btn" data-al="links">Send the links now</button>`
     : item.kind==='duty'?`<button class="btn" data-al="sec">Open Secretary</button>`
     : item.kind==='event'?`<button class="btn" data-al="invite">Invite people now</button>`
     : item.kind==='diary'?`<button class="btn" data-al="diary">Write now</button>`
@@ -827,6 +833,7 @@ document.addEventListener('click', e=>{
   if(a==='sec'){ tab='sec'; secTab='duties'; }
   if(a==='invite'){ const evId=it.id; closeAlarm(); inviteSheet(evId); return; }
   if(a==='people'){ tab='others'; peopleTab='met'; peopleFilter='due'; }
+  if(a==='links'){ closeAlarm(); tab='sec'; secTab='reports'; render(); linksSheet(); return; }
   if(a==='rdone'){ const r=S.reminders.find(z=>z.id===it.id); if(r){ setRoutineDone(TODAY(), r, true); save(); toast('Done ✓'); } }
   if(a==='diary'){ tab='today'; setTimeout(()=>{ const d=document.getElementById('diaryBox'); if(d){ d.scrollIntoView({block:'center'}); d.focus(); } },120); }
   if(a==='studied'){ const r=S.reminders.find(z=>z.id===it.id); if(r) setRoutineDone(TODAY(), r, true); save(); tab='faith'; faithTab='study'; if(!SA()) startStudy(true); }
@@ -835,7 +842,7 @@ document.addEventListener('click', e=>{
 
 /* ---- the clock that checks every 10 seconds ---- */
 function checkAlarms(){
-  if(NATIVE) return;   // the Android app hands every alarm to Android itself
+  if(NATIVE || FORM) return;   // the Android app hands every alarm to Android itself
   if(!S || !document.getElementById('alarm') || ringing || !document.getElementById('lock').hidden) return;
   const t=TODAY(), now=nowMins(), fm=firedMap(t);
   const sz=S.snooze.find(z=>z.at<=Date.now());
@@ -1390,10 +1397,10 @@ function metView(){
   return html;
 }
 V.others = () => {
-  const segs=[['met','Met in service'], ...(hasGroupData()?[['group','My group']]:[]), ['invite','Invitations'], ['help','Helping others']];
+  const segs=[['met','Met in service'], ...(hasGroupData()?[['group','My group']]:[]), ['thanks','After assignments'], ['invite','Invitations'], ['help','Helping others']];
   if(!segs.some(x=>x[0]===peopleTab)) peopleTab='met';
   let html=`<div class="seg six">${segs.map(([k,l])=>`<button class="${k===peopleTab?'on':''}" data-a="peopletab" data-k="${k}">${l}</button>`).join('')}</div>`;
-  return html + (peopleTab==='met' ? metView() : peopleTab==='group' ? groupView() : peopleTab==='invite' ? eventsView() : helpView());
+  return html + (peopleTab==='met' ? metView() : peopleTab==='group' ? groupView() : peopleTab==='thanks' ? thanksView() : peopleTab==='invite' ? eventsView() : helpView());
 };
 function contactSheet(id){
   const c = id ? S.contacts.find(x=>x.id===id) : {name:'',phone:'',type:'met',place:'',met:TODAY(),topic:'',ask:'',follow:addDays(TODAY(),3),status:'interested',notes:''};
@@ -1751,7 +1758,7 @@ const isPioneer = p => p.type==='rp'||p.type==='sp'||p.type==='fm';
 function activePubs(){ return SEC().pubs.filter(p=>p.status!=='moved' && p.status!=='inactive'); }
 function rep(m,id){ return (SEC().reports[m]||{})[id]; }
 function repState(r){ if(!r) return 'missing'; return r.shared===false ? 'none' : 'in'; }
-function groupsList(){ return [...new Set(SEC().pubs.map(p=>p.group||'').filter(Boolean))].sort(); }
+function groupsList(){ return [...new Set(SEC().pubs.filter(p=>p.status!=='moved').map(p=>p.group||'').filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})); }
 function monthTotals(m){
   const list=activePubs(), t={total:list.length, in:0, missing:0, none:0, pub:{n:0,st:0}, aux:{n:0,h:0,st:0}, rp:{n:0,h:0,st:0}};
   list.forEach(p=>{ const r=rep(m,p.id), s=repState(r); t[s]++; if(s!=='in') return;
@@ -1792,6 +1799,7 @@ function secReports(){
       <tr><td>Regular pioneers</td><td>${t.rp.n}</td><td>${r1(t.rp.h)}</td><td>${t.rp.st}</td></tr></table>
     <p class="muted" style="margin:6px 0 0;font-size:12.5px">${t.none?t.none+' did not share in the ministry. ':''}Counts only publishers marked Active.</p>
     <div class="btns" style="margin-top:10px"><button class="btn" style="flex:1" data-a="secpaste">Paste a group's report</button><button class="btn ghost" style="flex:1" data-a="seccopy">Copy totals</button></div>
+    <button class="btn wa" data-a="linkssheet" style="margin-top:8px">Send report links to group overseers</button>
     <button class="btn" data-a="monthreport" data-m="${m}" style="margin-top:8px">Monthly congregation report (PDF)</button>
     <button class="btn ghost" data-a="printsheet" data-k="s21" style="margin-top:8px">Print publisher records for the service year (S-21)</button></div>`;
   if(att.length) html+=`<div class="card"><h2>Needs encouragement<span class="sp"></span><span class="chip" style="background:#FBEAEA;color:#A32D2D">${att.length}</span></h2>
@@ -1990,18 +1998,20 @@ function parseReportLine(line, pool){
 }
 function pasteSheet(){
   openSheet(`<h3>Paste a group's report</h3>
-    <p class="muted" style="margin:0 0 8px">Copy the message the group overseer sent you on WhatsApp and paste it here. One person per line works best, for example:<br><b>Kofi Mensah - yes - 2 studies</b><br><b>Ama Owusu - 52 hrs - 3 studies</b><br><b>Yaw Boateng - no</b></p>
+    <p class="muted" style="margin:0 0 8px">Copy the whole WhatsApp message from the group overseer and paste it here. Replies from the report links are read by themselves, for every name at once. A typed list also works, one person per line, for example:<br><b>Kofi Mensah - yes - 2 studies</b><br><b>Ama Owusu - 52 hrs - 3 studies</b><br><b>Yaw Boateng - no</b></p>
     <div class="f"><textarea id="psText" style="min-height:170px" placeholder="Paste here"></textarea></div>
     <div id="psPrev"></div>
-    <div class="btns"><button class="btn ghost" style="flex:1" data-a="close">Cancel</button><button class="btn" style="flex:1" data-a="psapply">Add to ${monthName(secMonth)}</button></div>`, null);
+    <div class="btns"><button class="btn ghost" style="flex:1" data-a="close">Cancel</button><button class="btn" style="flex:1" data-a="psapply">Add the reports</button></div>`, null);
   const upd=()=>{
+    const codes=readCodes(val('psText')); if(codes.length){ document.getElementById('psPrev').innerHTML=codePreviewHTML(codes); return; }
     const rows=val('psText').split(/\n+/).map(l=>parseReportLine(l, activePubs())).filter(Boolean);
     const ok=rows.filter(r=>r.p && r.shared!==null), bad=rows.filter(r=>!r.p || r.shared===null);
-    document.getElementById('psPrev').innerHTML = rows.length ? `<div class="area">${ok.length} ready${bad.length?' · '+bad.length+' need checking':''}</div><div class="list">${rows.map(r=>`<div class="it"><span class="wdot ${r.p&&r.shared!==null?'green':'red'}" style="margin-top:6px"></span><div class="x"><b>${r.p?esc(r.p.name):'Not found: '+esc(r.name||r.line)}</b><small>${!r.p?'Skipped: no publisher with this name':r.shared===null?'Could not tell if they shared':r.shared?('Shared'+(r.hours!=null?' · '+r.hours+' h':'')+' · '+r.studies+' stud'+(r.studies===1?'y':'ies')+(r.aux?' · Aux':'')):'Did not share'}</small></div></div>`).join('')}</div>${bad.length?'<p class="muted" style="font-size:12.5px">Lines in red are skipped. Fix the name to match your Publishers list, or enter those reports by hand.</p>':''}` : '';
+    document.getElementById('psPrev').innerHTML = rows.length ? `<div class="area">${ok.length} ready for ${monthName(secMonth)}${bad.length?' · '+bad.length+' need checking':''}</div><div class="list">${rows.map(r=>`<div class="it"><span class="wdot ${r.p&&r.shared!==null?'green':'red'}" style="margin-top:6px"></span><div class="x"><b>${r.p?esc(r.p.name):'Not found: '+esc(r.name||r.line)}</b><small>${!r.p?'Skipped: no publisher with this name':r.shared===null?'Could not tell if they shared':r.shared?('Shared'+(r.hours!=null?' · '+r.hours+' h':'')+' · '+r.studies+' stud'+(r.studies===1?'y':'ies')+(r.aux?' · Aux':'')):'Did not share'}</small></div></div>`).join('')}</div>${bad.length?'<p class="muted" style="font-size:12.5px">Lines in red are skipped. Fix the name to match your Publishers list, or enter those reports by hand.</p>':''}` : '';
   };
   document.getElementById('psText').addEventListener('input',upd);
 }
 function applyPaste(){
+  const codes=readCodes(val('psText')); if(codes.length){ applyCodes(codes); return; }
   const d=SEC(), m=secMonth; d.reports[m]=d.reports[m]||{};
   const rows=val('psText').split(/\n+/).map(l=>parseReportLine(l, activePubs())).filter(r=>r&&r.p&&r.shared!==null);
   rows.forEach(r=>{ d.reports[m][r.p.id]={got:TODAY(), shared:r.shared, aux:r.aux&&!isPioneer(r.p), hours:r.shared?r.hours:null, studies:r.shared?r.studies:0, remarks:''}; });
@@ -2029,6 +2039,7 @@ function secPubs(){
   let html=`<div class="card"><div class="stat"><div><small>Active publishers</small><b>${activePubs().length}</b></div><div><small>Regular pioneers</small><b>${activePubs().filter(isPioneer).length}</b></div></div>
     <div class="btns" style="margin-top:10px"><button class="btn" style="flex:1" data-a="pubsheet">Add a publisher</button><button class="btn ghost" style="flex:1" data-a="pubbulk">Paste a list</button></div>
     <button class="btn ghost" data-a="printsheet" data-k="s21" style="margin-top:8px">Print publisher records (S-21)</button></div>`;
+  if(d.pubs.length) html+=groupsCard();
   if(nb.length) html+=`<div class="card"><h2>Newly baptized (first year)</h2><div class="list">${nb.map(p=>{ const lv=lastVisit(p), dd=lv?daysSince(lv):null; const w=lv===null?'red':dd>90?'orange':'green';
     return `<div class="it"><span class="wdot ${w}" style="margin-top:6px"></span><div class="x" data-a="pubsheet" data-id="${p.id}" style="cursor:pointer"><b>${esc(p.name)}</b><small>Baptized ${nice(p.baptized)} · ${(p.visits||[]).length} visit${(p.visits||[]).length===1?'':'s'}${lv?' · last '+nice(lv):' · not visited yet'}</small></div><button class="btn sm ghost" data-a="pubvisit" data-id="${p.id}">Log visit</button></div>`; }).join('')}</div></div>`;
   if(!d.pubs.length) return html+`<div class="card"><div class="empty">Add each publisher with their group. To save time, use <b>Paste a list</b>: one person per line, like <b>Kofi Mensah, Group 1, pioneer</b>.</div></div>`;
@@ -2105,6 +2116,7 @@ function secDuties(){
       return `<div class="it"><span class="wdot ${c}" style="margin-top:6px"></span><div class="x" data-a="dutysheet" data-id="${x.id}" style="cursor:pointer"><b>${esc(x.name)}</b><small>${esc((FREQ.find(f=>f[0]===x.freq)||['',''])[1])} · ${x.due?(k>0?'<span style="color:var(--bad)">Overdue since '+nice(x.due)+'</span>':k===0?'Due today':'Due '+nice(x.due)):'Set a due date'}${x.log.length?' · last done '+nice(x.log[x.log.length-1].date):''}</small></div>${x.due?`<button class="btn sm" data-a="dutydone" data-id="${x.id}">Done</button>`:''}</div>`; }).join('')}</div>
     <p class="muted" style="margin:8px 0 0;font-size:12.5px">Each duty rings a reminder at 9 am on its due day. Tap a duty to change its dates or checklist.</p></div>`;
   html += tasksCard();
+  html += deptsCard();
   return html;
 }
 function dutySheet(id){
@@ -2403,6 +2415,7 @@ function secTodayCard(){
   if(!d.pubs.length && !soon.length) return `<div class="card"><h2>Secretary</h2><div class="empty">Add your publishers to start tracking reports.</div><button class="btn ghost" data-a="gosec" data-k="pubs" style="margin-top:8px">Open Secretary</button></div>`;
   return `<div class="card"><h2>Secretary<span class="sp"></span><button class="btn sm ghost" data-a="gosec" data-k="glance">Open</button></h2>
     ${d.pubs.length?`<div class="row" style="border:0;padding-top:0"><div class="lbl">${monthName(m)} reports<small>${t.missing?t.missing+' still missing':'All reports in ✓'}</small></div><b>${t.in+t.none}/${t.total}</b></div>`:''}
+    ${(()=>{ const lm=secMonthDefault(), lg=groupsList(), ls=linkLog('r',lm), sent=lg.filter(g=>ls[g]&&ls[g].sent).length, got=lg.filter(g=>ls[g]&&ls[g].got).length; return parse(TODAY()).getDate()<=12 && lg.length && got<lg.length ? `<div class="row"><div class="lbl">Report links for ${monthName(lm).split(' ')[0]}<small>${sent} of ${lg.length} sent · ${got} back</small></div><button class="btn sm ${sent<lg.length?'':'ghost'}" data-a="linkssheet">${sent<lg.length?'Send':'Open'}</button></div>` : ''; })()}
     ${soon.map(x=>`<div class="row"><span class="wdot ${dutyClass(x)}" style="margin:0 8px 0 0"></span><div class="lbl">${esc(x.name)}<small>${daysSince(x.due)>0?'Overdue':daysSince(x.due)===0?'Due today':'Due '+nice(x.due)}</small></div><button class="btn sm ghost" data-a="dutydone" data-id="${x.id}">Done</button></div>`).join('')}
     ${nbv.length?`<p class="muted" style="margin:8px 0 0">Newly baptized to visit: <b>${nbv.map(p=>esc(p.name)).join(', ')}</b></p>`:''}</div>`;
 }
@@ -2498,6 +2511,7 @@ function secAttendance(){
       <div class="f"><label>Meeting</label><select id="atKind"><option value="mid" ${guessKind(TODAY())==='mid'?'selected':''}>Midweek</option><option value="wk" ${guessKind(TODAY())==='wk'?'selected':''}>Weekend</option></select></div></div>
     <div class="f"><label>Attendance (include those joining by phone or video)</label><input type="text" inputmode="numeric" id="atCount" placeholder="85"></div>
     <button class="btn" data-a="atadd">Save attendance</button></div>`;
+  html+=attLinkCard();
   html+=`<div class="card"><h2>Service year ${sy}<span class="sp"></span><span class="muted" style="font-weight:400;font-size:13px">${syLabel(sy)}</span></h2>
     <table class="tot"><tr><th>Month</th><th>Midweek avg</th><th>Weekend avg</th></tr>
     ${syMonthList(sy).map((m,i)=>{ const a=attMonth(m,'mid'), b=attMonth(m,'wk'); return `<tr><td>${MONTH_NAMES[i]}</td><td>${a.n?a.avg+' <small class="muted">('+a.n+')</small>':'—'}</td><td>${b.n?b.avg+' <small class="muted">('+b.n+')</small>':'—'}</td></tr>`; }).join('')}
@@ -3430,7 +3444,7 @@ function openSheet(html, onSave){
   openSheet.save = onSave;
   const f = el.querySelector('input,select,textarea'); if(f && f.type!=='date') setTimeout(()=>f.focus(),60);
 }
-function closeSheet(){ CM=null; if(!ringing) stopBeep(); if(typeof sheetAdded!=='undefined' && sheetAdded.length){ sheetAdded.forEach(photoDel); sheetAdded=[]; } document.getElementById('sheet').innerHTML=''; openSheet.save=null; weekSheet.open=null; }
+function closeSheet(){ CM=null; TH=null; if(!ringing) stopBeep(); if(typeof sheetAdded!=='undefined' && sheetAdded.length){ sheetAdded.forEach(photoDel); sheetAdded=[]; } document.getElementById('sheet').innerHTML=''; openSheet.save=null; weekSheet.open=null; }
 function val(id){ const e=document.getElementById(id); return e?e.value:''; }
 function fail(id,msg){ const e=document.getElementById(id); e.insertAdjacentHTML('afterend',`<div class="err">${msg}</div>`); e.addEventListener('input',()=>{ const n=e.nextElementSibling; if(n&&n.classList.contains('err')) n.remove(); },{once:true}); e.focus(); return false; }
 const actions = `<div class="btns" style="margin-top:6px"><button class="btn ghost" style="flex:1" data-a="close">Cancel</button><button class="btn" style="flex:1" data-a="save">Save</button></div>`;
@@ -3963,6 +3977,28 @@ document.addEventListener('click', e => {
       else { sheetPhotos=sheetPhotos.filter(p=>p!==id); if(sheetAdded.includes(id)){ sheetAdded=sheetAdded.filter(p=>p!==id); photoDel(id); } t.closest('.pthumb').remove(); }
       break;
     }
+    case 'thanks': thanksSheet({}); break;
+    case 'thagain': { const x=(S.thanks||[]).find(z=>z.id===id); if(x) thanksSheet({name:x.name, phone:x.phone||'', key:x.key, meet:meetOf(x.key)}); break; }
+    case 'thset': TH[t.dataset.f]=t.dataset.v; TH.offset=0; TH.edited=false; thanksSheet(); break;
+    case 'thnext': TH.offset++; TH.edited=false; thRefresh(); break;
+    case 'thcopy': copyText(val('thText')); break;
+    case 'thsend': { const txt=val('thText'); if(!txt.trim()){ e.preventDefault(); toast('Write a message first'); break; }
+      const [k,label]=thAssign(); S.thanks=S.thanks||[]; S.thanks.push({id:uid(), ts:Date.now(), date:TODAY(), on:TH.date, name:TH.name.trim()||'Someone', phone:TH.phone.trim(), key:k, label, ref:TH.edited?'':TH.ref, via:t.dataset.via, text:txt.slice(0,600)});
+      const pp=S.sec&&(S.sec.pubs||[]).find(x=>nameKey(x.name)===nameKey(TH.name)); if(pp){ if(!pp.phone && TH.phone.trim()) pp.phone=TH.phone.trim(); recordSend('pub', pp.id, t.dataset.via, txt, '', '', '', ''); } else save();
+      toast('Opening '+(t.dataset.via==='wa'?'WhatsApp':'messages')+'…'); setTimeout(()=>{ closeSheet(); render(); },600); return; }
+    case 'linkssheet': linksSheet(); break;
+    case 'lksend': { const lg=linkLog('r', linkMonth||secMonthDefault()); lg[t.dataset.k]=lg[t.dataset.k]||{}; lg[t.dataset.k].sent=TODAY(); save(); setTimeout(()=>{ linksSheet(); render(); },500); return; }
+    case 'groupedit': groupEditSheet(t.dataset.k, !!t.dataset.back); break;
+    case 'reshuffle': reshuffleSheet(); break;
+    case 'rsaddgrp': { const nm=val('rsNew').trim(); if(!nm){ document.getElementById('rsNew').focus(); break; } document.querySelectorAll('.rsSel').forEach(s=>{ if(![...s.options].some(o=>o.value===nm)) s.add(new Option(nm,nm)); }); document.getElementById('rsNew').value=''; toast(nm+' added. Choose it next to the names.'); break; }
+    case 'printgroups': boardPrint(t,'groups'); break;
+    case 'printduties': boardPrint(t,'duties'); break;
+    case 'deptsheet': deptSheet(id); break;
+    case 'deldept': if(confirm('Delete this department from the chart?')){ SEC().depts=depts().filter(z=>z.id!==id); save(); closeSheet(); render(); } break;
+    case 'attlinks': attLinkSheet(); break;
+    case 'attsend': linkLog('a', attLinkMonth||MONTH()).sent=TODAY(); save(); setTimeout(()=>{ attLinkSheet(); render(); },500); return;
+    case 'attpaste': attPasteSheet(); break;
+    case 'apapply': { const cs=readCodes(val('apText')); if(!cs.length){ toast('Paste his whole message first'); break; } applyCodes(cs); break; }
     case 'nativetest': nativeTest(); break;
     case 'nativeperm': nativePerm(); break;
     case 'phoneprompton': AL().noPhonePrompt=false; save(); closeSheet(); alarmsSheet(); break;
@@ -4089,6 +4125,488 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && !document.getElementById('sheet').innerHTML) render(); });
 
+
+/* ================= VERSION 28 ================= */
+
+/* ---------- small helpers ---------- */
+function b64uEnc(obj){ return bytesToB64(new TextEncoder().encode(JSON.stringify(obj))).replace(/\+/g,'-').replace(/\//g,'.').replace(/=+$/,''); }
+function b64uDec(s){ s=String(s).replace(/-/g,'+').replace(/\./g,'/'); while(s.length%4) s+='='; return JSON.parse(new TextDecoder().decode(b64ToBytes(s))); }
+function nameOnly(s){ return String(s||'').trim().replace(/^(bro|brother|sis|sister)\.?\s+/i,''); }
+function nameKey(s){ return nameOnly(s).toLowerCase().replace(/\s+/g,' ').trim(); }
+const DAYS_FULL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+function pubsInGroup(g){ return SEC().pubs.filter(p=>p.status!=='moved' && (p.group||'')===g); }
+function groupInfo(g){ const d=SEC(); d.groupInfo=d.groupInfo||{}; return d.groupInfo[g]||(d.groupInfo[g]={overseer:'',assistant:'',phone:''}); }
+function linkLog(kind,m){ const d=SEC(); d.links=d.links||{}; d.links[kind]=d.links[kind]||{}; return d.links[kind][m]||(d.links[kind][m]={}); }
+function myWa(){ return phoneIntl(congInfo().secPhone||''); }
+function meetDays(){ const d=SEC(); d.meetDays=d.meetDays||{}; if(d.meetDays.mid==null) d.meetDays.mid=3; if(d.meetDays.wk==null) d.meetDays.wk=0; return d.meetDays; }
+function meetingDates(m){ const md=meetDays(), out=[]; let x=m+'-01'; while(x.slice(0,7)===m){ const wd=parse(x).getDay(); if(wd===n(md.mid)) out.push([x,'mid']); if(wd===n(md.wk)) out.push([x,'wk']); x=addDays(x,1); } return out; }
+function copyText(txt, msg){ (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast(msg||'Copied'),()=>toast('Press and hold the text, then Copy')); }
+
+/* ================= FILL-IN LINKS: group overseers and attendants (no app needed on their phone) ================= */
+var FORM = (function(){ try{ const m=location.hash.slice(1).match(/^(rf|af)=(.+)$/); if(!m) return null; const d=b64uDec(m[2]); if(!d || (d.t!=='r' && d.t!=='a')) return null; d.key='lcform:'+strHash(m[2]); return d; }catch(e){ return null; } })();
+window.addEventListener('hashchange', ()=>{ if(/^#(rf|af)=/.test(location.hash) || FORM) location.reload(); });
+var FS=null;
+function formState(){ try{ return JSON.parse(localStorage.getItem(FORM.key))||{}; }catch(e){ return {}; } }
+function formSave(){ try{ localStorage.setItem(FORM.key, JSON.stringify(FS)); }catch(e){} }
+function renderForm(){
+  document.body.classList.add('formmode');
+  document.getElementById('nav').innerHTML='';
+  document.getElementById('title').textContent = FORM.t==='r' ? 'Field service reports' : 'Meeting attendance';
+  if(!FS) FS=formState();
+  document.getElementById('main').innerHTML = FORM.t==='r' ? reportFormHTML() : attFormHTML();
+}
+function reportFormHTML(){
+  const F=FORM, r=FS.r||(FS.r={}), ps=F.p||[];
+  const done=ps.filter(([id])=>r[id] && r[id].s!=null).length;
+  let html=`<div class="card hello"><div class="big">${esc(F.g)}</div><div class="sub">Reports for ${monthName(F.m)}${F.cn?' · '+esc(F.cn):''}</div><div class="chips"><span class="chip">${done} of ${ps.length} filled</span></div></div>
+    <p class="muted" style="margin:0 4px 12px">For each publisher, tap <b>Shared</b> or <b>Did not share</b>, then add their Bible studies. Tap <b>Send</b> at the bottom when you finish. What you type stays on this phone, so you can come back and finish later.</p>`;
+  if(!ps.length) html+=`<div class="card"><div class="empty">There are no names on this link. Ask the secretary to send it again.</div></div>`;
+  html+=ps.map(([id,nm,pio])=>{ const x=r[id]||{};
+    return `<div class="card person ${x.s===1?'green':x.s===0?'orange':''}"><b style="font-size:16.5px">${esc(nm)}</b>${pio?' <span class="chip">Pioneer</span>':''}
+      <div class="chips2" style="margin:10px 0 4px"><button class="${x.s===1?'on':''}" data-fr="s" data-id="${esc(id)}" data-v="1">Shared ✓</button><button class="${x.s===0?'on':''}" data-fr="s" data-id="${esc(id)}" data-v="0">Did not share</button></div>
+      ${x.s===1?`${pio?'':`<label class="row" style="cursor:pointer;border:0;padding:4px 0"><span class="lbl">Auxiliary pioneer this month</span><input type="checkbox" data-fr="a" data-id="${esc(id)}" ${x.a?'checked':''} style="width:22px;height:22px"></label>`}
+      <div class="f2">${pio||x.a?`<div class="f"><label>Hours</label><input type="text" inputmode="decimal" data-fr="h" data-id="${esc(id)}" value="${esc(x.h??'')}"></div>`:''}<div class="f"><label>Bible studies</label><input type="text" inputmode="numeric" data-fr="st" data-id="${esc(id)}" value="${esc(x.st??'')}" placeholder="0"></div></div>`:''}
+    </div>`; }).join('');
+  html+=`<div class="card"><div class="f"><label>Note for the secretary (optional)</label><textarea data-fr="note" placeholder="Anyone new in the group, or anything he should know">${esc(FS.note||'')}</textarea></div>
+    <a class="btn wa" id="frSend" href="${formWaHref()}" target="_blank" rel="noopener" data-fr="send">Send to ${esc(F.sn||'the secretary')} on WhatsApp</a>
+    ${done<ps.length?`<p class="muted" style="margin:8px 0 0;font-size:13px">${ps.length-done} not filled yet. You can send what you have now and send again later.</p>`:'<p class="muted" style="margin:8px 0 0;font-size:13px">Everyone is filled in. Thank you!</p>'}
+    ${FS.sentAt?`<p class="muted" style="margin:6px 0 0;font-size:13px">Last sent ${new Date(FS.sentAt).toLocaleString()}</p>`:''}</div>`;
+  return html;
+}
+function attFormHTML(){
+  const F=FORM, a=FS.a||(FS.a={}), extra=FS.x||(FS.x=[]);
+  const all=[...(F.d||[]), ...extra].sort((x,y)=>x[0].localeCompare(y[0])||y[1].localeCompare(x[1]));
+  const filled=all.filter(([d,k])=>(a[d+'|'+k]||'')!=='').length, today=ymd(new Date());
+  return `<div class="card hello"><div class="big">Meeting attendance</div><div class="sub">${monthName(F.m)}${F.cn?' · '+esc(F.cn):''}</div><div class="chips"><span class="chip">${filled} of ${all.length} meetings filled</span></div></div>
+    <p class="muted" style="margin:0 4px 12px">After each meeting, type the number who attended, including those joining by phone or video. Leave a box empty if there was no meeting. Your numbers stay on this phone until you send them.</p>
+    <div class="card">${all.map(([d,k])=>`<div class="row"><div class="lbl">${nice(d)}<small>${k==='mid'?'Midweek meeting':'Weekend meeting'}${d>today?' · coming up':''}</small></div><input class="mini" type="text" inputmode="numeric" data-fr="ac" data-k="${d}|${k}" value="${esc(a[d+'|'+k]||'')}" placeholder="—"></div>`).join('')}</div>
+    <div class="card"><h2>Meeting on a different day?</h2><p class="muted" style="margin:0 0 8px">For example during the circuit overseer's visit. Add the day here.</p>
+      <div class="f2"><input type="date" id="frDate" min="${F.m}-01" max="${F.m}-31"><select id="frKind"><option value="mid">Midweek</option><option value="wk">Weekend</option></select></div>
+      <button class="btn ghost" data-fr="addd" style="margin-top:8px">Add this day</button></div>
+    <div class="card"><a class="btn wa" id="frSend" href="${formWaHref()}" target="_blank" rel="noopener" data-fr="send">Send to ${esc(F.sn||'the secretary')} on WhatsApp</a>
+      <p class="muted" style="margin:8px 0 0;font-size:13px">You can send at the end of the month, or any time. Sending again is fine.</p>
+      ${FS.sentAt?`<p class="muted" style="margin:6px 0 0;font-size:13px">Last sent ${new Date(FS.sentAt).toLocaleString()}</p>`:''}</div>`;
+}
+function formMessage(){
+  const F=FORM;
+  if(F.t==='r'){
+    const r=FS.r||{}, rows=(F.p||[]).filter(([id])=>r[id] && r[id].s!=null);
+    const lines=rows.map(([id,nm,pio])=>{ const x=r[id], st=n(x.st)||0;
+      return nm+': '+(x.s ? 'shared'+((pio||x.a)&&String(x.h??'').trim()!==''?', '+n(x.h)+' h':'')+(x.a?', auxiliary pioneer':'')+', '+st+' Bible stud'+(st===1?'y':'ies') : 'did not share'); });
+    const code={v:1,t:'r',m:F.m,g:F.g,r:rows.map(([id,nm,pio])=>{ const x=r[id]; return [id, x.s, x.s&&(pio||x.a)&&String(x.h??'').trim()!==''?n(x.h):null, x.s?n(x.st)||0:0, x.s&&x.a?1:0]; })};
+    if((FS.note||'').trim()) code.n=FS.note.trim();
+    return `Field service reports: ${F.g}, ${monthName(F.m)}\n\n${lines.join('\n')||'(nothing filled in yet)'}${code.n?'\n\nNote: '+code.n:''}\n\n(For the secretary's app. Please don't change the line below.)\nLC-REPORT:${b64uEnc(code)}`;
+  }
+  const a=FS.a||{}, all=[...(F.d||[]), ...(FS.x||[])].filter(([d,k])=>(a[d+'|'+k]||'')!=='').sort((x,y)=>x[0].localeCompare(y[0]));
+  const code={v:1,t:'a',m:F.m,a:all.map(([d,k])=>[d,k,n(a[d+'|'+k])])};
+  return `Meeting attendance: ${monthName(F.m)}\n\n${all.map(([d,k])=>nice(d)+' ('+(k==='mid'?'midweek':'weekend')+'): '+n(a[d+'|'+k])).join('\n')||'(nothing filled in yet)'}\n\n(For the secretary's app. Please don't change the line below.)\nLC-ATTEND:${b64uEnc(code)}`;
+}
+function formWaHref(){ return 'https://wa.me/'+(FORM.to||'')+'?text='+encodeURIComponent(formMessage()); }
+document.addEventListener('click', e=>{
+  if(!FORM) return;
+  const t=e.target.closest('[data-fr]'); if(!t) return;
+  const f=t.dataset.fr, r=FS.r||(FS.r={});
+  if(f==='s'){ const x=r[t.dataset.id]||(r[t.dataset.id]={}); x.s=n(t.dataset.v); formSave(); renderForm(); }
+  if(f==='a'){ const x=r[t.dataset.id]||(r[t.dataset.id]={}); x.a=t.checked; formSave(); renderForm(); }
+  if(f==='addd'){ const d=val('frDate'), k=val('frKind'); if(!d || d.slice(0,7)!==FORM.m){ toast('Choose a day in '+monthName(FORM.m)); return; }
+    FS.x=FS.x||[]; if(![...(FORM.d||[]),...FS.x].some(z=>z[0]===d&&z[1]===k)) FS.x.push([d,k]); formSave(); renderForm(); toast('Day added'); }
+  if(f==='send'){ FS.sentAt=Date.now(); formSave(); setTimeout(renderForm,800); }
+});
+document.addEventListener('input', e=>{
+  if(!FORM) return; const t=e.target, f=t.dataset.fr; if(!f) return;
+  if(f==='h'||f==='st'){ const r=FS.r||(FS.r={}); const x=r[t.dataset.id]||(r[t.dataset.id]={}); x[f]=t.value.trim(); }
+  if(f==='note') FS.note=t.value;
+  if(f==='ac'){ FS.a=FS.a||{}; FS.a[t.dataset.k]=t.value.replace(/[^\d]/g,''); }
+  formSave(); const s=document.getElementById('frSend'); if(s) s.href=formWaHref();
+});
+
+/* ---------- making and sending the links ---------- */
+function reportLink(g, m){
+  const c=congInfo(), ps=pubsInGroup(g).sort((a,b)=>a.name.localeCompare(b.name));
+  return WEB_URL+'#rf='+b64uEnc({t:'r', m, g, to:myWa(), sn:firstName(nameOnly(c.secName||S.settings.name||'')), cn:c.name||'', p:ps.map(p=>[p.id, p.name, isPioneer(p)?1:0])});
+}
+function attLink(m){ const c=congInfo(); return WEB_URL+'#af='+b64uEnc({t:'a', m, to:myWa(), sn:firstName(nameOnly(c.secName||S.settings.name||'')), cn:c.name||'', d:meetingDates(m)}); }
+function linkMsg(g,m){
+  const nm=firstName(nameOnly(groupInfo(g).overseer)), mo=monthName(m).split(' ')[0];
+  return `Good ${timeOfDay()}${nm?' '+nm:''}! I hope you and the family are well. It's time to collect the field service reports for ${mo} for ${g}.\n\nPlease open this link, tap each publisher's report, then tap Send at the bottom. It comes straight back to me on WhatsApp:\n${reportLink(g,m)}\n\nThank you for your hard work 🙏`;
+}
+function attMsg(m){
+  const nm=firstName(nameOnly((SEC().attInfo||{}).name)), mo=monthName(m).split(' ')[0];
+  return `Good ${timeOfDay()}${nm?' '+nm:''}! Here is the attendance link for ${mo}. After each meeting, open it and type the number who attended. The numbers stay on your phone, and at the end of the month you tap Send and it comes to me on WhatsApp:\n${attLink(m)}\n\nThank you for your help 🙏`;
+}
+var linkMonth=null, attLinkMonth=null;
+function linksSheet(){
+  const m=linkMonth||secMonthDefault(), groups=groupsList(), log=linkLog('r',m), c=congInfo();
+  const months=[MONTH(), secMonthDefault(), prevMonth(secMonthDefault())];
+  openSheet(`<h3>Send report links</h3>
+    <p class="muted" style="margin:0 0 10px">Each group overseer gets a link with his group's names already on it. He taps each person's report and sends it back to you on WhatsApp. Copy his message, then tap <b>Paste a group's report</b>, and the whole group goes in at once.</p>
+    <div class="f2"><div class="f"><label>Reports for</label><select id="lkMonth">${months.map(x=>`<option value="${x}" ${x===m?'selected':''}>${monthName(x)}</option>`).join('')}</select></div>
+      <div class="f"><label>Your WhatsApp number</label><input type="tel" id="lkMe" value="${esc(c.secPhone||'')}" placeholder="024 123 4567"></div></div>
+    ${!myWa()?'<p class="err" style="margin:-4px 0 10px">Add your number so the overseers\' replies come straight to you.</p>':''}
+    ${groups.length?`<div class="list">${groups.map(g=>{ const gi=groupInfo(g), st=log[g]||{}, cnt=pubsInGroup(g).length, ph=phoneIntl(gi.phone);
+      return `<div class="it" style="flex-wrap:wrap"><div class="x"><b>${esc(g)}</b><small>${gi.overseer?esc(gi.overseer):'No overseer set'} · ${cnt} publisher${cnt===1?'':'s'}${st.got?' · <span style="color:var(--ok)">reports in '+nice(st.got)+' ✓</span>':st.sent?' · link sent '+nice(st.sent):''}</small></div>
+        <div class="btns" style="width:100%;margin-top:6px"><button class="btn sm ghost" data-a="groupedit" data-k="${esc(g)}" data-back="1">Edit</button><a class="btn sm ${st.sent?'ghost':'wa'}" style="flex:1" href="https://wa.me/${ph}?text=${encodeURIComponent(linkMsg(g,m))}" target="_blank" rel="noopener" data-a="lksend" data-k="${esc(g)}">${st.sent?'Send again':ph?'Send link to '+esc(firstName(nameOnly(gi.overseer))||'overseer'):'Send link (choose the chat)'}</a></div></div>`; }).join('')}</div>`
+      :'<div class="empty">Give your publishers a group first, on the Publishers tab.</div>'}
+    <div class="btns" style="margin-top:12px"><button class="btn ghost" style="flex:1" data-a="secpaste">Paste a reply</button><button class="btn ghost" style="flex:1" data-a="close">Close</button></div>`, null);
+}
+function attLinkSheet(){
+  const d=SEC(), m=attLinkMonth||MONTH(), md=meetDays(), info=d.attInfo||(d.attInfo={name:'',phone:''}), st=linkLog('a',m), dates=meetingDates(m), c=congInfo();
+  const dayOpts=sel=>DAYS_FULL.map((nm,i)=>`<option value="${i}" ${i===n(sel)?'selected':''}>${nm}</option>`).join('');
+  const ph=phoneIntl(info.phone);
+  openSheet(`<h3>Send the attendance link</h3>
+    <div class="f2"><div class="f"><label>Month</label><select id="alMonth">${[prevMonth(MONTH()), MONTH(), nextMonth(MONTH())].map(x=>`<option value="${x}" ${x===m?'selected':''}>${monthName(x)}</option>`).join('')}</select></div>
+      <div class="f"><label>Your WhatsApp number</label><input type="tel" id="alMe" value="${esc(c.secPhone||'')}" placeholder="024 123 4567"></div></div>
+    <div class="f2"><div class="f"><label>Midweek meeting day</label><select id="alMid">${dayOpts(md.mid)}</select></div><div class="f"><label>Weekend meeting day</label><select id="alWk">${dayOpts(md.wk)}</select></div></div>
+    <div class="f2"><div class="f"><label>Attendant's name</label><input type="text" id="alName" value="${esc(info.name||'')}" list="alMen"></div><div class="f"><label>His WhatsApp number</label><input type="tel" id="alPhone" value="${esc(info.phone||'')}"></div></div>
+    <datalist id="alMen">${d.pubs.filter(p=>p.status!=='moved' && p.gender!=='f').map(p=>`<option>${esc(p.name)}</option>`).join('')}</datalist>
+    <div class="area">${dates.length} meetings on the link</div>
+    <p class="muted" style="margin:0 0 8px">${dates.map(([dt,k])=>nice(dt)+' ('+(k==='mid'?'midweek':'weekend')+')').join(' · ')}</p>
+    <p class="muted" style="font-size:12.5px;margin:0 0 10px">If a meeting moves, for example during the circuit overseer's visit, the attendant can add the new day on the link himself.</p>
+    ${st.sent?`<p class="muted" style="margin:0 0 8px">Link sent ${nice(st.sent)}${st.got?' · reply added '+nice(st.got)+' ✓':''}</p>`:''}
+    <a class="btn wa" id="alSend" href="https://wa.me/${ph}?text=${encodeURIComponent(attMsg(m))}" target="_blank" rel="noopener" data-a="attsend">${st.sent?'Send again':'Send the link on WhatsApp'}</a>
+    <button class="btn ghost" data-a="close" style="margin-top:8px">Close</button>`, null);
+}
+function alUpd(){ const s=document.getElementById('alSend'); if(s) s.href='https://wa.me/'+phoneIntl((SEC().attInfo||{}).phone)+'?text='+encodeURIComponent(attMsg(attLinkMonth||MONTH())); }
+document.addEventListener('change', e=>{
+  const t=e.target;
+  if(t.id==='lkMonth'){ linkMonth=t.value; linksSheet(); }
+  if(t.id==='lkMe'){ congInfo().secPhone=t.value.trim(); save(); linksSheet(); }
+  if(t.id==='alMonth'){ attLinkMonth=t.value; attLinkSheet(); }
+  if(t.id==='alMid'||t.id==='alWk'){ meetDays()[t.id==='alMid'?'mid':'wk']=n(t.value); save(); attLinkSheet(); }
+  if(t.id==='alName'){ const info=SEC().attInfo, p=SEC().pubs.find(x=>nameKey(x.name)===nameKey(t.value)), ph=document.getElementById('alPhone'); if(p && p.phone && !ph.value.trim()){ ph.value=p.phone; info.phone=p.phone; save(); alUpd(); } }
+});
+document.addEventListener('input', e=>{
+  const t=e.target;
+  if(t.id==='alName'||t.id==='alPhone'){ const info=SEC().attInfo; info[t.id==='alName'?'name':'phone']=t.value.trim(); save(); alUpd(); }
+  if(t.id==='alMe'){ congInfo().secPhone=t.value.trim(); save(); alUpd(); }
+});
+
+/* ---------- reading the replies ---------- */
+function readCodes(text){ const out=[], re=/LC-(REPORT|ATTEND):([A-Za-z0-9.\-+\/]+)/g; let m; while((m=re.exec(String(text||'')))){ try{ const d=b64uDec(m[2]); if(d && ((d.t==='r'&&Array.isArray(d.r))||(d.t==='a'&&Array.isArray(d.a)))) out.push(d); }catch(e){} } return out; }
+function codePreviewHTML(codes){
+  const d=SEC();
+  return codes.map(c=>{
+    if(c.t==='r'){ const rows=c.r.map(([id,s,h,st,a])=>({p:d.pubs.find(x=>x.id===id),s,h,st:n(st),a})), ok=rows.filter(r=>r.p);
+      return `<div class="area">${esc(c.g)} · ${monthName(c.m)} · ${ok.length} report${ok.length===1?'':'s'}</div>${c.n?`<p class="muted" style="margin:0 0 6px"><b>Note:</b> ${esc(c.n)}</p>`:''}
+        <div class="list">${rows.map(r=>{ const had=r.p&&rep(c.m,r.p.id); return `<div class="it"><span class="wdot ${!r.p?'red':r.s?'green':'orange'}" style="margin-top:6px"></span><div class="x"><b>${r.p?esc(r.p.name):'Not on your list any more (skipped)'}</b><small>${r.s?'Shared'+(r.h!=null?' · '+r.h+' h':'')+' · '+r.st+' stud'+(r.st===1?'y':'ies')+(r.a?' · Aux':''):'Did not share'}${had?' · replaces the report already entered':''}</small></div></div>`; }).join('')}</div>`; }
+    const ms=d.meetings||[];
+    return `<div class="area">Attendance · ${monthName(c.m)}</div><div class="list">${c.a.map(([dt,k,cnt])=>{ const had=ms.find(x=>x.date===dt&&x.kind===k); return `<div class="it"><div class="x"><b>${nice(dt)} · ${k==='mid'?'Midweek':'Weekend'}</b>${had&&n(had.count)!==n(cnt)?`<small>Replaces ${had.count}</small>`:''}</div><span class="amt">${n(cnt)}</span></div>`; }).join('')}</div>`;
+  }).join('');
+}
+function applyCodes(codes){
+  const d=SEC(); let nr=0, na=0, lastM=null, notes=[];
+  codes.forEach(c=>{
+    if(c.t==='r'){ d.reports[c.m]=d.reports[c.m]||{};
+      c.r.forEach(([id,s,h,st,a])=>{ const p=d.pubs.find(x=>x.id===id); if(!p) return; const old=d.reports[c.m][id]||{};
+        d.reports[c.m][id]={got:TODAY(), shared:!!s, aux:!!a&&!isPioneer(p), hours:s&&h!=null?n(h):null, studies:s?n(st):0, remarks:old.remarks||''}; nr++; });
+      const lg=linkLog('r',c.m); lg[c.g]=lg[c.g]||{}; lg[c.g].got=TODAY(); lastM=c.m; if(c.n) notes.push(c.g+': '+c.n); }
+    else { d.meetings=d.meetings||[];
+      c.a.forEach(([dt,k,cnt])=>{ if(!(n(cnt)>0)) return; const ex=d.meetings.find(x=>x.date===dt&&x.kind===k); if(ex) ex.count=n(cnt); else d.meetings.push({id:uid(), date:dt, kind:k, count:n(cnt)}); na++; });
+      linkLog('a',c.m).got=TODAY(); }
+  });
+  if(lastM) secMonth=lastM;
+  if(notes.length) d.notes.push({id:uid(), date:TODAY(), title:'Notes from group overseers', text:notes.join('\n')});
+  save(); closeSheet(); render();
+  toast([nr?nr+' report'+(nr===1?'':'s'):'', na?na+' attendance number'+(na===1?'':'s'):''].filter(Boolean).join(' and ')+' added'+(notes.length?' · note saved in Committee':''));
+}
+function attLinkCard(){
+  const m=MONTH(), st=linkLog('a',m);
+  return `<div class="card"><h2>From the attendant</h2><p class="muted" style="margin:0 0 10px">Send the attendant a link with this month's meeting days. He types the number after each meeting and sends it to you on WhatsApp. Then paste his reply here.</p>
+    ${st.sent?`<p class="muted" style="margin:-4px 0 10px">${monthName(m)} link sent ${nice(st.sent)}${st.got?' · reply added '+nice(st.got)+' ✓':''}</p>`:''}
+    <div class="btns"><button class="btn wa" style="flex:1" data-a="attlinks">Send attendance link</button><button class="btn ghost" style="flex:1" data-a="attpaste">Paste his reply</button></div></div>`;
+}
+function attPasteSheet(){
+  openSheet(`<h3>Paste the attendant's reply</h3><p class="muted" style="margin:0 0 8px">Copy his whole WhatsApp message, including the last line, and paste it here.</p>
+    <div class="f"><textarea id="apText" style="min-height:160px" placeholder="Paste here"></textarea></div><div id="apPrev"></div>
+    <div class="btns"><button class="btn ghost" style="flex:1" data-a="close">Cancel</button><button class="btn" style="flex:1" data-a="apapply">Add attendance</button></div>`, null);
+  document.getElementById('apText').addEventListener('input',()=>{ const cs=readCodes(val('apText')); document.getElementById('apPrev').innerHTML = cs.length?codePreviewHTML(cs):(val('apText').trim()?'<p class="err">No attendance found. Copy his whole message, including the last line.</p>':''); });
+}
+
+/* ================= GROUPS: overseers, moving publishers, notice board ================= */
+function groupsCard(){
+  const gs=groupsList();
+  return `<div class="card"><h2>Field service groups<span class="sp"></span><span class="chip">${gs.length}</span></h2>
+    ${gs.length?`<div class="list">${gs.map(g=>{ const gi=groupInfo(g), c=pubsInGroup(g).length; return `<div class="it" data-a="groupedit" data-k="${esc(g)}" style="cursor:pointer"><div class="x"><b>${esc(g)}</b><small>${c} publisher${c===1?'':'s'} · Overseer: ${esc(gi.overseer||'not set')}${gi.assistant?' · Assistant: '+esc(gi.assistant):''}</small></div><span class="muted">›</span></div>`; }).join('')}</div>`:'<div class="empty">No groups yet. Give each publisher a group.</div>'}
+    <div class="btns" style="margin-top:10px"><button class="btn ghost" style="flex:1" data-a="reshuffle">Move publishers</button><button class="btn ghost" style="flex:1" data-a="printgroups">Print for notice board</button></div></div>`;
+}
+function groupEditSheet(g, back){
+  const d=SEC(), gi=groupInfo(g), men=d.pubs.filter(p=>p.status!=='moved' && p.gender!=='f');
+  openSheet(`<h3>${esc(g)}</h3>
+    <div class="f"><label>Group name</label><input type="text" id="geName" value="${esc(g)}"></div>
+    <div class="f"><label>Group overseer</label><input type="text" id="geOv" list="geMen" value="${esc(gi.overseer||'')}" placeholder="Choose a brother"></div>
+    <div class="f"><label>Group overseer's WhatsApp number</label><input type="tel" id="gePh" value="${esc(gi.phone||'')}"></div>
+    <div class="f"><label>Assistant</label><input type="text" id="geAs" list="geMen" value="${esc(gi.assistant||'')}"></div>
+    <datalist id="geMen">${men.map(p=>`<option>${esc(p.name)}</option>`).join('')}</datalist>
+    <p class="muted" style="font-size:12.5px;margin:0 0 10px">${pubsInGroup(g).length} publishers in this group. To move people, use <b>Move publishers</b>.</p>
+    ${actions}`, ()=>{
+      const nn=val('geName').trim(); if(!nn) return fail('geName','Enter a name');
+      Object.assign(gi,{overseer:val('geOv').trim(), phone:val('gePh').trim(), assistant:val('geAs').trim()});
+      if(nn!==g){ d.pubs.forEach(p=>{ if((p.group||'')===g) p.group=nn; }); d.groupInfo[nn]=gi; delete d.groupInfo[g]; if(S.settings.myGroup===g) S.settings.myGroup=nn; }
+      if(back) setTimeout(linksSheet,80);
+      return true;
+    });
+  document.getElementById('geOv').addEventListener('change',e=>{ const p=d.pubs.find(x=>nameKey(x.name)===nameKey(e.target.value)), ph=document.getElementById('gePh'); if(p&&p.phone&&!ph.value.trim()) ph.value=p.phone; });
+}
+function reshuffleSheet(){
+  const d=SEC(), gs=groupsList(), ps=d.pubs.filter(p=>p.status!=='moved').sort((a,b)=>(a.group||'').localeCompare(b.group||'',undefined,{numeric:true})||a.name.localeCompare(b.name));
+  const opts=cur=>`<option value="" ${!cur?'selected':''}>No group</option>`+gs.map(g=>`<option ${g===cur?'selected':''}>${esc(g)}</option>`).join('');
+  openSheet(`<h3>Move publishers between groups</h3>
+    <p class="muted" style="margin:0 0 10px">Change the group next to each name, then tap Save. Report links, group check-ins and the notice board use the new groups straight away. Past reports are not affected.</p>
+    <div class="sndrow" style="grid-template-columns:1fr auto;margin-bottom:8px"><input type="text" id="rsNew" placeholder="New group, e.g. Group 7"><button class="btn ghost" data-a="rsaddgrp" style="padding:0 14px">Add group</button></div>
+    <input type="search" id="rsFind" placeholder="Find a name…" style="margin-bottom:8px">
+    <div class="list">${ps.map(p=>`<div class="it rsrow" data-name="${esc(p.name.toLowerCase())}"><div class="x"><b>${esc(p.name)}</b><small>Now: ${esc(p.group||'No group')}</small></div><select class="rsSel" data-id="${p.id}" style="width:140px">${opts(p.group||'')}</select></div>`).join('')}</div>
+    ${actions}`, ()=>{
+      let moved=0; document.querySelectorAll('.rsSel').forEach(s=>{ const p=d.pubs.find(x=>x.id===s.dataset.id); if(p && (p.group||'')!==s.value){ p.group=s.value; moved++; } });
+      setTimeout(()=>toast(moved?moved+' publisher'+(moved===1?'':'s')+' moved':'Nothing changed'),350); return true;
+    });
+  document.getElementById('rsFind').addEventListener('input',e=>{ const q=e.target.value.trim().toLowerCase(); document.querySelectorAll('.rsrow').forEach(r=>r.hidden=q&&!r.dataset.name.includes(q)); });
+}
+
+/* ================= DUTIES CHART (notice board) ================= */
+const OFFICES=[['coord','Coordinator of the body of elders'],['sec','Secretary'],['so','Service overseer'],['lmm','Life and Ministry Meeting overseer'],['wt','Watchtower Study conductor'],['other','Other']];
+function depts(){
+  const d=SEC();
+  if(!d.depts) d.depts=[
+    {id:uid(), name:'Attendants', office:'sec', leadTitle:'Attendant overseer', leadName:'', teams:'Attendants: '},
+    {id:uid(), name:'Sound and video', office:'sec', leadTitle:'Brother in charge', leadName:'', teams:'Sound desk: \nStage: \nRoving microphones: '},
+    {id:uid(), name:'Cleaning', office:'coord', leadTitle:'Cleaning coordinator', leadName:'', teams:''},
+    {id:uid(), name:'Library', office:'lmm', leadTitle:'Library overseer', leadName:'', teams:''},
+    {id:uid(), name:'Territory', office:'so', leadTitle:'Territory servant', leadName:'', teams:''},
+    {id:uid(), name:'Literature', office:'so', leadTitle:'Literature servant', leadName:'', teams:''},
+    {id:uid(), name:'Accounts', office:'sec', leadTitle:'Accounts servant', leadName:'', teams:''}];
+  return d.depts;
+}
+function teamsOf(x){ return String(x.teams||'').split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{ const i=l.indexOf(':'); return i>0?{name:l.slice(0,i).trim(), people:l.slice(i+1).trim()}:{name:'', people:l}; }); }
+const officeName = k => (OFFICES.find(o=>o[0]===k)||OFFICES[5])[1];
+function deptsCard(){
+  const ds=depts();
+  return `<div class="card"><h2>Duties chart (notice board)<span class="sp"></span><button class="btn sm ghost" data-a="deptsheet">${svg('plus',15)} Add</button></h2>
+    <p class="muted" style="margin:0 0 6px">Each department, the brother in charge, the brothers on it and which office it works under. Add or change anything, then print it for the Kingdom Hall.</p>
+    ${OFFICES.filter(o=>ds.some(x=>(x.office||'other')===o[0])).map(([k,l])=>`<div class="area">${k==='other'?'Other duties':'Under the '+esc(l.charAt(0).toLowerCase()+l.slice(1))}</div><div class="list">${ds.filter(x=>(x.office||'other')===k).map(x=>{ const tm=teamsOf(x), names=tm.reduce((a,t)=>a+(t.people?t.people.split(',').filter(s=>s.trim()).length:0),0);
+      return `<div class="it" data-a="deptsheet" data-id="${x.id}" style="cursor:pointer"><div class="x"><b>${esc(x.name)}</b><small>${esc(x.leadTitle||'In charge')}: ${esc(x.leadName||'not set')}${tm.length?' · '+tm.length+' team'+(tm.length===1?'':'s')+' · '+names+' brother'+(names===1?'':'s'):''}</small></div><span class="muted">›</span></div>`; }).join('')}</div>`).join('')}
+    <button class="btn" data-a="printduties" style="margin-top:10px">Print duties chart for the notice board</button></div>`;
+}
+function deptSheet(id){
+  const ds=depts(), x = id ? ds.find(z=>z.id===id) : {name:'', office:'sec', leadTitle:'', leadName:'', teams:''};
+  const men=SEC().pubs.filter(p=>p.status!=='moved' && p.gender!=='f');
+  openSheet(`<h3>${id?esc(x.name):'Add a department or duty'}</h3>
+    <div class="f"><label>Department or duty</label><input type="text" id="dpName" value="${esc(x.name)}" placeholder="Attendants"></div>
+    <div class="f"><label>Works under</label><select id="dpOffice">${OFFICES.map(([k,l])=>`<option value="${k}" ${k===(x.office||'other')?'selected':''}>${l}</option>`).join('')}</select></div>
+    <div class="f2"><div class="f"><label>Title of the brother in charge</label><input type="text" id="dpLT" value="${esc(x.leadTitle||'')}" placeholder="Attendant overseer"></div>
+      <div class="f"><label>His name</label><input type="text" id="dpLN" list="dpMen" value="${esc(x.leadName||'')}"></div></div>
+    <datalist id="dpMen">${men.map(p=>`<option>${esc(p.name)}</option>`).join('')}</datalist>
+    <div class="f"><label>Teams and brothers (one team per line)</label><textarea id="dpTeams" style="min-height:130px" placeholder="Stage: Kofi Mensah, Yaw Boateng&#10;Roving microphones: Kwame Asante, Kojo Owusu">${esc(x.teams||'')}</textarea></div>
+    <p class="muted" style="font-size:12.5px;margin:-4px 0 10px">Write the team name, a colon, then the names with commas. Leave the names empty to print a blank line you can fill in by hand.</p>
+    ${actions}${id?`<button class="btn danger" data-a="deldept" data-id="${id}" style="margin-top:8px">Delete</button>`:''}`, ()=>{
+      const nm=val('dpName').trim(); if(!nm) return fail('dpName','Name the department');
+      const rec = id ? x : {id:uid()};
+      Object.assign(rec,{name:nm, office:val('dpOffice'), leadTitle:val('dpLT').trim(), leadName:val('dpLN').trim(), teams:val('dpTeams').trim()});
+      if(!id) ds.push(rec); return true;
+    });
+}
+
+/* ---------- printing the notice-board sheets (PDF made on the phone) ---------- */
+async function boardPdf(o){
+  const L=await loadPdfLib(), doc=await L.PDFDocument.create();
+  const font=await doc.embedFont(L.StandardFonts.Helvetica), bold=await doc.embedFont(L.StandardFonts.HelveticaBold);
+  const navy=L.rgb(0.047,0.235,0.471), ink=L.rgb(0.06,0.12,0.2), grey=L.rgb(0.42,0.48,0.56), line=L.rgb(0.78,0.83,0.9), white=L.rgb(1,1,1), sky=L.rgb(0.91,0.94,0.98);
+  const clean=x=>String(x??'').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[–—]/g,'-').replace(/[^\x20-\x7E\xA0-\xFF]/g,'');
+  const W=595, H=842, M=34, G=14, CW=(W-2*M-G)/2, P=9, SZ=10, LH=13.5, HB=24, BOT=M+22;
+  const fitW=(t,w,f,size)=>{ while(t && f.widthOfTextAtSize(t,size)>w) t=t.slice(0,-1); return t; };
+  const wrap=(t,w,f)=>{ const words=clean(t).split(/\s+/).filter(Boolean), out=[]; let cur=''; words.forEach(wd=>{ const s=cur?cur+' '+wd:wd; if(cur && f.widthOfTextAtSize(s,SZ)>w){ out.push(cur); cur=wd; } else cur=s; }); if(cur) out.push(cur); return out.map(x=>fitW(x,w,f,SZ)); };
+  const measure=b=>{ const rows=[], avail=CW-2*P;
+    (b.lines||[]).forEach(l=>{
+      if(l.label!=null){ const lab=clean(l.label), lw=bold.widthOfTextAtSize(lab+' ',SZ), txt=clean(l.text||'').trim();
+        if(!txt) rows.push({lab, lw, blank:true}); else wrap(txt, avail-lw, font).forEach((p,i)=>rows.push(i?{text:p, ind:lw}:{lab, lw, text:p})); }
+      else { const ind=l.num?20:0; wrap(l.text, avail-ind, font).forEach((p,i)=>rows.push({num:i?'':l.num, text:p, ind})); }
+      if(l.gap) rows.push({gap:1}); });
+    return {rows, h:HB+P+rows.reduce((a,r)=>a+(r.gap?6:LH),0)+P-2}; };
+  let page, colY, first=true;
+  const newPage=()=>{ page=doc.addPage([W,H]); let y=H-M;
+    if(first){ page.drawText(clean(o.title),{x:M,y:y-20,size:22,font:bold,color:navy}); y-=38; if(o.sub){ page.drawText(fitW(clean(o.sub),W-2*M,font,11),{x:M,y,size:11,font,color:grey}); y-=10; } page.drawLine({start:{x:M,y},end:{x:W-M,y},thickness:1.5,color:navy}); y-=16; first=false; }
+    else { page.drawText(clean(o.title+' (continued)'),{x:M,y:y-10,size:11,font:bold,color:navy}); y-=26; }
+    if(o.foot) page.drawText(fitW(clean(o.foot),W-2*M-150,font,8.5),{x:M,y:M,size:8.5,font,color:grey});
+    const up=clean('Updated '+parse(TODAY()).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})); page.drawText(up,{x:W-M-font.widthOfTextAtSize(up,8.5),y:M,size:8.5,font,color:grey});
+    colY=[y,y]; };
+  newPage();
+  for(const sec of o.sections){
+    if(sec.heading){ let y=Math.min(colY[0],colY[1]); if(y-22-G-HB-3*LH<BOT){ newPage(); y=colY[0]; }
+      page.drawRectangle({x:M,y:y-22,width:W-2*M,height:22,color:sky});
+      page.drawText(fitW(clean(sec.heading).toUpperCase(),W-2*M-2*P,bold,10.5),{x:M+P,y:y-15,size:10.5,font:bold,color:navy});
+      colY=[y-22-G, y-22-G]; }
+    for(const b of sec.boxes){
+      const {rows,h}=measure(b); let c=colY[0]>=colY[1]?0:1;
+      if(colY[c]-h<BOT){ if(colY[1-c]-h>=BOT) c=1-c; else { newPage(); c=0; } }
+      const x=M+c*(CW+G), top=colY[c];
+      page.drawRectangle({x, y:top-h, width:CW, height:h, borderColor:line, borderWidth:1});
+      page.drawRectangle({x, y:top-HB, width:CW, height:HB, color:navy});
+      page.drawText(fitW(clean(b.title),CW-2*P,bold,12),{x:x+P, y:top-HB+8, size:12, font:bold, color:white});
+      let y=top-HB-P-SZ+1;
+      rows.forEach(r=>{
+        if(r.gap){ y-=6; return; }
+        if(r.lab) page.drawText(r.lab,{x:x+P, y, size:SZ, font:bold, color:ink});
+        if(r.num) page.drawText(clean(r.num),{x:x+P, y, size:SZ, font, color:grey});
+        const tx=x+P+(r.lw||r.ind||0);
+        if(r.blank) page.drawLine({start:{x:tx, y:y-2}, end:{x:x+CW-P, y:y-2}, thickness:0.6, color:line});
+        else if(r.text) page.drawText(r.text,{x:tx, y, size:SZ, font, color:ink});
+        y-=LH; });
+      colY[c]=top-h-G;
+    }
+  }
+  return doc.save();
+}
+function makeGroupsPdf(){
+  const c=congInfo(), sy=curSY();
+  const boxes=groupsList().map(g=>{ const gi=groupInfo(g), skip=[gi.overseer,gi.assistant].map(nameKey).filter(Boolean);
+    const mem=pubsInGroup(g).filter(p=>!skip.includes(nameKey(p.name))).sort((a,b)=>a.name.localeCompare(b.name));
+    return {title:g, lines:[{label:'Group overseer:', text:gi.overseer||''}, {label:'Assistant:', text:gi.assistant||'', gap:true}, ...mem.map((p,i)=>({num:(i+1)+'.', text:p.name}))]}; });
+  return boardPdf({title:'Field Service Groups', sub:(c.name?c.name+' Congregation   ·   ':'')+'Service year '+sy+' ('+syLabel(sy)+')', sections:[{boxes}], foot:'If you have a question about your group, please speak to your group overseer.'});
+}
+function makeDutiesPdf(){
+  const c=congInfo(), sy=curSY(), ds=depts();
+  const sections=OFFICES.map(([k,l])=>({heading:k==='other'?'Other duties':'Under the '+l, boxes:ds.filter(x=>(x.office||'other')===k).map(x=>({title:x.name,
+    lines:[...(x.leadTitle||x.leadName?[{label:(x.leadTitle||'In charge')+':', text:x.leadName||'', gap:teamsOf(x).length>0}]:[]), ...teamsOf(x).map(t=>t.name?{label:t.name+':', text:t.people}:{text:t.people})]}))})).filter(s=>s.boxes.length);
+  return boardPdf({title:'Congregation Duties', sub:(c.name?c.name+' Congregation   ·   ':'')+'Service year '+sy+' ('+syLabel(sy)+')', sections, foot:'Thank you, brothers, for all you do to care for the congregation.'});
+}
+async function boardPrint(btn, kind){
+  const was=btn.textContent; btn.textContent='Making the PDF…'; btn.disabled=true;
+  try{
+    if(kind==='groups' && !groupsList().length) throw new Error('Give your publishers a group first');
+    const bytes = kind==='groups' ? await makeGroupsPdf() : await makeDutiesPdf();
+    await savePdfFile(bytes, (kind==='groups'?'Field service groups ':'Congregation duties ')+curSY()+'.pdf');
+    toast('PDF ready to print');
+  }catch(e){ toast(e.message||'Could not make the PDF'); }
+  btn.textContent=was; btn.disabled=false;
+}
+
+/* ================= ENCOURAGE AFTER AN ASSIGNMENT ================= */
+const ASSIGN=[
+  ['mid','Midweek meeting',[
+    ['treasures','"Treasures From God\'s Word" talk','talk','your talk'],
+    ['gems','Spiritual gems','part','handling the spiritual gems'],
+    ['reading','Bible reading','reading','your Bible reading'],
+    ['start','Starting a conversation','demo','your "Starting a conversation" part'],
+    ['follow','Following up','demo','your "Following up" part'],
+    ['disciples','Making disciples','demo','your "Making disciples" part'],
+    ['beliefs','Explaining your beliefs','demo','your "Explaining your beliefs" part'],
+    ['stalk','Student talk','talk','your talk'],
+    ['assist','Assisting a student','demo','helping with the student part'],
+    ['lac','Living as Christians part','part','your part'],
+    ['cbs','Congregation Bible Study (conductor)','conduct','conducting the Congregation Bible Study'],
+    ['cbsr','Congregation Bible Study (reader)','reading','reading at the Congregation Bible Study'],
+    ['chairm','Chairman','chair','chairing the meeting'],
+    ['prayerm','Prayer','prayer','the prayer']]],
+  ['wk','Weekend meeting',[
+    ['public','Public talk','talk','your public talk'],
+    ['wtc','Watchtower Study (conductor)','conduct','conducting the Watchtower Study'],
+    ['wtr','Watchtower Study (reader)','reading','reading at the Watchtower Study'],
+    ['chairw','Chairman','chair','chairing the meeting'],
+    ['prayerw','Prayer','prayer','the prayer']]],
+  ['other','Other duties',[
+    ['att','Attendant','duty','serving as an attendant'],
+    ['sound','Sound and video','duty','handling the sound and video'],
+    ['mics','Roving microphones','duty','passing the microphones'],
+    ['stage','Stage','duty','helping on the stage'],
+    ['clean','Cleaning the Kingdom Hall','duty','helping to clean the Kingdom Hall'],
+    ['fsm','Meeting for field service','conduct','conducting the meeting for field service'],
+    ['otherx','Something else','part','your assignment']]]
+];
+const TH_BODY={
+  talk:['Thank you for {phrase} {when}. It was clear and warm, and I could see you prepared well.','I really enjoyed {phrase} {when}. You made the points so easy to remember.','Well done on {phrase} {when}! It touched my heart, and I\'m sure it helped many others too.','Just wanted to say thank you for {phrase} {when}. You spoke with real conviction.'],
+  demo:['Well done on {phrase} {when}! It felt so natural, just like a real conversation in the ministry.','Thank you for {phrase} {when}. I picked up an idea I can use in the ministry this week.','I enjoyed {phrase} {when}. It was warm and natural, and the point came through clearly.','You did so well with {phrase} {when}. Thank you for preparing it so carefully.'],
+  reading:['Thank you for {phrase} {when}. Your reading was clear and easy to follow.','Well done on {phrase} {when}! You read with good feeling, and it helped me listen.','I enjoyed {phrase} {when}. You read clearly and with confidence.'],
+  part:['Thank you for {phrase} {when}. The points were practical and I can use them this week.','Well done on {phrase} {when}. It was very encouraging.','I really enjoyed {phrase} {when}. Thank you for all the work you put into it.'],
+  conduct:['Thank you for {phrase} {when}. You helped everyone take part, and the discussion was lively.','Well done on {phrase} {when}. It was well organised and encouraging.','I enjoyed {phrase} {when}. You made it warm and clear for everyone.'],
+  chair:['Thank you for {phrase} {when}. Everything flowed well and the meeting felt warm.','Well done on {phrase} {when}! Your introductions tied everything together nicely.','I appreciated {phrase} {when}. You kept everything moving and made everyone feel welcome.'],
+  prayer:['Thank you for {phrase} {when}. It was heartfelt and it really helped me.','Your prayer {when} touched my heart. Thank you for speaking to Jehovah for all of us so warmly.','I appreciated {phrase} {when}. It was simple, sincere and from the heart.'],
+  duty:['Thank you for {phrase} {when}. Your work helps everyone enjoy the meeting in peace.','Thank you so much for {phrase} {when}. Many people don\'t see the work behind the scenes, but Jehovah does.','I appreciate {phrase} {when}. You did it with a smile, and everything ran smoothly.']
+};
+const TH_POINT=['I especially liked {point}.','What stayed with me most was {point}.'];
+const TH_FRIEND=['How did you feel about it?','I hope you\'re resting well now!','I look forward to your next one!','Keep it up, you\'re doing so well.','How long did it take you to prepare?'];
+const TH_FRIEND_DUTY=['I hope you\'re resting well now!','Keep it up!','How are you and the family?'];
+const TH_CLOSE=['Thank you! 🙏','Keep it up! 👏','May Jehovah keep blessing you.','Well done!'];
+const TH_SCR={
+  speak:[['Proverbs 25:11','Proverbs 25:11 says a word spoken at the right time is like golden apples in silver carvings. That\'s how your words felt to me.'],
+    ['Hebrews 6:10','Hebrews 6:10 reminds us that Jehovah doesn\'t forget the work and love we show for his name. He saw all your preparation.'],
+    ['1 Timothy 4:15','1 Timothy 4:15 encourages us to keep working hard so our progress is plain to all. Your progress is plain to see!'],
+    ['2 Timothy 2:15','2 Timothy 2:15 talks about handling the word of truth aright. You did just that.'],
+    ['Psalm 40:9','Psalm 40:9 speaks of announcing the good news in the large congregation. You did that beautifully.']],
+  duty:[['Colossians 3:23','Colossians 3:23 says to work whole-souled, as for Jehovah. That\'s exactly what I saw.'],
+    ['Hebrews 6:10','Hebrews 6:10 reminds us that Jehovah doesn\'t forget the work and love we show for his name.'],
+    ['1 Corinthians 14:40','1 Corinthians 14:40 says all things should take place decently and in order. Thanks to you, they did.'],
+    ['Galatians 6:9','Galatians 6:9 encourages us not to give up doing what is fine. Your quiet, faithful work is fine indeed.']],
+  prayer:[['Psalm 65:2','Psalm 65:2 calls Jehovah the Hearer of prayer. Thank you for speaking to him for all of us.'],
+    ['Psalm 141:2','Psalm 141:2 says our prayers are like incense before Jehovah. Yours was a sweet one.']]
+};
+var TH=null;
+function thAssign(){ for(const g of ASSIGN) for(const x of g[2]) if(x[0]===TH.key) return x; return ASSIGN[0][2][0]; }
+function meetOf(key){ const g=ASSIGN.find(g=>g[2].some(x=>x[0]===key)); return g?g[0]:'mid'; }
+function thWhen(d){ const k=daysSince(d); return k===0?'today':k===1?'yesterday':k>1&&k<7?'on '+parse(d).toLocaleDateString('en',{weekday:'long'}):'at the meeting'; }
+function thanksText(){
+  const [key,,cat,phrase]=thAssign(), seed=strHash(TH.name+'|'+TH.date+'|'+key)+TH.offset*7, time=timeOfDay();
+  const pick=(a,s)=>a[(s>>>0)%a.length], nm=firstName(nameOnly(TH.name));
+  const greet=pick(GREET[time],seed).replace(/\s?\{name\}/, nm?' '+nm:'');
+  let body=pick(TH_BODY[cat],seed+1).replace('{phrase}',phrase).replace('{when}',thWhen(TH.date));
+  if(TH.point.trim()) body+=' '+pick(TH_POINT,seed+2).replace('{point}',TH.point.trim().replace(/[.!]+$/,''));
+  const close=pick(TH_CLOSE,seed+3);
+  TH.ref='';
+  if(TH.style==='scripture'){ const s=pick(TH_SCR[cat==='duty'?'duty':cat==='prayer'?'prayer':'speak'],seed+4); TH.ref=s[0]; return greet+' '+body+'\n\n'+s[1]+'\n\n'+close; }
+  if(TH.style==='friendly') return greet+' '+body+' '+pick(cat==='duty'?TH_FRIEND_DUTY:TH_FRIEND,seed+5)+'\n\n'+close;
+  return greet+' '+body+' '+close;
+}
+function thanksPeople(){
+  const out=[], seen=new Set(), add=(name,phone)=>{ const k=nameKey(name); if(!k||seen.has(k)) return; seen.add(k); out.push({name,phone:phone||''}); };
+  ((S.sec&&S.sec.pubs)||[]).filter(p=>p.status!=='moved').forEach(p=>add(p.name,p.phone));
+  (S.contacts||[]).forEach(c=>add(c.name,c.phone)); (S.thanks||[]).forEach(x=>add(x.name,x.phone));
+  return out.sort((a,b)=>a.name.localeCompare(b.name));
+}
+function thanksSheet(prefill){
+  if(!TH || prefill){ const wd=parse(TODAY()).getDay(), mt=wd===0||wd===6?'wk':'mid'; TH={name:'', phone:'', meet:mt, key:'', date:TODAY(), point:'', style:'short', offset:0, edited:false, text:'', ...(prefill||{})}; }
+  const list=ASSIGN.find(a=>a[0]===TH.meet)[2];
+  if(!list.some(x=>x[0]===TH.key)) TH.key=list[0][0];
+  if(!TH.edited) TH.text=thanksText();
+  const hist=(S.thanks||[]).filter(x=>TH.name.trim() && nameKey(x.name)===nameKey(TH.name)).slice(-3).reverse();
+  openSheet(`<h3>Encourage after an assignment</h3>
+    <div class="f"><label>Who</label><input type="text" id="thName" list="thPeople" value="${esc(TH.name)}" placeholder="Choose or type a name"><datalist id="thPeople">${thanksPeople().map(p=>`<option>${esc(p.name)}</option>`).join('')}</datalist></div>
+    <div class="f"><label>WhatsApp number</label><input type="tel" id="thPhone" value="${esc(TH.phone)}" placeholder="Fills in by itself for people on your lists"></div>
+    <div class="chips2">${ASSIGN.map(([k,l])=>`<button class="${k===TH.meet?'on':''}" data-a="thset" data-f="meet" data-v="${k}">${l}</button>`).join('')}</div>
+    <div class="f2"><div class="f"><label>Assignment</label><select id="thKey">${list.map(([k,l])=>`<option value="${k}" ${k===TH.key?'selected':''}>${esc(l)}</option>`).join('')}</select></div>
+      <div class="f"><label>Date</label><input type="date" id="thDate" value="${TH.date}" max="${TODAY()}"></div></div>
+    <div class="f"><label>Something you liked (optional)</label><input type="text" id="thPoint" value="${esc(TH.point)}" placeholder="your illustration about the farmer"></div>
+    <div class="chips2">${[['short','Short and warm'],['scripture','Add a scripture'],['friendly','Add a friendly note']].map(([k,l])=>`<button class="${k===TH.style?'on':''}" data-a="thset" data-f="style" data-v="${k}">${l}</button>`).join('')}</div>
+    <div class="f"><label style="display:flex;align-items:center"><span style="flex:1">Message (you can change anything)</span><button class="linkbtn" data-a="thnext" style="font-size:13px">↻ Another message</button></label>
+      <textarea id="thText" style="min-height:150px">${esc(TH.text)}</textarea></div>
+    <div class="btns" style="flex-direction:column">
+      <a class="btn wa" id="thWa" href="#" target="_blank" rel="noopener" data-a="thsend" data-via="wa">Send on WhatsApp</a>
+      <a class="btn ghost" id="thSms" href="#" data-a="thsend" data-via="sms">Send as text message (SMS)</a>
+      <div class="btns"><button class="btn ghost" style="flex:1" data-a="thcopy">Copy</button><button class="btn ghost" style="flex:1" data-a="close">Close</button></div></div>
+    ${hist.length?`<div class="area">Sent to ${esc(firstName(nameOnly(TH.name)))} before</div><div class="list">${hist.map(x=>`<div class="it"><div class="x"><b>${nice(x.on||x.date)} · ${esc(x.label)}</b><small>${esc((x.text||'').slice(0,110))}${(x.text||'').length>110?'…':''}</small></div></div>`).join('')}</div>`:''}`, null);
+  thUpd();
+}
+function thUpd(){ const t=val('thText'), p=phoneIntl(TH.phone), wa=document.getElementById('thWa'), sm=document.getElementById('thSms');
+  if(wa) wa.href=`https://wa.me/${p}?text=${encodeURIComponent(t)}`; if(sm) sm.href=`sms:${p?'+'+p:''}?body=${encodeURIComponent(t)}`; }
+function thRefresh(){ if(!TH.edited){ TH.text=thanksText(); const ta=document.getElementById('thText'); if(ta) ta.value=TH.text; } thUpd(); }
+document.addEventListener('input', e=>{
+  if(!TH) return; const t=e.target;
+  if(t.id==='thName'){ TH.name=t.value; const p=thanksPeople().find(x=>nameKey(x.name)===nameKey(t.value)), ph=document.getElementById('thPhone'); if(p && p.phone && !ph.value.trim()){ ph.value=p.phone; TH.phone=p.phone; } thRefresh(); }
+  if(t.id==='thPhone'){ TH.phone=t.value; thUpd(); }
+  if(t.id==='thPoint'){ TH.point=t.value; thRefresh(); }
+  if(t.id==='thText'){ TH.edited=true; TH.text=t.value; thUpd(); }
+});
+document.addEventListener('change', e=>{
+  if(!TH) return; const t=e.target;
+  if(t.id==='thKey'){ TH.key=t.value; TH.offset=0; thRefresh(); }
+  if(t.id==='thDate'){ TH.date=t.value||TODAY(); thRefresh(); }
+});
+function thanksView(){
+  const all=S.thanks||[], list=[...all].sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,40), m=MONTH();
+  let html=`<div class="card"><div class="stat"><div><small>Encouraged this month</small><b>${all.filter(x=>x.date.slice(0,7)===m).length}</b></div><div><small>People encouraged</small><b>${new Set(all.map(x=>nameKey(x.name))).size}</b></div></div>
+    <button class="btn" data-a="thanks" style="margin-top:12px">${svg('plus',18)}&nbsp; Encourage someone after an assignment</button>
+    <p class="muted" style="font-size:12.5px;margin:8px 0 0">After the meeting, choose the person and their assignment. The app writes a short, warm message. Add one scripture or a friendly note if you like, then send it on WhatsApp.</p></div>`;
+  html+=`<div class="card"><h2>Messages sent</h2>${list.length?`<div class="list">${list.map(x=>`<div class="it"><div class="x"><b>${esc(x.name)}</b><small>${nice(x.on||x.date)} · ${esc(x.label)}</small><div style="font-size:13.5px;margin-top:2px">${esc((x.text||'').slice(0,120))}${(x.text||'').length>120?'…':''}</div></div><button class="btn sm ghost" data-a="thagain" data-id="${x.id}">Again</button></div>`).join('')}</div>`:'<div class="empty">Nothing sent yet.</div>'}</div>`;
+  return html;
+}
+
 /* ---------- Android app: real alarms through Android itself ---------- */
 var NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 var nativeReady = false, nativeTimer = null;
@@ -4143,6 +4661,7 @@ function handleNativeAction(a){
   else if(ex.kind==='duty'){ tab='sec'; secTab='duties'; }
   else if(ex.kind==='event'){ tab='others'; peopleTab='invite'; }
   else if(ex.kind==='followup'){ tab='others'; peopleTab='met'; peopleFilter='due'; }
+  else if(ex.kind==='links'){ tab='sec'; secTab='reports'; setTimeout(linksSheet,300); }
   save(); render();
 }
 async function nativeTest(){
@@ -4274,7 +4793,7 @@ async function forceUpdate(){
   location.replace(location.pathname + '?v=' + Date.now());
 }
 async function checkNewVersion(){
-  if(!navigator.onLine) return;
+  if(!navigator.onLine || FORM) return;
   try{
     const r = await fetch((NATIVE?WEB_URL:'') + 'version.json?t=' + Date.now(), {cache:'no-store'});
     if(!r.ok) return;
@@ -4352,7 +4871,7 @@ function personSheet(){
     });
 }
 
-if(needsLock()) showLock(); else render();
+if(FORM) renderForm(); else if(needsLock()) showLock(); else render();
 try{ const sc=new URLSearchParams(location.search).get('setup'); if(sc){ history.replaceState(null,'',location.pathname); setTimeout(()=>setupCodeSheet(sc), 400); } }catch(e){}
 setTimeout(checkAlarms, 1500);
 if(!NATIVE && 'serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
