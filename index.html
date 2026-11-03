@@ -242,7 +242,7 @@ body.formmode main{padding-bottom:40px}
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 28;
+const APP_VERSION = 29;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -4129,8 +4129,16 @@ document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && !docu
 /* ================= VERSION 28 ================= */
 
 /* ---------- small helpers ---------- */
-function b64uEnc(obj){ return bytesToB64(new TextEncoder().encode(JSON.stringify(obj))).replace(/\+/g,'-').replace(/\//g,'.').replace(/=+$/,''); }
-function b64uDec(s){ s=String(s).replace(/-/g,'+').replace(/\./g,'/'); while(s.length%4) s+='='; return JSON.parse(new TextDecoder().decode(b64ToBytes(s))); }
+function b64url(u){ return bytesToB64(u).replace(/\+/g,'-').replace(/\//g,'.').replace(/=+$/,''); }
+function b64std(s){ s=String(s).replace(/-/g,'+').replace(/\./g,'/'); while(s.length%4) s+='='; return s; }
+function b64uEnc(obj){ return b64url(new TextEncoder().encode(JSON.stringify(obj))); }
+function b64uDec(s){ return JSON.parse(new TextDecoder().decode(b64ToBytes(b64std(s)))); }
+const textB64 = str => b64url(new TextEncoder().encode(str));
+const b64Text = s => new TextDecoder().decode(b64ToBytes(b64std(s)));
+async function zipText(str){ const out=await new Response(new Blob([new TextEncoder().encode(str)]).stream().pipeThrough(new CompressionStream('deflate'))).arrayBuffer(); return b64url(new Uint8Array(out)); }
+async function unzipText(s){ const out=await new Response(new Blob([b64ToBytes(b64std(s))]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer(); return new TextDecoder().decode(out); }
+function sid(id){ return strHash(String(id)).toString(36).slice(-4); }   /* short code for a publisher, used in links */
+function findPub(id,g){ const ps=SEC().pubs, p=ps.find(x=>x.id===id); if(p) return p; const c=ps.filter(x=>sid(x.id)===id); return c.find(x=>(x.group||'')===g)||c[0]||null; }
 function nameOnly(s){ return String(s||'').trim().replace(/^(bro|brother|sis|sister)\.?\s+/i,''); }
 function nameKey(s){ return nameOnly(s).toLowerCase().replace(/\s+/g,' ').trim(); }
 const DAYS_FULL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -4143,8 +4151,17 @@ function meetingDates(m){ const md=meetDays(), out=[]; let x=m+'-01'; while(x.sl
 function copyText(txt, msg){ (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast(msg||'Copied'),()=>toast('Press and hold the text, then Copy')); }
 
 /* ================= FILL-IN LINKS: group overseers and attendants (no app needed on their phone) ================= */
-var FORM = (function(){ try{ const m=location.hash.slice(1).match(/^(rf|af)=(.+)$/); if(!m) return null; const d=b64uDec(m[2]); if(!d || (d.t!=='r' && d.t!=='a')) return null; d.key='lcform:'+strHash(m[2]); return d; }catch(e){ return null; } })();
-window.addEventListener('hashchange', ()=>{ if(/^#(rf|af)=/.test(location.hash) || FORM) location.reload(); });
+var FORM = (function(){ try{ const m=location.hash.slice(1).match(/^(rf|af|r|a)=(.+)$/); if(!m) return null; const key='lcform:'+strHash(m[2]);
+  if(m[1]==='r'||m[1]==='a') return {t:m[1], raw:m[2], pending:true, key};
+  const d=b64uDec(m[2]); if(!d || (d.t!=='r' && d.t!=='a')) return null; d.key=key; return d; }catch(e){ return null; } })();
+window.addEventListener('hashchange', ()=>{ if(/^#(rf|af|r|a)=/.test(location.hash) || FORM) location.reload(); });
+async function decodeForm(){
+  const raw=FORM.raw, txt = raw[0]==='z' ? await unzipText(raw.slice(1)) : b64Text(raw.slice(1)), L=txt.split('\n');
+  if(FORM.t==='r') Object.assign(FORM,{m:L[1], g:L[2], to:L[3], sn:L[4], cn:'', p:L.slice(5).filter(Boolean).map(e=>{ const i=e.indexOf('~'), nm=e.slice(i+1); return [e.slice(0,i), nm.replace(/^\*/,''), nm[0]==='*'?1:0]; })});
+  else { const m=L[1], mid=n(L[2]), wk=n(L[3]), d=[]; let x=m+'-01'; while(x.slice(0,7)===m){ const wd=parse(x).getDay(); if(wd===mid) d.push([x,'mid']); if(wd===wk) d.push([x,'wk']); x=addDays(x,1); } Object.assign(FORM,{m, to:L[4], sn:L[5], cn:'', d}); }
+  if(!/^\d{4}-\d\d$/.test(FORM.m||'')) throw new Error('bad link');
+  delete FORM.pending;
+}
 var FS=null;
 function formState(){ try{ return JSON.parse(localStorage.getItem(FORM.key))||{}; }catch(e){ return {}; } }
 function formSave(){ try{ localStorage.setItem(FORM.key, JSON.stringify(FS)); }catch(e){} }
@@ -4152,6 +4169,8 @@ function renderForm(){
   document.body.classList.add('formmode');
   document.getElementById('nav').innerHTML='';
   document.getElementById('title').textContent = FORM.t==='r' ? 'Field service reports' : 'Meeting attendance';
+  if(FORM.pending){ document.getElementById('main').innerHTML='<div class="card"><div class="empty">Opening…</div></div>';
+    decodeForm().then(renderForm, ()=>{ document.getElementById('main').innerHTML='<div class="card"><div class="empty">This link could not be opened on this phone. Try opening it in Chrome, or ask the secretary to send it again.</div></div>'; }); return; }
   if(!FS) FS=formState();
   document.getElementById('main').innerHTML = FORM.t==='r' ? reportFormHTML() : attFormHTML();
 }
@@ -4193,12 +4212,12 @@ function formMessage(){
     const r=FS.r||{}, rows=(F.p||[]).filter(([id])=>r[id] && r[id].s!=null);
     const lines=rows.map(([id,nm,pio])=>{ const x=r[id], st=n(x.st)||0;
       return nm+': '+(x.s ? 'shared'+((pio||x.a)&&String(x.h??'').trim()!==''?', '+n(x.h)+' h':'')+(x.a?', auxiliary pioneer':'')+', '+st+' Bible stud'+(st===1?'y':'ies') : 'did not share'); });
-    const code={v:1,t:'r',m:F.m,g:F.g,r:rows.map(([id,nm,pio])=>{ const x=r[id]; return [id, x.s, x.s&&(pio||x.a)&&String(x.h??'').trim()!==''?n(x.h):null, x.s?n(x.st)||0:0, x.s&&x.a?1:0]; })};
-    if((FS.note||'').trim()) code.n=FS.note.trim();
-    return `Field service reports: ${F.g}, ${monthName(F.m)}\n\n${lines.join('\n')||'(nothing filled in yet)'}${code.n?'\n\nNote: '+code.n:''}\n\n(For the secretary's app. Please don't change the line below.)\nLC-REPORT:${b64uEnc(code)}`;
+    const note=(FS.note||'').trim(), rs=rows.map(([id,nm,pio])=>{ const x=r[id]; return [id, x.s, x.s&&(pio||x.a)&&String(x.h??'').trim()!==''?n(x.h):'', x.s?n(x.st)||0:0, x.s&&x.a?1:0].join(','); }).join(';');
+    const code=note?[1,F.m,F.g,rs,note]:[1,F.m,F.g,rs];
+    return `Field service reports: ${F.g}, ${monthName(F.m)}\n\n${lines.join('\n')||'(nothing filled in yet)'}${note?'\n\nNote: '+note:''}\n\n(For the secretary's app. Please don't change the line below.)\nLC-REPORT:${b64uEnc(code)}`;
   }
   const a=FS.a||{}, all=[...(F.d||[]), ...(FS.x||[])].filter(([d,k])=>(a[d+'|'+k]||'')!=='').sort((x,y)=>x[0].localeCompare(y[0]));
-  const code={v:1,t:'a',m:F.m,a:all.map(([d,k])=>[d,k,n(a[d+'|'+k])])};
+  const code=[1,F.m,all.map(([d,k])=>(+d.slice(8))+(k==='mid'?'m':'w')+n(a[d+'|'+k])).join(';')];
   return `Meeting attendance: ${monthName(F.m)}\n\n${all.map(([d,k])=>nice(d)+' ('+(k==='mid'?'midweek':'weekend')+'): '+n(a[d+'|'+k])).join('\n')||'(nothing filled in yet)'}\n\n(For the secretary's app. Please don't change the line below.)\nLC-ATTEND:${b64uEnc(code)}`;
 }
 function formWaHref(){ return 'https://wa.me/'+(FORM.to||'')+'?text='+encodeURIComponent(formMessage()); }
@@ -4221,22 +4240,28 @@ document.addEventListener('input', e=>{
 });
 
 /* ---------- making and sending the links ---------- */
-function reportLink(g, m){
-  const c=congInfo(), ps=pubsInGroup(g).sort((a,b)=>a.name.localeCompare(b.name));
-  return WEB_URL+'#rf='+b64uEnc({t:'r', m, g, to:myWa(), sn:firstName(nameOnly(c.secName||S.settings.name||'')), cn:c.name||'', p:ps.map(p=>[p.id, p.name, isPioneer(p)?1:0])});
+const meName = () => firstName(nameOnly(congInfo().secName||S.settings.name||''));
+async function reportLink(g, m){
+  const seen=new Set(), ents=pubsInGroup(g).sort((a,b)=>a.name.localeCompare(b.name)).map(p=>{ let k=sid(p.id); if(seen.has(k)) k=p.id; seen.add(k); return k+'~'+(isPioneer(p)?'*':'')+p.name.replace(/[~\n]/g,' '); });
+  const txt=['r1', m, g.replace(/\n/g,' '), myWa(), meName(), ...ents].join('\n');
+  let code='p'+textB64(txt);
+  try{ if(window.CompressionStream){ const z='z'+await zipText(txt); if(z.length<code.length) code=z; } }catch(e){}
+  return WEB_URL+'#r='+code;
 }
-function attLink(m){ const c=congInfo(); return WEB_URL+'#af='+b64uEnc({t:'a', m, to:myWa(), sn:firstName(nameOnly(c.secName||S.settings.name||'')), cn:c.name||'', d:meetingDates(m)}); }
-function linkMsg(g,m){
-  const nm=firstName(nameOnly(groupInfo(g).overseer)), mo=monthName(m).split(' ')[0];
-  return `Good ${timeOfDay()}${nm?' '+nm:''}! I hope you and the family are well. It's time to collect the field service reports for ${mo} for ${g}.\n\nPlease open this link, tap each publisher's report, then tap Send at the bottom. It comes straight back to me on WhatsApp:\n${reportLink(g,m)}\n\nThank you for your hard work 🙏`;
+function attLink(m){ const md=meetDays(); return WEB_URL+'#a=p'+textB64(['a1', m, n(md.mid), n(md.wk), myWa(), meName()].join('\n')); }
+function collector(g){ const gi=groupInfo(g); return gi.collector==='as' ? gi.assistant : gi.overseer; }
+function linkMsg(g,m,link){
+  const nm=firstName(nameOnly(collector(g))), mo=monthName(m).split(' ')[0];
+  return `Good ${timeOfDay()}${nm?' '+nm:''}! Please fill in ${g}'s reports for ${mo} here, then tap Send at the bottom. Thank you 🙏\n${link}`;
 }
 function attMsg(m){
   const nm=firstName(nameOnly((SEC().attInfo||{}).name)), mo=monthName(m).split(' ')[0];
-  return `Good ${timeOfDay()}${nm?' '+nm:''}! Here is the attendance link for ${mo}. After each meeting, open it and type the number who attended. The numbers stay on your phone, and at the end of the month you tap Send and it comes to me on WhatsApp:\n${attLink(m)}\n\nThank you for your help 🙏`;
+  return `Good ${timeOfDay()}${nm?' '+nm:''}! Here is the attendance link for ${mo}. After each meeting, type the number who attended. At the end of the month, tap Send. Thank you 🙏\n${attLink(m)}`;
 }
 var linkMonth=null, attLinkMonth=null;
-function linksSheet(){
-  const m=linkMonth||secMonthDefault(), groups=groupsList(), log=linkLog('r',m), c=congInfo();
+async function linksSheet(){
+  const m=linkMonth||secMonthDefault(), groups=groupsList(), log=linkLog('r',m), c=congInfo(), links={};
+  for(const g of groups) links[g]=await reportLink(g,m);
   const months=[MONTH(), secMonthDefault(), prevMonth(secMonthDefault())];
   openSheet(`<h3>Send report links</h3>
     <p class="muted" style="margin:0 0 10px">Each group overseer gets a link with his group's names already on it. He taps each person's report and sends it back to you on WhatsApp. Copy his message, then tap <b>Paste a group's report</b>, and the whole group goes in at once.</p>
@@ -4244,8 +4269,9 @@ function linksSheet(){
       <div class="f"><label>Your WhatsApp number</label><input type="tel" id="lkMe" value="${esc(c.secPhone||'')}" placeholder="024 123 4567"></div></div>
     ${!myWa()?'<p class="err" style="margin:-4px 0 10px">Add your number so the overseers\' replies come straight to you.</p>':''}
     ${groups.length?`<div class="list">${groups.map(g=>{ const gi=groupInfo(g), st=log[g]||{}, cnt=pubsInGroup(g).length, ph=phoneIntl(gi.phone);
-      return `<div class="it" style="flex-wrap:wrap"><div class="x"><b>${esc(g)}</b><small>${gi.overseer?esc(gi.overseer):'No overseer set'} · ${cnt} publisher${cnt===1?'':'s'}${st.got?' · <span style="color:var(--ok)">reports in '+nice(st.got)+' ✓</span>':st.sent?' · link sent '+nice(st.sent):''}</small></div>
-        <div class="btns" style="width:100%;margin-top:6px"><button class="btn sm ghost" data-a="groupedit" data-k="${esc(g)}" data-back="1">Edit</button><a class="btn sm ${st.sent?'ghost':'wa'}" style="flex:1" href="https://wa.me/${ph}?text=${encodeURIComponent(linkMsg(g,m))}" target="_blank" rel="noopener" data-a="lksend" data-k="${esc(g)}">${st.sent?'Send again':ph?'Send link to '+esc(firstName(nameOnly(gi.overseer))||'overseer'):'Send link (choose the chat)'}</a></div></div>`; }).join('')}</div>`
+      const who=collector(g);
+      return `<div class="it" style="flex-wrap:wrap"><div class="x"><b>${esc(g)}</b><small>${who?esc(who)+(gi.collector==='as'?' (assistant)':''):'Nobody set to collect reports'} · ${cnt} publisher${cnt===1?'':'s'}${st.got?' · <span style="color:var(--ok)">reports in '+nice(st.got)+' ✓</span>':st.sent?' · link sent '+nice(st.sent):''}</small></div>
+        <div class="btns" style="width:100%;margin-top:6px"><button class="btn sm ghost" data-a="groupedit" data-k="${esc(g)}" data-back="1">Edit</button><a class="btn sm ${st.sent?'ghost':'wa'}" style="flex:1" href="https://wa.me/${ph}?text=${encodeURIComponent(linkMsg(g,m,links[g]))}" target="_blank" rel="noopener" data-a="lksend" data-k="${esc(g)}">${st.sent?'Send again':ph?'Send link to '+esc(firstName(nameOnly(who))||'him'):'Send link (choose the chat)'}</a></div></div>`; }).join('')}</div>`
       :'<div class="empty">Give your publishers a group first, on the Publishers tab.</div>'}
     <div class="btns" style="margin-top:12px"><button class="btn ghost" style="flex:1" data-a="secpaste">Paste a reply</button><button class="btn ghost" style="flex:1" data-a="close">Close</button></div>`, null);
 }
@@ -4282,11 +4308,16 @@ document.addEventListener('input', e=>{
 });
 
 /* ---------- reading the replies ---------- */
-function readCodes(text){ const out=[], re=/LC-(REPORT|ATTEND):([A-Za-z0-9.\-+\/]+)/g; let m; while((m=re.exec(String(text||'')))){ try{ const d=b64uDec(m[2]); if(d && ((d.t==='r'&&Array.isArray(d.r))||(d.t==='a'&&Array.isArray(d.a)))) out.push(d); }catch(e){} } return out; }
+function readCodes(text){ const out=[], re=/LC-(REPORT|ATTEND):([A-Za-z0-9.\-+\/]+)/g; let m; while((m=re.exec(String(text||'')))){ try{ let d=b64uDec(m[2]);
+    if(Array.isArray(d)){
+      if(m[1]==='REPORT') d={t:'r', m:d[1], g:d[2], n:d[4]||'', r:String(d[3]||'').split(';').filter(Boolean).map(x=>{ const [id,s,h,st,a]=x.split(','); return [id, n(s), h===''||h==null?null:n(h), n(st), n(a)]; })};
+      else { const mo=d[1]; d={t:'a', m:mo, a:String(d[2]||'').split(';').map(x=>x.match(/^(\d+)([mw])(\d+)$/)).filter(Boolean).map(x=>[mo+'-'+x[1].padStart(2,'0'), x[2]==='m'?'mid':'wk', n(x[3])])}; }
+    }
+    if(d && ((d.t==='r'&&Array.isArray(d.r))||(d.t==='a'&&Array.isArray(d.a)))) out.push(d); }catch(e){} } return out; }
 function codePreviewHTML(codes){
   const d=SEC();
   return codes.map(c=>{
-    if(c.t==='r'){ const rows=c.r.map(([id,s,h,st,a])=>({p:d.pubs.find(x=>x.id===id),s,h,st:n(st),a})), ok=rows.filter(r=>r.p);
+    if(c.t==='r'){ const rows=c.r.map(([id,s,h,st,a])=>({p:findPub(id,c.g),s,h,st:n(st),a})), ok=rows.filter(r=>r.p);
       return `<div class="area">${esc(c.g)} · ${monthName(c.m)} · ${ok.length} report${ok.length===1?'':'s'}</div>${c.n?`<p class="muted" style="margin:0 0 6px"><b>Note:</b> ${esc(c.n)}</p>`:''}
         <div class="list">${rows.map(r=>{ const had=r.p&&rep(c.m,r.p.id); return `<div class="it"><span class="wdot ${!r.p?'red':r.s?'green':'orange'}" style="margin-top:6px"></span><div class="x"><b>${r.p?esc(r.p.name):'Not on your list any more (skipped)'}</b><small>${r.s?'Shared'+(r.h!=null?' · '+r.h+' h':'')+' · '+r.st+' stud'+(r.st===1?'y':'ies')+(r.a?' · Aux':''):'Did not share'}${had?' · replaces the report already entered':''}</small></div></div>`; }).join('')}</div>`; }
     const ms=d.meetings||[];
@@ -4297,8 +4328,8 @@ function applyCodes(codes){
   const d=SEC(); let nr=0, na=0, lastM=null, notes=[];
   codes.forEach(c=>{
     if(c.t==='r'){ d.reports[c.m]=d.reports[c.m]||{};
-      c.r.forEach(([id,s,h,st,a])=>{ const p=d.pubs.find(x=>x.id===id); if(!p) return; const old=d.reports[c.m][id]||{};
-        d.reports[c.m][id]={got:TODAY(), shared:!!s, aux:!!a&&!isPioneer(p), hours:s&&h!=null?n(h):null, studies:s?n(st):0, remarks:old.remarks||''}; nr++; });
+      c.r.forEach(([id,s,h,st,a])=>{ const p=findPub(id,c.g); if(!p) return; const old=d.reports[c.m][p.id]||{};
+        d.reports[c.m][p.id]={got:TODAY(), shared:!!s, aux:!!a&&!isPioneer(p), hours:s&&h!=null?n(h):null, studies:s?n(st):0, remarks:old.remarks||''}; nr++; });
       const lg=linkLog('r',c.m); lg[c.g]=lg[c.g]||{}; lg[c.g].got=TODAY(); lastM=c.m; if(c.n) notes.push(c.g+': '+c.n); }
     else { d.meetings=d.meetings||[];
       c.a.forEach(([dt,k,cnt])=>{ if(!(n(cnt)>0)) return; const ex=d.meetings.find(x=>x.date===dt&&x.kind===k); if(ex) ex.count=n(cnt); else d.meetings.push({id:uid(), date:dt, kind:k, count:n(cnt)}); na++; });
@@ -4334,18 +4365,20 @@ function groupEditSheet(g, back){
   openSheet(`<h3>${esc(g)}</h3>
     <div class="f"><label>Group name</label><input type="text" id="geName" value="${esc(g)}"></div>
     <div class="f"><label>Group overseer</label><input type="text" id="geOv" list="geMen" value="${esc(gi.overseer||'')}" placeholder="Choose a brother"></div>
-    <div class="f"><label>Group overseer's WhatsApp number</label><input type="tel" id="gePh" value="${esc(gi.phone||'')}"></div>
     <div class="f"><label>Assistant</label><input type="text" id="geAs" list="geMen" value="${esc(gi.assistant||'')}"></div>
+    <div class="f"><label>Who collects the reports?</label><select id="geCol"><option value="ov" ${gi.collector!=='as'?'selected':''}>The group overseer</option><option value="as" ${gi.collector==='as'?'selected':''}>The assistant</option></select></div>
+    <div class="f"><label>WhatsApp number of the one who collects the reports</label><input type="tel" id="gePh" value="${esc(gi.phone||'')}"></div>
     <datalist id="geMen">${men.map(p=>`<option>${esc(p.name)}</option>`).join('')}</datalist>
     <p class="muted" style="font-size:12.5px;margin:0 0 10px">${pubsInGroup(g).length} publishers in this group. To move people, use <b>Move publishers</b>.</p>
     ${actions}`, ()=>{
       const nn=val('geName').trim(); if(!nn) return fail('geName','Enter a name');
-      Object.assign(gi,{overseer:val('geOv').trim(), phone:val('gePh').trim(), assistant:val('geAs').trim()});
+      Object.assign(gi,{overseer:val('geOv').trim(), phone:val('gePh').trim(), assistant:val('geAs').trim(), collector:val('geCol')});
       if(nn!==g){ d.pubs.forEach(p=>{ if((p.group||'')===g) p.group=nn; }); d.groupInfo[nn]=gi; delete d.groupInfo[g]; if(S.settings.myGroup===g) S.settings.myGroup=nn; }
       if(back) setTimeout(linksSheet,80);
       return true;
     });
-  document.getElementById('geOv').addEventListener('change',e=>{ const p=d.pubs.find(x=>nameKey(x.name)===nameKey(e.target.value)), ph=document.getElementById('gePh'); if(p&&p.phone&&!ph.value.trim()) ph.value=p.phone; });
+  const fillPh=()=>{ const who=val(val('geCol')==='as'?'geAs':'geOv'), p=d.pubs.find(x=>nameKey(x.name)===nameKey(who)), ph=document.getElementById('gePh'); if(p&&p.phone&&!ph.value.trim()) ph.value=p.phone; };
+  ['geOv','geAs','geCol'].forEach(i=>document.getElementById(i).addEventListener('change',fillPh));
 }
 function reshuffleSheet(){
   const d=SEC(), gs=groupsList(), ps=d.pubs.filter(p=>p.status!=='moved').sort((a,b)=>(a.group||'').localeCompare(b.group||'',undefined,{numeric:true})||a.name.localeCompare(b.name));
