@@ -239,7 +239,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 26;
+const APP_VERSION = 27;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -2185,14 +2185,16 @@ function taskSheet(id){
 /* ================= LETTERS: introduction, transfer in, transfer out, request for records ================= */
 const LETTERS=[['intro','Letter of introduction'],['out','Transfer out (records sent)'],['in','Transfer in (publisher received)'],['req','Request for records']];
 let LT=null;
-function congInfo(){ const c=SEC().cong; if(!c.secName && S.settings.name) c.secName=S.settings.name; return c; }
+function congInfo(){ const c=SEC().cong; if(!c.secName && S.settings.name) c.secName=S.settings.name;
+  if(!c.seeded){ c.seeded=true; if(!c.name) c.name='West Junction Twi - Kasoa CP'; if(!c.email) c.email='CONG23518556@jwpub.org'; if(!c.city) c.city='Kasoa'; }
+  return c; }
 function secLetters(){
   const d=SEC(), c=congInfo(), log=[...d.letters].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,15);
   let html='';
-  if(!c.name) html+=`<div class="banner"><span style="flex:1">Add your congregation's details once. They go at the top and bottom of every letter.</span><button class="btn sm" data-a="congsheet">Add</button></div>`;
+  if(!c.name || c.name==='West Junction Twi - Kasoa CP' && !c.checked) html+=`<div class="banner"><span style="flex:1">${c.name?'Check your congregation details: <b>'+esc(c.name)+'</b>, '+esc(c.email||'no email'):'Add your congregation\'s details once'}. They go at the top and bottom of every letter.</span><button class="btn sm" data-a="congsheet">${c.name?'Check':'Add'}</button></div>`;
   html+=`<div class="card"><h2>Write a letter</h2><div class="list">${LETTERS.map(([k,l])=>`<div class="it" data-a="lettersheet" data-k="${k}" style="cursor:pointer"><div class="x"><b>${l}</b><small>${({intro:'For a publisher moving or staying in another congregation',out:'Send a publisher\'s records to their new congregation',in:'Tell the old congregation the publisher has arrived',req:'Ask the old congregation for records of someone who moved in'})[k]}</small></div><span class="muted">›</span></div>`).join('')}</div>
     <p class="muted" style="margin:8px 0 0;font-size:12.5px">The letter fills in the publisher's details. Check the wording with the coordinator, and follow any direction from the branch on how records are sent.</p></div>`;
-  html+=`<div class="card"><h2>My congregation<span class="sp"></span><button class="btn sm ghost" data-a="congsheet">Edit</button></h2>${c.name?`<p style="margin:0"><b>${esc(c.name)} Congregation</b>${c.number?' · No. '+esc(c.number):''}<br><span class="muted">${esc([c.city,c.secName&&'Secretary: '+c.secName,c.secEmail].filter(Boolean).join(' · '))}</span></p>`:'<div class="empty">Not added yet.</div>'}</div>`;
+  html+=`<div class="card"><h2>My congregation<span class="sp"></span><button class="btn sm ghost" data-a="congsheet">Edit</button></h2>${c.name?`<p style="margin:0"><b>${esc(c.name)} Congregation</b>${c.number?' · No. '+esc(c.number):''}<br><span class="muted">${esc([c.city,c.email,c.secName&&'Secretary: '+c.secName].filter(Boolean).join(' · '))}</span></p>`:'<div class="empty">Not added yet.</div>'}</div>`;
   html+=`<div class="card"><h2>Other congregations<span class="sp"></span><button class="btn sm ghost" data-a="ocsheet">${svg('plus',15)} Add</button></h2>${d.congs.length?`<div class="list">${[...d.congs].sort((a,b)=>a.name.localeCompare(b.name)).map(o=>`<div class="it" data-a="ocsheet" data-id="${o.id}" style="cursor:pointer"><div class="x"><b>${esc(o.name)}</b><small>${esc([o.secretary,o.email].filter(Boolean).join(' · ')||'No email yet')}</small></div></div>`).join('')}</div>`:'<div class="empty">Saved automatically when you send a letter, or add them here.</div>'}</div>`;
   if(log.length) html+=`<div class="card"><h2>Letters sent</h2><div class="list">${log.map(l=>`<div class="it"><div class="x"><b>${esc((LETTERS.find(x=>x[0]===l.type)||['',''])[1])}</b><small>${esc(l.name)} · ${esc(l.cong)} · ${nice(l.date)}</small></div></div>`).join('')}</div></div>`;
   return html;
@@ -2201,10 +2203,11 @@ function congSheet(){
   const c=congInfo();
   openSheet(`<h3>My congregation</h3>
     <div class="f2"><div class="f"><label>Congregation name</label><input type="text" id="cgName" value="${esc(c.name||'')}" placeholder="Dansoman North"></div><div class="f"><label>Congregation number</label><input type="text" id="cgNum" value="${esc(c.number||'')}"></div></div>
-    <div class="f"><label>Town or address</label><input type="text" id="cgCity" value="${esc(c.city||'')}" placeholder="Dansoman, Accra"></div>
+    <div class="f"><label>Town or address</label><input type="text" id="cgCity" value="${esc(c.city||'')}" placeholder="Kasoa"></div>
+    <div class="f"><label>Congregation email</label><input type="email" id="cgCEmail" value="${esc(c.email||'')}" placeholder="CONG…@jwpub.org"></div>
     <div class="f"><label>Secretary's name</label><input type="text" id="cgSec" value="${esc(c.secName||'')}"></div>
     <div class="f2"><div class="f"><label>Phone</label><input type="tel" id="cgPhone" value="${esc(c.secPhone||'')}"></div><div class="f"><label>Email</label><input type="email" id="cgEmail" value="${esc(c.secEmail||'')}"></div></div>
-    ${actions}`, ()=>{ Object.assign(c,{name:val('cgName').trim().replace(/\s+congregation$/i,''), number:val('cgNum').trim(), city:val('cgCity').trim(), secName:val('cgSec').trim(), secPhone:val('cgPhone').trim(), secEmail:val('cgEmail').trim()}); return true; });
+    ${actions}`, ()=>{ c.checked=true; Object.assign(c,{name:val('cgName').trim().replace(/\s+congregation$/i,''), number:val('cgNum').trim(), city:val('cgCity').trim(), email:val('cgCEmail').trim(), secName:val('cgSec').trim(), secPhone:val('cgPhone').trim(), secEmail:val('cgEmail').trim()}); return true; });
 }
 function ocSheet(id){
   const d=SEC(), o = id ? d.congs.find(x=>x.id===id) : {name:'',secretary:'',email:'',phone:''};
@@ -2217,6 +2220,7 @@ function ocSheet(id){
       const rec=id?o:{id:uid()}; Object.assign(rec,{name:nm, secretary:val('ocSec').trim(), email:val('ocEmail').trim(), phone:val('ocPhone').trim()});
       if(!id) d.congs.push(rec); return true; });
 }
+function letterElders(){ return SEC().pubs.filter(p=>(p.elder||p.ms) && p.phone && p.status!=='moved').sort((a,b)=>(b.elder?1:0)-(a.elder?1:0)||a.name.localeCompare(b.name)); }
 function letterWho(nm){ return SEC().pubs.find(p=>p.name.toLowerCase()===String(nm||'').trim().toLowerCase()) || null; }
 function letterText(){
   const c=congInfo(), p=letterWho(LT.name)||{name:LT.name}, nm=p.name||'[name]', first=firstName(nm);
@@ -2229,8 +2233,8 @@ function letterText(){
   const privLine = priv.length ? `${He} ${has} been serving as ${priv.join(' and ')}.` : `${He} ${is} ${p.type==='unbap'?'an unbaptized publisher':'a baptized publisher'}.`;
   const bap = p.baptized && p.type!=='unbap' ? `${He} ${mKnown?'was':'were'} baptized on ${parse(p.baptized).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}. ` : '';
   const today=parse(TODAY()).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
-  const head=`${c.name||'[Our]'} Congregation${c.city?'\n'+c.city:''}\n${today}\n\nTo the Secretary\n${other} Congregation\n\nDear Brothers,\n\n`;
-  const sign=`\n\nWith warm Christian love,\n\n${c.secName||'[Secretary]'}\nSecretary, ${c.name||'[Our]'} Congregation${c.secPhone||c.secEmail?'\n'+[c.secPhone,c.secEmail].filter(Boolean).join(' · '):''}`;
+  const head=`${c.name||'[Our]'} Congregation${c.city?'\n'+c.city:''}${c.email?'\n'+c.email:''}\n${today}\n\nTo the Secretary\n${other} Congregation\n\nDear Brothers,\n\n`;
+  const sign=`\n\nWith warm Christian love,\n\n${c.secName||'[Secretary]'}\nSecretary, ${c.name||'[Our]'} Congregation${c.secPhone||c.email?'\n'+[c.secPhone,c.email].filter(Boolean).join(' · '):''}`;
   const extra=LT.note?'\n\n'+LT.note:'';
   const T={
     intro:{subj:`Letter of introduction: ${title}${nm}`,
@@ -2256,13 +2260,16 @@ function letterSheet(type){
     ${type==='in'?`<div class="f"><label>Records</label><select id="ltGot"><option value="1" ${LT.got?'selected':''}>We have received their records</option><option value="" ${LT.got?'':'selected'}>Not received yet</option></select></div>`:''}
     <div class="f"><label>Add a line (optional)</label><input type="text" id="ltNote" value="${esc(LT.note)}" placeholder="He has a Bible study with a young man in your area."></div>
     <div class="f"><label>Letter (you can change anything)</label><textarea id="ltBody" style="min-height:260px;font-size:14px">${esc(L.body)}</textarea></div>
+    <div class="f"><label>Send on WhatsApp to</label><div class="sndrow"><input type="tel" id="ltWa" value="${esc(LT.wa||congInfo().lastWa||'')}" placeholder="Elder's WhatsApp number"></div>
+      ${letterElders().length?`<div class="chips2" style="margin-top:6px">${letterElders().map(p=>`<button data-a="ltpickwa" data-k="${esc(p.phone)}">${esc(p.name)}</button>`).join('')}</div>`:'<p class="muted" style="font-size:12.5px;margin:4px 0 0">Tip: tick Elder and add a phone number on the elders\' Publisher pages, and their names appear here to tap.</p>'}</div>
     <div class="btns" style="flex-direction:column">
-      <button class="btn" data-a="ltemail">Send by email</button>
+      <button class="btn wa" data-a="ltwa">Send on WhatsApp</button>
+      <button class="btn ghost" data-a="ltemail">Send by email</button>
       ${canAttach?`<button class="btn ghost" data-a="ltattach">Share with the S-21 cards attached</button>`:''}
       <button class="btn ghost" data-a="ltcopy">Copy the letter</button>
       ${type==='out'&&letterWho(LT.name)&&letterWho(LT.name).status!=='moved'?`<button class="btn ghost" data-a="ltmoved">Mark ${esc(firstName(LT.name))} as moved away</button>`:''}
       <button class="btn ghost" data-a="close">Close</button></div>
-    <p class="muted" style="font-size:12.5px;margin:8px 0 0">${canAttach?'Email cannot attach files by itself. Use <b>Share with the S-21 cards attached</b> and choose Gmail; the letter goes in as the message.':'Send by email opens your email app with the letter and the address filled in.'}</p>`, null);
+    <p class="muted" style="font-size:12.5px;margin:8px 0 0">${canAttach?'WhatsApp and email links can\'t attach files. To send the S-21 cards too, tap <b>Share with the S-21 cards attached</b> and choose WhatsApp or Gmail.':'Send by email opens your email app with the letter and the address filled in.'}</p>`, null);
   const refresh=()=>{ const b=document.getElementById('ltBody'); if(!LT.edited) b.value=letterText().body; };
   [['ltName','name'],['ltCong','cong'],['ltEmail','email'],['ltDate','date'],['ltNote','note']].forEach(([i,k])=>document.getElementById(i).addEventListener('input',e=>{ LT[k]=e.target.value.trim();
     if(k==='cong'){ const o=d.congs.find(x=>x.name.toLowerCase()===LT.cong.toLowerCase().replace(/\s+congregation$/,'')); if(o&&o.email){ LT.email=o.email; document.getElementById('ltEmail').value=o.email; } }
@@ -3874,6 +3881,8 @@ document.addEventListener('click', e => {
     case 'deloc': if(confirm('Delete this congregation?')){ SEC().congs=SEC().congs.filter(z=>z.id!==id); save(); closeSheet(); render(); } break;
     case 'lettersheet': LT=null; letterSheet(t.dataset.k); break;
     case 'ltemail': { const L=letterText(), body=val('ltBody'), subj=L.subj; letterDone('email'); window.location.href='mailto:'+encodeURIComponent(LT.email||'')+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body); toast('Opening your email'); break; }
+    case 'ltpickwa': { const b=document.getElementById('ltWa'); b.value=t.dataset.k; LT.wa=t.dataset.k; document.querySelectorAll('[data-a=ltpickwa]').forEach(x=>x.classList.toggle('on',x===t)); break; }
+    case 'ltwa': { const num=phoneIntl(val('ltWa')), body=val('ltBody'), subj=letterText().subj; LT.wa=val('ltWa').trim(); if(LT.wa) congInfo().lastWa=LT.wa; letterDone('whatsapp'); window.location.href='https://wa.me/'+num+'?text='+encodeURIComponent('*'+subj+'*\n\n'+body); toast(num?'Opening WhatsApp':'Opening WhatsApp: choose the chat'); break; }
     case 'ltcopy': { const body=val('ltBody'); (navigator.clipboard?navigator.clipboard.writeText(body):Promise.reject()).then(()=>toast('Letter copied'),()=>{ const b=document.getElementById('ltBody'); b.focus(); b.select(); toast('Press and hold, then Copy'); }); break; }
     case 'ltattach': { const pp=letterWho(LT.name); if(!pp){ toast('Choose a publisher from your list'); break; } const body=val('ltBody'); (async()=>{ if(!(await photoGet(FORM_KEY.s21))){ toast('First add your blank S-21 card once'); printSheet('s21'); return; } const was=t.textContent; t.textContent='Making the cards…'; t.disabled=true; try{ await savePdfFile(await s21Both(pp), 'S-21 '+safeName(pp.name)+'.pdf', body); letterDone('share'); toast('Choose Gmail to send it'); }catch(e){ toast(e.message||'Could not make the cards'); } t.textContent=was; t.disabled=false; })(); break; }
     case 'ltmoved': { const pp=letterWho(LT.name); if(pp){ pp.status='moved'; save(); toast(firstName(pp.name)+' marked as moved away'); letterSheet(LT.type); render(); } break; }
