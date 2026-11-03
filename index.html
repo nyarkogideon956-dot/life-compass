@@ -239,7 +239,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 25;
+const APP_VERSION = 26;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -247,6 +247,50 @@ function saveProfiles(){ try{ localStorage.setItem(PKEY, JSON.stringify(P)); }ca
 const keyFor = id => id==='main' ? 'lifecompass.v1' : 'lifecompass.v1.'+id;
 let KEY = keyFor(P.current);
 const curProfile = () => P.list.find(x=>x.id===P.current) || P.list[0];
+let SESSION_PIN = null;   // the passcode typed at unlock, kept only in memory to lock backups
+async function pinKey(pin, salt, iter){
+  const base=await crypto.subtle.importKey('raw', new TextEncoder().encode('lc-backup:'+pin), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2', salt, iterations:iter, hash:'SHA-256'}, base, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
+}
+async function lockText(str, pin){
+  const salt=crypto.getRandomValues(new Uint8Array(16)), iv=crypto.getRandomValues(new Uint8Array(12)), iter=250000;
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM', iv}, await pinKey(pin, salt, iter), new TextEncoder().encode(str)));
+  return JSON.stringify({lcProtected:1, v:1, app:'Life Compass', note:'This file is locked with a Life Compass passcode.', iter, salt:bytesToB64(salt), iv:bytesToB64(iv), data:bytesToB64(ct)});
+}
+async function unlockText(obj, pin){
+  const ct=b64ToBytes(obj.data), key=await pinKey(pin, b64ToBytes(obj.salt), n(obj.iter)||250000);
+  return new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM', iv:b64ToBytes(obj.iv)}, key, ct));
+}
+/* ask for the passcode in a sheet; check(pin) returns true when it is right */
+function askPin(title, help, check){
+  return new Promise(res=>{
+    openSheet(`<h3>${title}</h3><p class="muted" style="margin:0 0 10px">${help}</p>
+      <div class="f"><input type="password" inputmode="numeric" maxlength="8" id="apPin" autocomplete="off" placeholder="Passcode"></div>
+      <div class="btns"><button class="btn ghost" style="flex:1" data-a="close">Cancel</button><button class="btn" style="flex:1" id="apGo">Continue</button></div>`, null);
+    const go=document.getElementById('apGo'), inp=document.getElementById('apPin');
+    const run=async()=>{ const v=inp.value.trim(); go.disabled=true;
+      if(await check(v)){ res(v); } else { go.disabled=false; inp.value=''; if(!inp.nextElementSibling||!inp.nextElementSibling.classList.contains('err')) fail('apPin','Wrong passcode. Try again.'); else inp.focus(); } };
+    go.addEventListener('click', run); inp.addEventListener('keydown', e=>{ if(e.key==='Enter') run(); });
+  });
+}
+async function myPin(){
+  const h=curProfile().pin; if(!h) return null;
+  if(SESSION_PIN && await hashPin(SESSION_PIN)===h) return SESSION_PIN;
+  const v=await askPin('Enter your passcode', 'Your backup will be locked with this passcode. Nobody can open it without it.', async x=>await hashPin(x)===h);
+  SESSION_PIN=v; return v;
+}
+/* read a backup or sync file; unlocks it first if it is protected */
+async function openDataFile(text){
+  let d=JSON.parse(text);
+  if(d && d.lcProtected){
+    let plain=null;
+    const tryPin=async x=>{ try{ plain=await unlockText(d, x); return true; }catch(e){ return false; } };
+    if(!(SESSION_PIN && await tryPin(SESSION_PIN)))
+      await askPin('This file is locked', 'Enter the passcode of the phone or laptop that made this file.', tryPin);
+    d=JSON.parse(plain);
+  }
+  return d;
+}
 async function hashPin(pin){ const d=new TextEncoder().encode('lc:'+pin); const h=await crypto.subtle.digest('SHA-256',d); return [...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,'0')).join(''); }
 const AREAS = {
   faith:  {label:'Faith',  color:'#0C3C78'},
@@ -688,6 +732,7 @@ function dueOn(date){
   S.todos.filter(x=>x.time && x.alarm!==false && !x.done && (x.date===date || (x.date<date && date===TODAY()))).forEach(x=>out.push({key:'todo:'+x.id, time:x.time, title:x.text, kind:'todo', id:x.id, sound:x.sound||'', created:x.date<date?0:(x.createdAt||0), quietMiss:x.date<date}));
   if(secOn('people')){ const fu=S.contacts.filter(c=>warmth(c)!=='off' && c.follow && (c.follow===date || (date===TODAY() && c.follow<date))); if(fu.length) out.push({key:'fu:'+fu.map(c=>c.id).sort().join(','), time:AL().followTime||'10:00', title:'Follow up: '+fu.slice(0,3).map(c=>firstName(c.name)).join(', ')+(fu.length>3?' and '+(fu.length-3)+' more':''), kind:'followup', created:Date.now(), quietMiss:true}); }
   (S.events||[]).filter(ev=>ev.date>date && (date===addDays(ev.date,-n(ev.remind||14)) || date===addDays(ev.date,-1))).forEach(ev=>out.push({key:'ev:'+ev.id+':'+date, time:'09:00', title:'Invite people to the '+evShort(ev)+' ('+(date===addDays(ev.date,-1)?'tomorrow':nice(ev.date))+')', kind:'event', id:ev.id, created:Date.now(), quietMiss:true}));
+  if(secOn('secretary') && S.sec) (S.sec.tasks||[]).filter(x=>!x.done && x.due && (date===x.due || date===addDays(x.due,-n(x.remind||0)))).forEach(x=>out.push({key:'task:'+x.id+':'+date, time:'09:00', title:(date===x.due?'Due today: ':'Coming up: ')+x.title+' ('+taskWho(x)+')', kind:'duty', id:x.id, created:Date.now(), quietMiss:true}));
   if(secOn('secretary') && S.sec) (S.sec.duties||[]).filter(x=>x.due && (x.due===date || (date===TODAY() && x.due<date))).forEach(x=>out.push({key:'duty:'+x.id+':'+x.due, time:'09:00', title:(x.due<date?'Overdue: ':'Due today: ')+x.name, kind:'duty', id:x.id, created:Date.now(), quietMiss:true}));
   if(AL().diaryOn) out.push({key:'diary', time:AL().diaryTime, title:'Write about your day', kind:'diary', sound:AL().diarySound||'', created:Date.now(), quietMiss:true});
   return out.sort((a,b)=>mins(a.time)-mins(b.time));
@@ -1687,7 +1732,7 @@ let secTab='glance', secMonth=null, secGroup='all', secRepView='month', secSY=nu
 function SEC(){
   S.sec = S.sec || {};
   const d=S.sec;
-  d.pubs=d.pubs||[]; d.reports=d.reports||{}; d.duties=d.duties||[]; d.remits=d.remits||[]; d.purchases=d.purchases||[]; d.bank=d.bank||[]; d.notes=d.notes||[]; d.co=d.co||{date:'',notes:''};
+  d.pubs=d.pubs||[]; d.reports=d.reports||{}; d.duties=d.duties||[]; d.remits=d.remits||[]; d.purchases=d.purchases||[]; d.bank=d.bank||[]; d.notes=d.notes||[]; d.co=d.co||{date:'',notes:''}; d.tasks=d.tasks||[]; d.letters=d.letters||[]; d.congs=d.congs||[]; d.cong=d.cong||{}; d.roles=d.roles||{};
   if(!d.seeded){
     const m=addDays(TODAY(),0).slice(0,8);
     d.duties=[
@@ -1723,10 +1768,10 @@ function money2(v){ return money(n(v)); }
 
 /* ---------- the Secretary tab ---------- */
 V.sec = () => {
-  const segs=[['glance','Overview'],['reports','Reports'],['pubs','Publishers'],['att','Meetings'],['duties','Duties'],['committee','Committee']];
+  const segs=[['glance','Overview'],['reports','Reports'],['pubs','Publishers'],['att','Meetings'],['duties','Duties & tasks'],['letters','Letters'],['committee','Committee']];
   let html=`<div class="seg six">${segs.map(([k,l])=>`<button class="${k===secTab?'on':''}" data-a="sectab" data-k="${k}">${l}</button>`).join('')}</div>`;
   if(!curProfile().pin) html+=`<div class="banner"><span style="flex:1">These are confidential congregation records. They stay only on this phone. Set a passcode so nobody else can open them.</span><button class="btn sm" data-a="pinsheet">Set passcode</button></div>`;
-  html += secTab==='glance'?secGlance(): secTab==='reports'?secReports(): secTab==='pubs'?secPubs(): secTab==='att'?secAttendance(): secTab==='duties'?secDuties(): secCommittee();
+  html += secTab==='glance'?secGlance(): secTab==='reports'?secReports(): secTab==='pubs'?secPubs(): secTab==='att'?secAttendance(): secTab==='duties'?secDuties(): secTab==='letters'?secLetters(): secCommittee();
   return html;
 };
 function secReports(){
@@ -1747,6 +1792,7 @@ function secReports(){
       <tr><td>Regular pioneers</td><td>${t.rp.n}</td><td>${r1(t.rp.h)}</td><td>${t.rp.st}</td></tr></table>
     <p class="muted" style="margin:6px 0 0;font-size:12.5px">${t.none?t.none+' did not share in the ministry. ':''}Counts only publishers marked Active.</p>
     <div class="btns" style="margin-top:10px"><button class="btn" style="flex:1" data-a="secpaste">Paste a group's report</button><button class="btn ghost" style="flex:1" data-a="seccopy">Copy totals</button></div>
+    <button class="btn" data-a="monthreport" data-m="${m}" style="margin-top:8px">Monthly congregation report (PDF)</button>
     <button class="btn ghost" data-a="printsheet" data-k="s21" style="margin-top:8px">Print publisher records for the service year (S-21)</button></div>`;
   if(att.length) html+=`<div class="card"><h2>Needs encouragement<span class="sp"></span><span class="chip" style="background:#FBEAEA;color:#A32D2D">${att.length}</span></h2>
     <p class="muted" style="margin:0 0 6px">No report or no ministry for 2 months in a row.</p>
@@ -1843,6 +1889,10 @@ function secGlance(){
   <div class="card"><h2>For the circuit overseer</h2><p class="muted" style="margin:0 0 10px">One PDF with the last 6 months: reports, attendance, pioneers, inactive and irregular publishers, groups and newly baptized.</p>
     <button class="btn" data-a="coprint">Print circuit overseer summary</button>
     <button class="btn ghost" data-a="printsheet" data-k="s21" style="margin-top:8px">Send all S-21 cards (PDF or ZIP)</button></div>`;
+  html = `<div class="card"><h2>Monthly report · ${monthName(m)}</h2><p class="muted" style="margin:0 0 10px">Totals, attendance, pioneers, missing reports, groups and remittance in one PDF, with a short summary to send on WhatsApp.</p>
+    <button class="btn" data-a="monthreport" data-m="${m}">Make the monthly report</button></div>` + html;
+  const lateT=SEC().tasks.filter(x=>!x.done && x.due && x.due<TODAY());
+  if(lateT.length) html = `<div class="banner"><span style="flex:1"><b>${lateT.length} task${lateT.length===1?'':'s'} for others overdue</b>: ${lateT.slice(0,3).map(x=>esc(x.title)).join(', ')}</span><button class="btn sm" data-a="sectab" data-k="duties">Open</button></div>` + html;
   return html;
 }
 
@@ -2054,6 +2104,7 @@ function secDuties(){
     <div class="list">${list.map(x=>{ const c=dutyClass(x), k=x.due?daysSince(x.due):null;
       return `<div class="it"><span class="wdot ${c}" style="margin-top:6px"></span><div class="x" data-a="dutysheet" data-id="${x.id}" style="cursor:pointer"><b>${esc(x.name)}</b><small>${esc((FREQ.find(f=>f[0]===x.freq)||['',''])[1])} · ${x.due?(k>0?'<span style="color:var(--bad)">Overdue since '+nice(x.due)+'</span>':k===0?'Due today':'Due '+nice(x.due)):'Set a due date'}${x.log.length?' · last done '+nice(x.log[x.log.length-1].date):''}</small></div>${x.due?`<button class="btn sm" data-a="dutydone" data-id="${x.id}">Done</button>`:''}</div>`; }).join('')}</div>
     <p class="muted" style="margin:8px 0 0;font-size:12.5px">Each duty rings a reminder at 9 am on its due day. Tap a duty to change its dates or checklist.</p></div>`;
+  html += tasksCard();
   return html;
 }
 function dutySheet(id){
@@ -2080,6 +2131,231 @@ function dutyDoneSheet(id){
     <div class="f" style="margin-top:10px"><label>Note (optional)</label><input type="text" id="ddNote" placeholder="Reference number, who helped"></div>
     ${/remit/i.test(x.name)?`<p class="muted" style="font-size:12.5px;margin:0 0 8px">Tip: record the amount and reference under Committee → Remittances.</p>`:''}
     <div class="btns"><button class="btn ghost" style="flex:1" data-a="close">Cancel</button><button class="btn" style="flex:1" data-a="ddsave" data-id="${id}">Mark as done</button></div>`, null);
+}
+
+/* ================= TASKS GIVEN TO OTHERS ================= */
+const ROLES=[['coord','Coordinator of the body of elders'],['so','Service overseer'],['elders','Body of elders'],['go','Group overseer'],['acc','Accounts servant'],['other','Someone else']];
+const roleName = k => (ROLES.find(r=>r[0]===k)||['','Someone'])[1];
+const taskWho = x => x.toName || roleName(x.role);
+function taskState(x){ if(x.done) return 'off'; if(!x.due) return 'green'; const k=daysSince(x.due); return k>0?'red':k>=-3?'orange':'green'; }
+function taskMsg(x){
+  const time=timeOfDay(), when=x.due?parse(x.due).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}):'', seed=strHash(x.id)+(x.nudges||[]).length;
+  const hi = x.role==='elders' ? ['Dear brothers, good '+time+'.','Good '+time+', dear brothers.'] : ['Good '+time+' '+(x.toName||'')+'!','Hello '+(x.toName||'')+', good '+time+'.','Hi '+(x.toName||'')+', I hope you\'re keeping well.'];
+  const body = [
+    'Just a gentle reminder about: '+x.title+(when?', needed by '+when:'')+'.',
+    'I wanted to check on '+x.title+(when?' for '+when:'')+'. How is it going?',
+    'A kind reminder about '+x.title+(when?'. We need it by '+when:'')+'. Please let me know if I can help in any way.'];
+  const end = x.role==='elders' ? 'Thank you for all your hard work 🙏' : ['Thank you very much 🙏','Thanks a lot for your help!','I really appreciate it 🙏'][seed%3];
+  return hi[seed%hi.length].replace(/\s+!/,'!').replace(/\s+\./,'.')+' '+body[seed%body.length]+(x.notes?'\n\n'+x.notes:'')+'\n\n'+end;
+}
+function tasksCard(){
+  const d=SEC(), open=d.tasks.filter(x=>!x.done).sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999')), done=d.tasks.filter(x=>x.done).sort((a,b)=>(b.doneOn||'').localeCompare(a.doneOn||'')).slice(0,8);
+  return `<div class="card"><h2>Tasks for others<span class="sp"></span><button class="btn sm ghost" data-a="tasksheet">${svg('plus',15)} Add</button></h2>
+    ${open.length?`<div class="list">${open.map(x=>{ const st=taskState(x), k=x.due?daysSince(x.due):null, tel=phoneIntl(x.toPhone);
+      return `<div class="it" style="flex-wrap:wrap"><span class="wdot ${st}" style="margin-top:6px"></span><div class="x" data-a="tasksheet" data-id="${x.id}" style="cursor:pointer"><b>${esc(x.title)}</b><small>${esc(taskWho(x))}${x.role!=='other'&&x.toName?' · '+esc(roleName(x.role)):''} · ${x.due?(k>0?'<span style="color:var(--bad)">'+k+' day'+(k===1?'':'s')+' late</span>':k===0?'due today':'due '+nice(x.due)):'no due date'}${(x.nudges||[]).length?' · reminded '+nice(x.nudges[x.nudges.length-1]):''}</small></div>
+        <div class="btns" style="width:100%;margin-top:6px"><a class="btn sm wa" style="flex:1" href="https://wa.me/${tel}?text=${encodeURIComponent(taskMsg(x))}" target="_blank" rel="noopener" data-a="tasknudge" data-id="${x.id}">${tel?'Remind on WhatsApp':'Remind (choose the chat)'}</a><button class="btn sm ghost" data-a="taskdone" data-id="${x.id}">Done ✓</button></div></div>`; }).join('')}</div>`
+      :'<div class="empty">Nothing given out. Add a task for the coordinator, the service overseer, the body of elders or anyone.</div>'}
+    ${done.length?`<div class="area">Done</div><div class="list">${done.map(x=>`<div class="it" data-a="tasksheet" data-id="${x.id}" style="cursor:pointer"><div class="x"><b style="text-decoration:line-through;opacity:.7">${esc(x.title)}</b><small>${esc(taskWho(x))} · done ${nice(x.doneOn)}</small></div></div>`).join('')}</div>`:''}
+    <p class="muted" style="margin:8px 0 0;font-size:12.5px">You get a reminder at 9 am on the day you choose and on the due date. For the body of elders, WhatsApp opens so you can pick the elders' chat.</p></div>`;
+}
+function taskSheet(id){
+  const d=SEC(), x = id ? d.tasks.find(z=>z.id===id) : {title:'', role:'coord', toName:'', toPhone:'', due:'', remind:2, notes:''};
+  if(!id){ const r=d.roles.coord||{}; x.toName=r.name||''; x.toPhone=r.phone||''; }
+  openSheet(`<h3>${id?'Edit task':'Give a task'}</h3>
+    <div class="f"><label>Task</label><input type="text" id="tkTitle" value="${esc(x.title)}" placeholder="Approve the accounts audit"></div>
+    <div class="f"><label>Given to</label><select id="tkRole">${ROLES.map(([k,l])=>`<option value="${k}" ${k===x.role?'selected':''}>${l}</option>`).join('')}</select></div>
+    <div class="f2"><div class="f"><label>Name</label><input type="text" id="tkName" value="${esc(x.toName||'')}" list="tkPubs" placeholder="Bro. Mensah"><datalist id="tkPubs">${SEC().pubs.filter(p=>p.elder||p.ms).map(p=>`<option>${esc(p.name)}</option>`).join('')}</datalist></div>
+      <div class="f"><label>WhatsApp number</label><input type="tel" id="tkPhone" value="${esc(x.toPhone||'')}" placeholder="${x.role==='elders'?'Leave empty to pick a chat':'024…'}"></div></div>
+    <div class="f2"><div class="f"><label>Due date</label><input type="date" id="tkDue" value="${x.due||''}"></div>
+      <div class="f"><label>Remind me</label><select id="tkRemind">${[[0,'Only on the due date'],[1,'1 day before'],[2,'2 days before'],[3,'3 days before'],[7,'1 week before']].map(([v,l])=>`<option value="${v}" ${v===n(x.remind)?'selected':''}>${l}</option>`).join('')}</select></div></div>
+    <div class="f"><label>Details (added to the reminder message)</label><textarea id="tkNotes" placeholder="The audit form is in the accounts file">${esc(x.notes||'')}</textarea></div>
+    ${actions}
+    ${id?`<div class="btns" style="margin-top:8px">${x.done?`<button class="btn ghost" style="flex:1" data-a="taskundo" data-id="${id}">Not done yet</button>`:''}<button class="btn danger" style="flex:1" data-a="deltask" data-id="${id}">Delete</button></div>`:''}`, ()=>{
+      const t=val('tkTitle').trim(); if(!t) return fail('tkTitle','Write the task');
+      const rec = id ? x : {id:uid(), created:TODAY(), nudges:[]};
+      Object.assign(rec,{title:t, role:val('tkRole'), toName:val('tkName').trim(), toPhone:val('tkPhone').trim(), due:val('tkDue'), remind:n(val('tkRemind')), notes:val('tkNotes').trim()});
+      if(rec.role!=='other' && (rec.toName||rec.toPhone)) d.roles[rec.role]={name:rec.toName, phone:rec.toPhone};
+      if(!id) d.tasks.push(rec); return true;
+    });
+  const role=document.getElementById('tkRole'), nm=document.getElementById('tkName'), ph=document.getElementById('tkPhone');
+  role.addEventListener('change',()=>{ const r=d.roles[role.value]||{}; nm.value=r.name||''; ph.value=r.phone||''; ph.placeholder=role.value==='elders'?'Leave empty to pick a chat':'024…'; });
+  nm.addEventListener('change',()=>{ const pp=SEC().pubs.find(z=>z.name.toLowerCase()===nm.value.trim().toLowerCase()); if(pp&&pp.phone&&!ph.value) ph.value=pp.phone; });
+}
+
+/* ================= LETTERS: introduction, transfer in, transfer out, request for records ================= */
+const LETTERS=[['intro','Letter of introduction'],['out','Transfer out (records sent)'],['in','Transfer in (publisher received)'],['req','Request for records']];
+let LT=null;
+function congInfo(){ const c=SEC().cong; if(!c.secName && S.settings.name) c.secName=S.settings.name; return c; }
+function secLetters(){
+  const d=SEC(), c=congInfo(), log=[...d.letters].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,15);
+  let html='';
+  if(!c.name) html+=`<div class="banner"><span style="flex:1">Add your congregation's details once. They go at the top and bottom of every letter.</span><button class="btn sm" data-a="congsheet">Add</button></div>`;
+  html+=`<div class="card"><h2>Write a letter</h2><div class="list">${LETTERS.map(([k,l])=>`<div class="it" data-a="lettersheet" data-k="${k}" style="cursor:pointer"><div class="x"><b>${l}</b><small>${({intro:'For a publisher moving or staying in another congregation',out:'Send a publisher\'s records to their new congregation',in:'Tell the old congregation the publisher has arrived',req:'Ask the old congregation for records of someone who moved in'})[k]}</small></div><span class="muted">›</span></div>`).join('')}</div>
+    <p class="muted" style="margin:8px 0 0;font-size:12.5px">The letter fills in the publisher's details. Check the wording with the coordinator, and follow any direction from the branch on how records are sent.</p></div>`;
+  html+=`<div class="card"><h2>My congregation<span class="sp"></span><button class="btn sm ghost" data-a="congsheet">Edit</button></h2>${c.name?`<p style="margin:0"><b>${esc(c.name)} Congregation</b>${c.number?' · No. '+esc(c.number):''}<br><span class="muted">${esc([c.city,c.secName&&'Secretary: '+c.secName,c.secEmail].filter(Boolean).join(' · '))}</span></p>`:'<div class="empty">Not added yet.</div>'}</div>`;
+  html+=`<div class="card"><h2>Other congregations<span class="sp"></span><button class="btn sm ghost" data-a="ocsheet">${svg('plus',15)} Add</button></h2>${d.congs.length?`<div class="list">${[...d.congs].sort((a,b)=>a.name.localeCompare(b.name)).map(o=>`<div class="it" data-a="ocsheet" data-id="${o.id}" style="cursor:pointer"><div class="x"><b>${esc(o.name)}</b><small>${esc([o.secretary,o.email].filter(Boolean).join(' · ')||'No email yet')}</small></div></div>`).join('')}</div>`:'<div class="empty">Saved automatically when you send a letter, or add them here.</div>'}</div>`;
+  if(log.length) html+=`<div class="card"><h2>Letters sent</h2><div class="list">${log.map(l=>`<div class="it"><div class="x"><b>${esc((LETTERS.find(x=>x[0]===l.type)||['',''])[1])}</b><small>${esc(l.name)} · ${esc(l.cong)} · ${nice(l.date)}</small></div></div>`).join('')}</div></div>`;
+  return html;
+}
+function congSheet(){
+  const c=congInfo();
+  openSheet(`<h3>My congregation</h3>
+    <div class="f2"><div class="f"><label>Congregation name</label><input type="text" id="cgName" value="${esc(c.name||'')}" placeholder="Dansoman North"></div><div class="f"><label>Congregation number</label><input type="text" id="cgNum" value="${esc(c.number||'')}"></div></div>
+    <div class="f"><label>Town or address</label><input type="text" id="cgCity" value="${esc(c.city||'')}" placeholder="Dansoman, Accra"></div>
+    <div class="f"><label>Secretary's name</label><input type="text" id="cgSec" value="${esc(c.secName||'')}"></div>
+    <div class="f2"><div class="f"><label>Phone</label><input type="tel" id="cgPhone" value="${esc(c.secPhone||'')}"></div><div class="f"><label>Email</label><input type="email" id="cgEmail" value="${esc(c.secEmail||'')}"></div></div>
+    ${actions}`, ()=>{ Object.assign(c,{name:val('cgName').trim().replace(/\s+congregation$/i,''), number:val('cgNum').trim(), city:val('cgCity').trim(), secName:val('cgSec').trim(), secPhone:val('cgPhone').trim(), secEmail:val('cgEmail').trim()}); return true; });
+}
+function ocSheet(id){
+  const d=SEC(), o = id ? d.congs.find(x=>x.id===id) : {name:'',secretary:'',email:'',phone:''};
+  openSheet(`<h3>${id?esc(o.name):'Add a congregation'}</h3>
+    <div class="f"><label>Congregation name</label><input type="text" id="ocName" value="${esc(o.name)}"></div>
+    <div class="f"><label>Secretary's name</label><input type="text" id="ocSec" value="${esc(o.secretary||'')}"></div>
+    <div class="f2"><div class="f"><label>Email</label><input type="email" id="ocEmail" value="${esc(o.email||'')}"></div><div class="f"><label>Phone</label><input type="tel" id="ocPhone" value="${esc(o.phone||'')}"></div></div>
+    ${actions}${id?`<button class="btn danger" data-a="deloc" data-id="${id}" style="margin-top:8px">Delete</button>`:''}`, ()=>{
+      const nm=val('ocName').trim().replace(/\s+congregation$/i,''); if(!nm) return fail('ocName','Enter the name');
+      const rec=id?o:{id:uid()}; Object.assign(rec,{name:nm, secretary:val('ocSec').trim(), email:val('ocEmail').trim(), phone:val('ocPhone').trim()});
+      if(!id) d.congs.push(rec); return true; });
+}
+function letterWho(nm){ return SEC().pubs.find(p=>p.name.toLowerCase()===String(nm||'').trim().toLowerCase()) || null; }
+function letterText(){
+  const c=congInfo(), p=letterWho(LT.name)||{name:LT.name}, nm=p.name||'[name]', first=firstName(nm);
+  const f=p.gender==='f', mKnown=p.gender==='m'||p.gender==='f';
+  const he=mKnown?(f?'she':'he'):'they', He=he[0].toUpperCase()+he.slice(1), his=mKnown?(f?'her':'his'):'their', him=mKnown?(f?'her':'him'):'them', is=mKnown?'is':'are', has=mKnown?'has':'have';
+  const title=p.gender==='f'?'Sister ':p.gender==='m'?'Brother ':'';
+  const other=LT.cong||'[congregation]', when=LT.date?parse(LT.date).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}):'';
+  const typeL={pub:'publisher',unbap:'unbaptized publisher',rp:'regular pioneer',sp:'special pioneer',fm:'field missionary'}[p.type]||'publisher';
+  const priv=[p.elder&&'an elder', p.ms&&'a ministerial servant', isPioneer(p)&&'a '+typeL].filter(Boolean);
+  const privLine = priv.length ? `${He} ${has} been serving as ${priv.join(' and ')}.` : `${He} ${is} ${p.type==='unbap'?'an unbaptized publisher':'a baptized publisher'}.`;
+  const bap = p.baptized && p.type!=='unbap' ? `${He} ${mKnown?'was':'were'} baptized on ${parse(p.baptized).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}. ` : '';
+  const today=parse(TODAY()).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+  const head=`${c.name||'[Our]'} Congregation${c.city?'\n'+c.city:''}\n${today}\n\nTo the Secretary\n${other} Congregation\n\nDear Brothers,\n\n`;
+  const sign=`\n\nWith warm Christian love,\n\n${c.secName||'[Secretary]'}\nSecretary, ${c.name||'[Our]'} Congregation${c.secPhone||c.secEmail?'\n'+[c.secPhone,c.secEmail].filter(Boolean).join(' · '):''}`;
+  const extra=LT.note?'\n\n'+LT.note:'';
+  const T={
+    intro:{subj:`Letter of introduction: ${title}${nm}`,
+      body:`We are pleased to introduce ${title}${nm}, who ${LT.stay==='visit'?`will be staying in your area${when?' from '+when:''}`:`${has} moved into your territory${when?' ('+when+')':''}`}. ${bap}${privLine}\n\n${first} ${is} a dear member of our congregation, and we warmly recommend ${him} to you. We are sure you will make ${him} feel at home.${LT.stay==='visit'?'':` ${his[0].toUpperCase()+his.slice(1)} publisher record cards are attached.`}`},
+    out:{subj:`Transfer of records: ${title}${nm}`,
+      body:`${title}${nm} has moved from our congregation${when?' on '+when:''} and now lives in your territory. Please find attached ${his} Congregation's Publisher Record cards (S-21) for the current and previous service years.\n\n${bap}${privLine} We have enjoyed ${his} company and will miss ${him}.\n\nKindly let us know when you have received the records. Thank you for caring for ${him}.`},
+    in:{subj:`${title}${nm} is now with our congregation`,
+      body:`We are happy to let you know that ${title}${nm} is now attending meetings and sharing in the ministry with our congregation${when?' since '+when:''}.\n\n${LT.got?`Thank you for sending ${his} publisher record cards. We have received them and added ${him} to our congregation.`:`If you have not sent ${his} publisher record cards yet, we would be grateful to receive them, together with a letter of introduction.`}`},
+    req:{subj:`Request for publisher records: ${title}${nm}`,
+      body:`${title}${nm} has recently moved into our territory${when?' ('+when+')':''} and is now associated with our congregation. ${He} told us that ${he} ${mKnown?'was':'were'} previously with your congregation.\n\nKindly send us ${his} Congregation's Publisher Record cards (S-21) and a letter of introduction from your body of elders, so that we can care for ${him} well.\n\nThank you very much for your help.`}
+  };
+  const t=T[LT.type];
+  return {subj:t.subj, body:head+t.body.replace(/ {2,}/g,' ')+extra+sign};
+}
+function letterSheet(type){
+  LT = LT && LT.type===type ? LT : {type, name:'', cong:'', email:'', date:'', note:'', stay:'move', got:true};
+  const d=SEC(), L=letterText(), canAttach=(LT.type==='intro'&&LT.stay!=='visit')||LT.type==='out';
+  openSheet(`<h3>${(LETTERS.find(x=>x[0]===type)||['',''])[1]}</h3>
+    <div class="f"><label>Publisher</label><input type="text" id="ltName" value="${esc(LT.name)}" list="ltPubs" placeholder="Choose or type a name"><datalist id="ltPubs">${d.pubs.map(p=>`<option>${esc(p.name)}</option>`).join('')}</datalist></div>
+    <div class="f"><label>${type==='in'||type==='req'?'Their old congregation':'Their new congregation'}</label><input type="text" id="ltCong" value="${esc(LT.cong)}" list="ltCongs" placeholder="Kaneshie South"><datalist id="ltCongs">${d.congs.map(o=>`<option>${esc(o.name)}</option>`).join('')}</datalist></div>
+    <div class="f2"><div class="f"><label>Their secretary's email</label><input type="email" id="ltEmail" value="${esc(LT.email)}" placeholder="secretary@…"></div><div class="f"><label>${type==='intro'?'From (date)':'Date moved'}</label><input type="date" id="ltDate" value="${LT.date}"></div></div>
+    ${type==='intro'?`<div class="f"><label>The publisher is</label><select id="ltStay"><option value="move" ${LT.stay==='move'?'selected':''}>Moving there for good</option><option value="visit" ${LT.stay==='visit'?'selected':''}>Staying there for a while</option></select></div>`:''}
+    ${type==='in'?`<div class="f"><label>Records</label><select id="ltGot"><option value="1" ${LT.got?'selected':''}>We have received their records</option><option value="" ${LT.got?'':'selected'}>Not received yet</option></select></div>`:''}
+    <div class="f"><label>Add a line (optional)</label><input type="text" id="ltNote" value="${esc(LT.note)}" placeholder="He has a Bible study with a young man in your area."></div>
+    <div class="f"><label>Letter (you can change anything)</label><textarea id="ltBody" style="min-height:260px;font-size:14px">${esc(L.body)}</textarea></div>
+    <div class="btns" style="flex-direction:column">
+      <button class="btn" data-a="ltemail">Send by email</button>
+      ${canAttach?`<button class="btn ghost" data-a="ltattach">Share with the S-21 cards attached</button>`:''}
+      <button class="btn ghost" data-a="ltcopy">Copy the letter</button>
+      ${type==='out'&&letterWho(LT.name)&&letterWho(LT.name).status!=='moved'?`<button class="btn ghost" data-a="ltmoved">Mark ${esc(firstName(LT.name))} as moved away</button>`:''}
+      <button class="btn ghost" data-a="close">Close</button></div>
+    <p class="muted" style="font-size:12.5px;margin:8px 0 0">${canAttach?'Email cannot attach files by itself. Use <b>Share with the S-21 cards attached</b> and choose Gmail; the letter goes in as the message.':'Send by email opens your email app with the letter and the address filled in.'}</p>`, null);
+  const refresh=()=>{ const b=document.getElementById('ltBody'); if(!LT.edited) b.value=letterText().body; };
+  [['ltName','name'],['ltCong','cong'],['ltEmail','email'],['ltDate','date'],['ltNote','note']].forEach(([i,k])=>document.getElementById(i).addEventListener('input',e=>{ LT[k]=e.target.value.trim();
+    if(k==='cong'){ const o=d.congs.find(x=>x.name.toLowerCase()===LT.cong.toLowerCase().replace(/\s+congregation$/,'')); if(o&&o.email){ LT.email=o.email; document.getElementById('ltEmail').value=o.email; } }
+    refresh(); }));
+  ['ltStay','ltGot'].forEach(i=>{ const el=document.getElementById(i); if(el) el.addEventListener('change',e=>{ if(i==='ltStay') LT.stay=e.target.value; else LT.got=!!e.target.value; letterSheet(type); }); });
+  document.getElementById('ltName').addEventListener('change',()=>letterSheet(type));
+  document.getElementById('ltBody').addEventListener('input',()=>{ LT.edited=true; });
+}
+function letterDone(how){
+  const d=SEC(), cn=(LT.cong||'').replace(/\s+congregation$/i,'').trim();
+  if(cn){ let o=d.congs.find(x=>x.name.toLowerCase()===cn.toLowerCase()); if(!o){ o={id:uid(), name:cn, secretary:'', email:'', phone:''}; d.congs.push(o); } if(LT.email) o.email=LT.email; }
+  d.letters.push({id:uid(), type:LT.type, name:LT.name, cong:cn, date:TODAY(), how}); save();
+}
+async function s21Both(p){
+  const L=await loadPdfLib(), sy=curSY(), out=await L.PDFDocument.create();
+  for(const y of [sy-1, sy]){ const src=await L.PDFDocument.load(await makeS21([p], y, [])); (await out.copyPages(src, src.getPageIndices())).forEach(pg=>out.addPage(pg)); }
+  return out.save();
+}
+
+/* ================= MONTHLY CONGREGATION REPORT ================= */
+function monthReportText(m){
+  const t=monthTotals(m), a=attMonth(m,'mid'), b=attMonth(m,'wk'), c=congInfo();
+  return `${c.name?c.name+' Congregation\n':''}Monthly report: ${monthName(m)}\n\nReports in: ${t.in+t.none} of ${t.total}${t.missing?' ('+t.missing+' missing)':''}\nPublishers: ${t.pub.n} · Bible studies ${t.pub.st}\nAuxiliary pioneers: ${t.aux.n} · Hours ${r1(t.aux.h)} · Bible studies ${t.aux.st}\nRegular pioneers: ${t.rp.n} · Hours ${r1(t.rp.h)} · Bible studies ${t.rp.st}\nAll Bible studies: ${t.pub.st+t.aux.st+t.rp.st}\n\nMeeting attendance (average)\nMidweek: ${a.n?a.avg+' ('+a.n+' meeting'+(a.n===1?'':'s')+')':'not entered'}\nWeekend: ${b.n?b.avg+' ('+b.n+' meeting'+(b.n===1?'':'s')+')':'not entered'}`;
+}
+async function makeMonthReport(m){
+  const L=await loadPdfLib(), doc=await L.PDFDocument.create();
+  const font=await doc.embedFont(L.StandardFonts.Helvetica), bold=await doc.embedFont(L.StandardFonts.HelveticaBold);
+  const ink=L.rgb(0.05,0.13,0.3), grey=L.rgb(0.4,0.45,0.52), line=L.rgb(0.85,0.88,0.92), W=595, H=842, M=40;
+  const clean=x=>String(x??'').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[–—]/g,'-').replace(/₵/g,'C').replace(/[^\x20-\x7E\xA0-\xFF]/g,'');
+  const fit=(x,w,size,f)=>{ x=clean(x); while(x && f.widthOfTextAtSize(x,size)>w) x=x.slice(0,-1); return x; };
+  let page, y;
+  const newPage=()=>{ page=doc.addPage(); page.setSize(W,H); y=H-M; };
+  const need=h=>{ if(y-h<M+20) newPage(); };
+  const text=(x,xp,size=9.5,f=font,c=ink)=>page.drawText(clean(x),{x:xp,y,size,font:f,color:c});
+  const heading=x=>{ need(44); y-=10; text(x,M,12.5,bold); y-=6; page.drawLine({start:{x:M,y},end:{x:W-M,y},thickness:1,color:ink}); y-=14; };
+  const row=(cells,xs,f=font,size=9.5)=>{ need(14); cells.forEach((c,i)=>text(fit(c,((xs[i+1]||W-M)-xs[i])-6,size,f),xs[i],size,f)); y-=5; page.drawLine({start:{x:M,y},end:{x:W-M,y},thickness:0.4,color:line}); y-=10; };
+  const note=x=>{ need(14); text(x,M,9.5,font,grey); y-=14; };
+  const para=x=>{ const words=clean(x).split(' '); let ln=''; words.forEach(w=>{ if(font.widthOfTextAtSize(ln+' '+w,9.5)>W-2*M){ need(14); text(ln.trim(),M); y-=13; ln=''; } ln+=' '+w; }); if(ln.trim()){ need(14); text(ln.trim(),M); y-=13; } };
+  const t=monthTotals(m), c=congInfo(), d=SEC();
+  newPage();
+  text((c.name?c.name+' Congregation - ':'')+'Monthly report',M,16,bold); y-=18;
+  text(monthName(m)+'   ·   Prepared '+parse(TODAY()).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})+(c.secName?'   ·   '+c.secName+', Secretary':''),M,9.5,font,grey); y-=10;
+
+  heading('1. Field service');
+  let xs=[M,220,320,420];
+  row(['','Number','Hours','Bible studies'],xs,bold,8.5);
+  row(['Publishers',t.pub.n,'',t.pub.st],xs);
+  row(['Auxiliary pioneers',t.aux.n,r1(t.aux.h),t.aux.st],xs);
+  row(['Regular pioneers',t.rp.n,r1(t.rp.h),t.rp.st],xs);
+  row(['Total',t.pub.n+t.aux.n+t.rp.n,r1(t.aux.h+t.rp.h),t.pub.st+t.aux.st+t.rp.st],xs,bold);
+  note('Reports in: '+(t.in+t.none)+' of '+t.total+' active publishers'+(t.none?' ('+t.none+' did not share)':'')+(t.missing?'. Still missing: '+t.missing+'.':'.'));
+
+  heading('2. Meeting attendance');
+  xs=[M,200,330,450];
+  row(['','Meetings','Average','Total'],xs,bold,8.5);
+  [['Midweek','mid'],['Weekend','wk']].forEach(([l,k])=>{ const a=attMonth(m,k); row([l,a.n||'-',a.n?a.avg:'-',a.n?a.total:'-'],xs); });
+  const pm=prevMonth(m), pa=attMonth(pm,'wk'), ca=attMonth(m,'wk');
+  if(pa.n&&ca.n) note('Weekend average last month: '+pa.avg+(ca.avg>=pa.avg?' (up)':' (down)'));
+
+  heading('3. Reports still missing');
+  const miss=activePubs().filter(p=>repState(rep(m,p.id))==='missing').sort((a,b)=>(a.group||'').localeCompare(b.group||'')||a.name.localeCompare(b.name));
+  if(miss.length){ xs=[M,260,400]; row(['Name','Group','Phone'],xs,bold,8.5); miss.forEach(p=>row([p.name,p.group||'-',p.phone||'-'],xs)); } else note('None. Every active publisher has reported.');
+
+  heading('4. Pioneers');
+  const pios=activePubs().filter(p=>isPioneer(p) || (rep(m,p.id)||{}).aux).sort((a,b)=>a.name.localeCompare(b.name));
+  if(pios.length){ xs=[M,230,340,430]; row(['Name','Type','Hours','Bible studies'],xs,bold,8.5);
+    pios.forEach(p=>{ const r=rep(m,p.id); row([p.name,isPioneer(p)?'Regular pioneer':'Auxiliary pioneer',r&&r.shared!==false?r1(n(r.hours)):'not in',r?n(r.studies):'-'],xs); }); }
+  else note('No pioneers this month.');
+
+  heading('5. Field service groups');
+  const groups=groupsList();
+  if(groups.length){ xs=[M,220,330,440]; row(['Group','Publishers','Reported','Missing'],xs,bold,8.5);
+    groups.forEach(g=>{ const ps=activePubs().filter(p=>(p.group||'')===g), inn=ps.filter(p=>repState(rep(m,p.id))!=='missing').length; row([g,ps.length,inn,ps.length-inn],xs); }); }
+  else note('No groups set.');
+
+  heading('6. Changes and care');
+  const newP=d.pubs.filter(p=>p.since===m), bap=d.pubs.filter(p=>p.baptized&&p.baptized.slice(0,7)===m), ina=inactivePubs(), att=needsAttention(m);
+  note('New publishers added: '+(newP.length?newP.map(p=>p.name).join(', '):'none'));
+  note('Baptized this month: '+(bap.length?bap.map(p=>p.name).join(', '):'none'));
+  note('Inactive publishers: '+ina.length+'   ·   Missed two months in a row: '+(att.length?att.map(p=>p.name).join(', '):'none'));
+
+  const remM=d.remits.filter(r=>r.date.slice(0,7)===m), openT=d.tasks.filter(x=>!x.done);
+  if(remM.length||openT.length){ heading('7. Operating committee');
+    if(remM.length) note('Remittance sent: '+money(remM.reduce((a,r)=>a+n(r.amount),0))+' ('+remM.map(r=>nice(r.date)+(r.ref?' ref '+r.ref:'')).join(', ')+')');
+    if(openT.length){ xs=[M,280,430]; row(['Task still open','Given to','Due'],xs,bold,8.5); openT.forEach(x=>row([x.title,taskWho(x),x.due?nice(x.due):'-'],xs)); } }
+  need(30); y-=10; note('Confidential congregation record. Made with Life Compass.');
+  return doc.save();
+}
+async function monthReport(btn, m){
+  const was=btn.textContent; btn.textContent='Making the report…'; btn.disabled=true;
+  try{ await savePdfFile(await makeMonthReport(m), 'Monthly report '+m+'.pdf', monthReportText(m)); toast('Report ready'); }
+  catch(e){ toast(e.message||'Could not make the report'); }
+  btn.textContent=was; btn.disabled=false;
 }
 
 /* ---------- operating committee: remittances, purchases, bank, meeting notes ---------- */
@@ -3321,7 +3597,7 @@ function settingsSheet(){
     <p class="muted" style="margin:0 0 8px">Use Life Compass on two devices and keep them the same with the Sync button at the top.</p>
     <button class="btn ghost" data-a="syncsheet">Sync with my other device</button>
     <div class="area" style="margin-top:20px">Backup</div>
-    <p class="muted" style="margin:0 0 8px">Your data is saved only on this phone. Download a backup file regularly and keep it in Google Drive or WhatsApp to yourself. ${st.lastBackup?'Last backup: '+new Date(st.lastBackup).toLocaleDateString()+'.':'No backup made yet.'}</p>
+    <p class="muted" style="margin:0 0 8px">${curProfile().pin?'<b>Backups and sync files are locked with your passcode.</b> Nobody can open them without it, so don\'t forget it. ':'<b>Set a passcode</b> (under Passcode above) to lock your backups. '}Your data is saved only on this phone. Download a backup file regularly and keep it in Google Drive or WhatsApp to yourself. ${st.lastBackup?'Last backup: '+new Date(st.lastBackup).toLocaleDateString()+'.':'No backup made yet.'}</p>
     <div class="btns"><button class="btn ghost" style="flex:1" data-a="backup">Download backup</button><button class="btn ghost" style="flex:1" data-a="restore">Restore backup</button></div>
     <input type="file" id="restoreFile" accept=".json,application/json" hidden>
     <div class="area" style="margin-top:20px">Put it on your home screen</div>
@@ -3381,12 +3657,14 @@ function startFresh(withBackup){
 async function backup(){
   S.settings.lastBackup = Date.now(); save();
   let photos={}; try{ photos=await photoAll(); delete photos['lib:pdf-lib']; }catch(e){}
-  const out = JSON.stringify(Object.keys(photos).length ? {...S, __photos:photos} : S, null, 1);
+  let out = JSON.stringify(Object.keys(photos).length ? {...S, __photos:photos} : S);
+  const pin = await myPin(); if(pin) out = await lockText(out, pin); closeSheet();
+  if(!pin) toast('Tip: set a passcode so your backups are locked');
   if(NATIVE){
     const F=window.Capacitor.Plugins.Filesystem, Sh=window.Capacitor.Plugins.Share, name='life-compass-backup-'+TODAY()+'.json';
     try{
       const r=await F.writeFile({path:name, data:out, directory:'CACHE', encoding:'utf8'});
-      await Sh.share({title:'Life Compass backup', text:'My Life Compass backup '+TODAY(), files:[r.uri], dialogTitle:'Keep your backup safe'});
+      await Sh.share({title:'Life Compass backup', text:'My Life Compass backup '+TODAY()+(pin?' (locked with my passcode)':''), files:[r.uri], dialogTitle:'Keep your backup safe'});
       toast('Choose Google Drive or WhatsApp to keep it');
     }catch(e){ if(!/cancel/i.test(String(e&&e.message||e))) alert('The backup could not be shared: '+(e&&e.message||e)); }
     render(); return;
@@ -3394,7 +3672,7 @@ async function backup(){
   const blob = new Blob([out],{type:'application/json'});
   const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='life-compass-backup-'+TODAY()+'.json';
   document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},500);
-  toast('Backup downloaded'); render();
+  toast(pin?'Locked backup downloaded':'Backup downloaded'); render();
 }
 /* ================= SYNC BETWEEN PHONE AND LAPTOP (through a file, merged, nothing wiped) ================= */
 function deviceId(){ try{ let d=localStorage.getItem('lc.device'); if(!d){ d=uid(); localStorage.setItem('lc.device',d); } return d; }catch(e){ return 'x'; } }
@@ -3436,7 +3714,8 @@ async function syncSend(){
   const data=syncPack();
   let photos={}; try{ photos=await photoAll(); delete photos['lib:pdf-lib']; }catch(e){}
   if(Object.keys(photos).length) data.__photos=photos;
-  const out=JSON.stringify(data), d=new Date(), name='life-compass-sync-'+TODAY()+'-'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0')+'.json';
+  let out=JSON.stringify(data); const pin=await myPin(); if(pin) out=await lockText(out, pin);
+  const d=new Date(), name='life-compass-sync-'+TODAY()+'-'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0')+'.json';
   if(NATIVE){
     const F=window.Capacitor.Plugins.Filesystem, Sh=window.Capacitor.Plugins.Share;
     try{ const r=await F.writeFile({path:name, data:out, directory:'CACHE', encoding:'utf8'});
@@ -3466,8 +3745,8 @@ function syncMerge(d){
 }
 function syncLoad(file){
   const r=new FileReader();
-  r.onload=()=>{
-    let d; try{ d=JSON.parse(r.result); if(!d||!d.settings||!d.days) throw 0; }catch(e){ toast('That file is not a Life Compass sync file'); return; }
+  r.onload=async()=>{
+    let d; try{ d=await openDataFile(r.result); if(!d||!d.settings||!d.days) throw 0; }catch(e){ toast('That file is not a Life Compass sync file'); return; }
     if(d.__sync && d.__sync.device===deviceId()){ toast('That file came from this device. Load the one from your other device.'); return; }
     syncMerge(d).then(ctx=>{ closeSheet(); render(); toast('Synced'+(d.__sync&&d.__sync.name?' with '+d.__sync.name:'')+': '+ctx.added+' new, '+ctx.changed+' updated'+(ctx.removed?', '+ctx.removed+' removed':'')); });
   };
@@ -3491,9 +3770,9 @@ function syncSheet(){
 
 function restore(file){
   const r = new FileReader();
-  r.onload = () => {
+  r.onload = async () => {
     try{
-      const d = JSON.parse(r.result);
+      const d = await openDataFile(r.result);
       if(!d || !d.settings || !d.days) throw 0;
       if(!confirm('Replace everything on this phone with this backup?')) return;
       const ph=d.__photos||{}; delete d.__photos;
@@ -3543,7 +3822,7 @@ document.addEventListener('click', e => {
     case 'delmoney': if(confirm('Delete this money entry?')){ S.money=S.money.filter(x=>x.id!==id); save(); render(); } break;
     case 'addbucket': document.getElementById('bk').insertAdjacentHTML('beforeend', bucketRow({name:'',pct:0})); updBk(); break;
     case 'delbucket': t.closest('.bkrow').remove(); updBk(); break;
-    case 'backup': { const ws=weekSheet.open; backup(); if(ws) weekSheet(ws); break; }
+    case 'backup': { const ws=weekSheet.open; backup().then(()=>{ if(ws) weekSheet(ws); }); break; }
     case 'restore': document.getElementById('restoreFile').click(); break;
     case 'syncsheet': syncSheet(); break;
     case 'syncsend': syncSend(); break;
@@ -3584,6 +3863,20 @@ document.addEventListener('click', e => {
     case 'rpclear': if(confirm('Clear this report?')){ delete (SEC().reports[secMonth]||{})[id]; save(); closeSheet(); render(); } break;
     case 'secpaste': pasteSheet(); break;
     case 'psapply': applyPaste(); break;
+    case 'monthreport': monthReport(t, t.dataset.m||secMonthDefault()); break;
+    case 'tasksheet': taskSheet(id); break;
+    case 'tasknudge': { const x=SEC().tasks.find(z=>z.id===id); if(x){ x.nudges=x.nudges||[]; x.nudges.push(TODAY()); save(); setTimeout(render,400); } return; }
+    case 'taskdone': { const x=SEC().tasks.find(z=>z.id===id); x.done=true; x.doneOn=TODAY(); save(); render(); toast('Marked as done ✓'); break; }
+    case 'taskundo': { const x=SEC().tasks.find(z=>z.id===id); x.done=false; x.doneOn=''; save(); closeSheet(); render(); break; }
+    case 'deltask': if(confirm('Delete this task?')){ SEC().tasks=SEC().tasks.filter(z=>z.id!==id); save(); closeSheet(); render(); } break;
+    case 'congsheet': congSheet(); break;
+    case 'ocsheet': ocSheet(id); break;
+    case 'deloc': if(confirm('Delete this congregation?')){ SEC().congs=SEC().congs.filter(z=>z.id!==id); save(); closeSheet(); render(); } break;
+    case 'lettersheet': LT=null; letterSheet(t.dataset.k); break;
+    case 'ltemail': { const L=letterText(), body=val('ltBody'), subj=L.subj; letterDone('email'); window.location.href='mailto:'+encodeURIComponent(LT.email||'')+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body); toast('Opening your email'); break; }
+    case 'ltcopy': { const body=val('ltBody'); (navigator.clipboard?navigator.clipboard.writeText(body):Promise.reject()).then(()=>toast('Letter copied'),()=>{ const b=document.getElementById('ltBody'); b.focus(); b.select(); toast('Press and hold, then Copy'); }); break; }
+    case 'ltattach': { const pp=letterWho(LT.name); if(!pp){ toast('Choose a publisher from your list'); break; } const body=val('ltBody'); (async()=>{ if(!(await photoGet(FORM_KEY.s21))){ toast('First add your blank S-21 card once'); printSheet('s21'); return; } const was=t.textContent; t.textContent='Making the cards…'; t.disabled=true; try{ await savePdfFile(await s21Both(pp), 'S-21 '+safeName(pp.name)+'.pdf', body); letterDone('share'); toast('Choose Gmail to send it'); }catch(e){ toast(e.message||'Could not make the cards'); } t.textContent=was; t.disabled=false; })(); break; }
+    case 'ltmoved': { const pp=letterWho(LT.name); if(pp){ pp.status='moved'; save(); toast(firstName(pp.name)+' marked as moved away'); letterSheet(LT.type); render(); } break; }
     case 'seccopy': { const txt=totalsText(secMonth); (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast('Totals copied'),()=>openSheet(`<h3>Totals</h3><textarea style="min-height:200px">${esc(txt)}</textarea><button class="btn ghost" data-a="close" style="margin-top:8px">Close</button>`,null)); break; }
     case 'secremind': remindSheet(); break;
     case 'secreminded': { const pp=SEC().pubs.find(p=>p.id===id); if(pp){ pp.reminded=secMonth; save(); } setTimeout(remindSheet,500); return; }
@@ -4009,6 +4302,7 @@ function showLock(sel){
 async function tryUnlock(id){
   const prof=P.list.find(x=>x.id===id);
   if(prof.pin){ const v=(document.getElementById('lockPin')||{}).value||''; if(await hashPin(v)!==prof.pin){ document.getElementById('lockErr').hidden=false; document.getElementById('lockPin').value=''; return; } }
+  if(prof.pin) SESSION_PIN=(document.getElementById('lockPin')||{}).value||null;
   P.current=id; saveProfiles(); KEY=keyFor(id); S=load();
   if(!S.settings.name && prof.name) { S.settings.name=prof.name; save(); }
   try{ sessionStorage.setItem('lc.unlocked',id); }catch(e){}
@@ -4029,7 +4323,7 @@ function pinSheet(){
       const a=val('pin1'), b=val('pin2');
       if(!/^\d{4,8}$/.test(a)) return fail('pin1','Use 4 to 8 numbers');
       if(a!==b) return fail('pin2','The two passcodes are different');
-      hashPin(a).then(h=>{ prof.pin=h; saveProfiles(); try{ sessionStorage.setItem('lc.unlocked',prof.id); }catch(e){} toast('Passcode set'); });
+      SESSION_PIN=a; hashPin(a).then(h=>{ prof.pin=h; saveProfiles(); try{ sessionStorage.setItem('lc.unlocked',prof.id); }catch(e){} toast('Passcode set'); });
       return true;
     });
 }
