@@ -242,7 +242,7 @@ body.formmode main{padding-bottom:40px}
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 29;
+const APP_VERSION = 30;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -539,6 +539,8 @@ function renderNav(){
 function render(){
   if(FORM){ renderForm(); return; }
   if(tab!=='notes' && !tabOn(tab)) tab='today';
+  if(tab==='notes' && !partOn('notes')) tab='today';
+  const nb=document.querySelector('header [data-a=gonotes]'); if(nb) nb.hidden=!partOn('notes');
   renderNav();
   document.getElementById('title').textContent = tab==='today'?'Life Compass':tab==='notes'?'My notes':TABS.find(t=>t[0]===tab)[1];
   document.getElementById('main').innerHTML = V[tab]();
@@ -563,26 +565,44 @@ V.today = () => {
     <div class="sub">${parse(t).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
     <div class="chips">
       ${secOn('faith')?`<span class="chip">Bible reading streak: ${bStreak} day${bStreak===1?'':'s'}</span>`:''}
-      ${secOn('ministry')?`<span class="chip">${ministryChip()}</span>`:''}
+      ${partOn('mintime')?`<span class="chip">${ministryChip()}</span>`:''}
     </div></div>`;
   if(hasData && (sinceBackup===null || sinceBackup>=7))
     html += `<div class="banner"><span style="flex:1">${sinceBackup===null?'You haven\'t made a backup yet.':'Last backup was '+sinceBackup+' days ago.'} Your data lives only on this phone.</span><button class="btn sm" data-a="backup">Back up</button></div>`;
   if(SA()) html += `<div class="banner" style="background:var(--sky);border-color:var(--sky2);color:var(--navy)"><span style="flex:1"><b>Studying:</b> ${esc(studyTitle(SA()))} · ${hoursText(studyMs()/3.6e6)}</span><button class="btn sm" data-a="gostudy">Open</button></div>`;
-  if(!st.setupAsked && !hasData && !S.contacts.length)
+  if(false)
     html += `<div class="banner" style="background:var(--sky);border-color:var(--sky2);color:var(--navy)"><span style="flex:1">Did someone share Life Compass with you and give you a setup code?</span><button class="btn sm" data-a="setupcode">Enter code</button><button class="btn sm ghost" data-a="nosetup">No</button></div>`;
+  const cards={};
+  cards.plan=()=>{ let html='';
   html += planCard(t);
+  return html; };
+  cards.invite=()=>{ let html='';
   html += inviteCard(t);
-  if(secOn('people')) html += followCard(t);
-  if(secOn('secretary')) html += secTodayCard();
+  return html; };
+  cards.follow=()=>{ let html='';
+  if(partOn('met')) html += followCard(t);
+  return html; };
+  cards.sec=()=>{ let html='';
+  if(secOn('secretary') && secNeedsMe()) html += secTodayCard();
+  return html; };
+  cards.week=()=>{ let html='';
   html += weekCard(t);
-  if(secOn('ministry')) html += timerCard();
-  if(secOn('faith')) html += encouragement(t);
+  return html; };
+  cards.timer=()=>{ let html='';
+  if(partOn('mintime')) html += timerCard();
+  return html; };
+  cards.encourage=()=>{ let html='';
+  if(secOn('faith')) html += encOpen ? encouragement(t) : encouragementMini(t);
+  return html; };
+  cards.faith=()=>{ let html='';
   if(secOn('faith')||secOn('ministry')) html += `<div class="card"><h2>${svg('faith',18)} Faith today</h2>
-    ${secOn('faith')?[['bible','Daily Bible reading',''],['study','Personal study',''],['prayer','Prayer and meditation',''],['meeting','Meeting preparation','']].map(([k,l])=>`
+    ${secOn('faith')?[['bible','Daily Bible reading',''],['study','Personal study',''],['prayer','Prayer and meditation',''],['meeting','Meeting preparation','']].filter(([k])=>partOn(k==='prayer'?'bible':k)).map(([k,l])=>`
     <div class="row"><div class="lbl">${l}</div>${checkBox(d[k],'tick','data-k="'+k+'"')}</div>`).join(''):''}
     ${secOn('ministry')?`<div class="row"><div class="lbl">Ministry today<small>${hoursText(todayMin)} logged</small></div>
       <div class="btns"><button class="btn sm ghost" data-a="addmin" data-h="0.5">+30 min</button><button class="btn sm ghost" data-a="addmin" data-h="1">+1 h</button><button class="btn sm ghost" data-a="minsheet">More</button></div></div>`:''}
   </div>`;
+  return html; };
+  cards.health=()=>{ let html='';
   if(secOn('health')) html += `<div class="card"><h2>${svg('health',18)} Health today</h2>
     <div class="row"><div class="lbl">Water<small>Target ${st.waterTarget} glasses</small></div>
       <div class="step"><button data-a="water" data-d="-1">−</button><b>${d.water||0}</b><button data-a="water" data-d="1">+</button></div></div>
@@ -591,24 +611,72 @@ V.today = () => {
     <div class="row"><div class="lbl">Weight (kg)<small>Optional</small></div><input class="mini" type="text" inputmode="decimal" step="0.1" min="0" data-f="weight" value="${d.weight??''}"></div>
     ${medCard(t,true)}
   </div>`;
+  return html; };
+  cards.money=()=>{ let html='';
   if(secOn('money')) html += todayMoneyCard(t);
-  if(secOn('ministry') && S.students.some(x=>x.status!=='stopped')){
+  return html; };
+  cards.students=()=>{ let html='';
+  if(partOn('students') && S.students.some(x=>x.status!=='stopped')){
     const act=S.students.filter(x=>x.phone&&x.status!=='stopped'), sent=act.filter(x=>x.lastMsg===t).length;
     const dueStudy=S.students.filter(x=>x.status==='steady' && x.day && x.day.toLowerCase().startsWith(parse(t).toLocaleDateString('en',{weekday:'long'}).toLowerCase().slice(0,3)));
     html += `<div class="card"><h2>${svg('others',18)} Bible students<span class="sp"></span><span class="chip">${sent}/${act.length} encouraged today</span></h2>
       ${dueStudy.length?`<p style="margin:0 0 8px">Study today: <b>${dueStudy.map(x=>esc(x.name)+(x.day?' ('+esc(x.day)+')':'')).join(', ')}</b></p>`:''}
       <div class="btns"><button class="btn sm" data-a="encourageall">Send today's encouragement</button><button class="btn sm ghost" data-a="gostudents">My students</button></div></div>`;
   }
-  if(secOn('people')) html += `<div class="card"><h2>${svg('others',18)} Helping others</h2>
+  return html; };
+  cards.help=()=>{ let html='';
+  if(partOn('help')) html += `<div class="card"><h2>${svg('others',18)} Helping others</h2>
     ${followups.length?`<div class="list">${followups.map(x=>`<div class="it"><div class="x"><b>Follow up: ${esc(x.person)}</b><small>${esc(x.how)}</small></div>${checkBox(false,'followdone','data-id="'+x.id+'"')}</div>`).join('')}</div>`:''}
     <button class="btn ghost" data-a="helpsheet" style="margin-top:${followups.length?10:0}px">I helped someone today</button><button class="btn ghost" data-a="thanks" style="margin-top:8px">Encourage someone after an assignment</button></div>`;
+  return html; };
+  cards.goals=()=>{ let html='';
   if(secOn('goals')) html += `<div class="card"><h2>${svg('goals',18)} This month's goals<span class="sp"></span><button class="btn sm ghost" data-a="go" data-t="goals">See all</button></h2>
     ${monthGoals.length?monthGoals.slice(0,6).map(goalRow).join(''):`<div class="empty">No goals for ${monthName(MONTH())} yet.</div><button class="btn" data-a="goalsheet" data-h="1m">Set a goal for this month</button>`}
   </div>`;
+  return html; };
+  cards.diary=()=>{ let html='';
   html += diaryCard(t);
+  return html; };
+  const cfg=todayCfg(), tm=T();
+  cfg.order.forEach(k=>{ if(cards[k] && (!cfg.hide[k] || (k==='timer' && (tm.running||tm.sessionMs)))) html += cards[k](); });
+  html += `<button class="btn ghost" data-a="todaycfg" style="margin:4px 0 10px">Customise my Today page</button>`;
+
   html += `<p class="muted" style="text-align:center;font-size:12px;margin:4px 0 0">Life Compass version ${APP_VERSION} · <button class="linkbtn" data-a="forceupdate">Check for updates</button></p>`;
   return html;
 };
+
+/* ---------- choose what the Today page shows ---------- */
+const TODAY_CARDS=[['plan','Today\'s plan'],['invite','Invitation reminders'],['follow','People to follow up'],['sec','Secretary (only when something needs you)'],['week','Weekly summary'],['timer','Field service timer (always shows while running)'],['encourage','Today\'s encouragement'],['faith','Faith today'],['students','Bible students'],['goals','This month\'s goals'],['help','Helping others'],['health','Health today'],['money','Money today'],['diary','Diary']];
+const TODAY_HIDE={timer:1, health:1, money:1, diary:1};
+function todayCfg(){
+  const st=S.settings; st.today=st.today||{}; const c=st.today;
+  if(!Array.isArray(c.order)) c.order=TODAY_CARDS.map(x=>x[0]);
+  TODAY_CARDS.forEach(([k])=>{ if(!c.order.includes(k)) c.order.push(k); });
+  if(!c.hide) c.hide={...TODAY_HIDE};
+  return c;
+}
+function todayCfgSheet(){
+  const c=todayCfg(), lab=k=>(TODAY_CARDS.find(x=>x[0]===k)||['',k])[1];
+  openSheet(`<h3>Customise my Today page</h3><p class="muted" style="margin:-6px 0 10px">Tick what you want to see on the front, and move it up or down. Everything else is still in its own tab.</p>
+    <div class="list">${c.order.filter(k=>TODAY_CARDS.some(x=>x[0]===k)).map((k,i,arr)=>`<div class="it" style="align-items:center"><label style="display:flex;gap:10px;align-items:center;flex:1;cursor:pointer"><input type="checkbox" data-a="tcshow" data-k="${k}" ${c.hide[k]?'':'checked'} style="width:22px;height:22px"><span>${esc(lab(k))}</span></label>
+      <button class="icon-btn" data-a="tcmove" data-k="${k}" data-d="-1" aria-label="Move up" ${i===0?'disabled style="opacity:.3"':''}>▲</button><button class="icon-btn" data-a="tcmove" data-k="${k}" data-d="1" aria-label="Move down" ${i===arr.length-1?'disabled style="opacity:.3"':''}>▼</button></div>`).join('')}</div>
+    <div class="btns" style="margin-top:12px"><button class="btn ghost" style="flex:1" data-a="tcreset">Use the suggested layout</button><button class="btn" style="flex:1" data-a="close">Done</button></div>`, null);
+}
+let encOpen=false;
+function encouragementMini(t){
+  const dn=dayNum(t), [ref,code,theme]=VERSES[dn % VERSES.length];
+  return `<div class="card enc" style="padding-block:12px"><div style="display:flex;gap:10px;align-items:center"><div style="flex:1;min-width:0"><div class="kicker">Scripture for today</div><b>${esc(ref)}</b> <span class="muted">${esc(theme)}</span></div>
+    <a class="btn sm ghost" href="${jwlib(code)}">Read</a><button class="btn sm ghost" data-a="encmore">More</button></div></div>`;
+}
+function secNeedsMe(){
+  const d=SEC(); if(!d.pubs.length) return true;
+  const t=monthTotals(secMonthDefault()), dom=parse(TODAY()).getDate();
+  if(t.missing && dom<=20) return true;
+  if(d.duties.some(x=>x.due && daysSince(x.due)>=-3)) return true;
+  if((d.tasks||[]).some(x=>!x.done && x.due && daysSince(x.due)>=-2)) return true;
+  if(newlyBaptized().some(p=>{ const lv=lastVisit(p); return !lv || daysSince(lv)>90; })) return true;
+  return false;
+}
 
 /* ---------- weekly summary (weeks run Monday to Sunday) ---------- */
 function weekStart(s=TODAY()){ return addDays(s, -((parse(s).getDay()+6)%7)); }
@@ -1173,8 +1241,48 @@ function finishStudy(){
   if(a.material==='Bible chapter'){ const set=new Set(S.bible.read[a.book]||[]); if(!set.has(a.chapter)){ set.add(a.chapter); S.bible.read[a.book]=[...set].sort((x,y)=>x-y); S.bible.log.push({date:TODAY(), book:a.book, chapter:a.chapter, note:''}); } day().bible=true; }
   if(a.material==='Bible chapter'){ S.study.next = a.chapter<BOOKS[a.book-1][1] ? {book:a.book, chapter:a.chapter+1} : {book:a.book%66+1, chapter:1}; }
   S.study.active=null; save(); render(); toast('Saved: '+hoursText(minsDone/60)+' of personal study');
+  { const jl=S.study.journal[S.study.journal.length-1]; setTimeout(()=> a.material==='Bible chapter' ? reflectSheet(a.book, a.chapter) : studyDeeperSheet(jl.id), 400); }
 }
 setInterval(()=>{ const el=document.getElementById('stClock'); if(el && SA() && SA().running) el.textContent=clock(studyMs()); }, 1000);
+
+const EZEKIEL_Q = [["Ezekiel saw Jehovah’s heavenly chariot with living creatures and huge wheels. What does this vision teach you about Jehovah’s organization and how it moves?", "The rainbow around the throne (1:28) shows beauty and calm. How does this help you picture Jehovah?", "Ezekiel was in exile, far from the temple, yet Jehovah came to him there. How does that comfort you when you are in a hard place?"], ["Jehovah sent Ezekiel to a rebellious people, whether they listened or not (2:5, 7). How does this help you when people don’t listen in the ministry?", "Jehovah told Ezekiel not to be afraid, again and again (2:6). What fears do you face in the ministry, and how can you handle them?", "Ezekiel had to eat the scroll (2:8 to 3:3). What does it mean for you to take in God’s word before you preach it?"], ["The scroll was sweet like honey even though the message was hard (3:3). Why can preaching be sweet to you even when the message is serious?", "Read 3:17-21 about the watchman. Who are you responsible to warn, and how do you feel about that?", "Jehovah made Ezekiel’s forehead harder than flint (3:8, 9). How does Jehovah give you strength to keep going?"], ["Ezekiel acted out the siege of Jerusalem and lay on his side for many days. What does this show about his obedience, even when it was uncomfortable?", "When Ezekiel objected about how the bread was baked, Jehovah adjusted the command (4:14, 15). What does that show about Jehovah’s consideration?", "Why do you think Jehovah used acted-out messages? What can you learn about making the truth clear to others?"], ["Ezekiel shaved his hair and divided it into thirds (5:1-4). What does this teach about the results of turning away from Jehovah?", "Jerusalem was placed among the nations to be an example, but became worse than them (5:5-7). What responsibility comes with knowing the truth?", "A few hairs were tied in his garment (5:3). How does this show that Jehovah protects the faithful ones?"], ["“You will have to know that I am Jehovah” is repeated again and again (6:7, 10, 13). What does Jehovah want all people to learn about him?", "Jehovah felt heartbroken over their unfaithful hearts (6:9). What does this show about his feelings?", "What could become an “idol” in a person’s life today? How can you guard against it?"], ["“The end has come” (7:2, 6). How does this chapter help you keep a sense of urgency today?", "Their silver and gold could not save them (7:19). How does this affect the way you view money?", "People looked for a vision but found none (7:26). Why is it important to listen to Jehovah’s warnings now, while there is time?"], ["Ezekiel was shown the disgusting things done in secret in the temple (8:12). What does it teach you that Jehovah sees what is done in secret?", "The elders said, “Jehovah is not seeing us” (8:12). How can you keep your private life clean before Jehovah?", "Some wept for Tammuz and others bowed to the sun (8:14, 16). Why does Jehovah hate mixing true worship with false?"], ["The man with the secretary’s inkhorn marked those sighing and groaning over the bad things (9:4). How do you show that you hate what is bad?", "Today, what does it mean to be marked for survival? What are you doing to keep that mark?", "The judgment started at the sanctuary, with the elders (9:6). Why does Jehovah expect more from those who know him?"], ["Jehovah’s glory moved from the temple to the threshold (10:4, 18). How do you think Ezekiel felt seeing Jehovah leave the temple?", "The cherubs were full of eyes (10:12). What does that teach you about how alert Jehovah’s angels are?", "What could cause Jehovah to leave a person or a family? How can you keep his favor?"], ["Jehovah promised his people a new heart and a new spirit (11:19, 20). How has Jehovah changed your heart since you learned the truth?", "Jehovah said he would be a sanctuary for a little while to the exiles (11:16). How does Jehovah care for you when you are far from home or in a hard place?", "When Pelatiah died, Ezekiel cried out for the rest of the people (11:13). What does that show about Ezekiel’s feelings for them?"], ["Ezekiel packed his baggage and dug through the wall as a sign of exile (12:3-7). How does his example help you obey even when people watch and question you?", "People said the vision was for many days in the future (12:22, 27). How do some people think the same way today? How would you answer them?", "Jehovah said there would be no more delay (12:28). How does this help you plan your life?"], ["The false prophets said “Peace!” when there was no peace (13:10). What false “peace” messages do people believe today?", "They whitewashed a weak wall (13:10-12). Why is it dangerous to cover up problems instead of fixing them?", "How can you make sure your comfort to others is based on the Bible, not just nice words?"], ["Some elders had set up idols in their hearts (14:3). What could become an idol in my heart without anyone noticing?", "Noah, Daniel and Job are named as examples of righteousness (14:14). Which of the three would you like to imitate, and why?", "Even those men could save only themselves (14:14, 20). Why must each of us build our own friendship with Jehovah?"], ["Wood from a vine that gives no fruit is only good for burning (15:2-5). What fruit does Jehovah want to see in your life?", "Why was Jerusalem compared to useless vine wood? What made it lose its value?", "How can you keep being useful to Jehovah all through your life?"], ["Jehovah found Jerusalem like an abandoned baby and cared for her (16:4-14). What does this show about his love and patience?", "Jerusalem trusted in her beauty and became unfaithful (16:15). How can gifts from Jehovah lead to pride if we are not careful?", "Even after all that, Jehovah promised to remember his covenant and forgive (16:60-63). How does this make you feel about Jehovah’s mercy?"], ["The riddle of the two eagles shows that the king broke his oath (17:15-18). How important is it to keep your word, even when it is hard?", "Jehovah himself plants a tender twig on a high mountain (17:22-24). How does this point to Jesus and God’s Kingdom?", "Jehovah makes the low tree high and the high tree low (17:24). What does this teach about humility?"], ["“The soul who sins is the one who will die” (18:4, 20). How does this show that each person is responsible for his own choices?", "Jehovah says he takes no pleasure in the death of anyone (18:32). How does this make you feel about Jehovah?", "A wicked person who turns back can live (18:21, 22). How can this help you be patient with people in the ministry and in the congregation?"], ["This chapter is a funeral song for the princes of Judah, pictured as young lions (19:1-9). Why do you think Jehovah had Ezekiel sing a sad song for them?", "The vine that was once strong was pulled up and dried out (19:10-14). What happens when leaders forget Jehovah?", "How can you show feeling for people who suffer because of bad choices?"], ["Jehovah acted again and again for the sake of his own name (20:9, 14, 22). Why is Jehovah’s name so important?", "Israel rebelled even in the wilderness, yet Jehovah was patient. How has Jehovah been patient with you?", "Jehovah gave the sabbaths as a sign between him and his people (20:12). How do you set aside time for Jehovah each week?"], ["The crown would go to the one who has the legal right (21:27). How was this fulfilled in Jesus?", "The king of Babylon used divination, but Jehovah still controlled the result (21:21, 22). How does it comfort you that Jehovah is in control?", "The sword was sharpened and ready (21:9-11). How should Jehovah’s coming judgment affect your choices today?"], ["Jehovah looked for a man to stand in the gap but found none (22:30). How can you be someone who stands up for what is right?", "The priests did not teach the difference between holy and common (22:26). Why is it important to teach your family and Bible students this difference?", "The leaders were like wolves tearing prey (22:27). What does this teach about how to treat others when you have authority?"], ["Oholah (Samaria) and Oholibah (Jerusalem) trusted in the nations instead of Jehovah (23:4-11). What do people trust in today instead of Jehovah?", "Oholibah saw what happened to her sister but did even worse (23:11). Why is it wise to learn from others’ mistakes?", "How can you protect your heart from loving the world’s things?"], ["Ezekiel’s dear wife died, and he was told not to mourn openly (24:16-18). How do you think he felt? What does his obedience teach you?", "The rusty cooking pot pictured Jerusalem’s uncleanness (24:6-13). What spiritual “rust” do we need to clean off?", "After the news came, Ezekiel would speak freely again (24:27). How does Jehovah help you keep going after a loss?"], ["Ammon, Moab, Edom and Philistia were happy when Israel fell (25:3, 6, 8, 12, 15). Why does Jehovah hate it when people enjoy someone else’s trouble?", "How can you avoid feeling happy when someone who hurt you has problems?", "These nations would come to know that he is Jehovah (25:7, 11). How does Jehovah show his justice to all nations?"], ["Tyre said “Aha!” when Jerusalem fell, because she hoped to gain (26:2). How can greed and selfishness creep into our hearts?", "Tyre was to become a bare rock for drying fishnets (26:4, 5, 14). How does the fulfillment of this prophecy strengthen your trust in the Bible?", "How could you use this fulfilled prophecy in the ministry?"], ["Tyre is pictured as a beautiful trading ship that sinks (27:3-9, 26, 27). What does this teach about trusting in riches and business?", "Many traders mourned when Tyre fell (27:28-36). How does this help you understand Revelation 18?", "How can you keep your work and business in their right place?"], ["The king of Tyre said “I am a god” because of his wisdom and wealth (28:2-5). How can pride grow when things are going well?", "The words about being in Eden and an anointed cherub (28:13, 14) remind us of Satan. How did pride lead to his fall?", "Jehovah promised his people would live in security (28:26). How does that promise comfort you?"], ["Pharaoh said the Nile was his own, that he made it for himself (29:3, 9). How can a person forget that everything comes from Jehovah?", "Israel leaned on Egypt like a broken reed (29:6, 7). Why is it dangerous to depend on humans instead of Jehovah?", "Jehovah gave Egypt to Nebuchadnezzar as wages for his work against Tyre (29:18-20). What does this teach about Jehovah’s fairness?"], ["“The day of Jehovah is near” (30:3). How does this chapter help you keep Jehovah’s day close in mind?", "Egypt’s helpers fell with her (30:6, 8). What happens to those who stand with what Jehovah condemns?", "Jehovah broke Pharaoh’s arm and strengthened Babylon’s king (30:21-25). How does it help you to know that Jehovah decides who wins?"], ["Assyria was like a tall, beautiful cedar, but it fell because of pride (31:3-10). What warning is there here for you?", "Even the trees in the garden of God envied it (31:8, 9). How can success make a person proud?", "How can you stay humble when Jehovah blesses you?"], ["Ezekiel sang a funeral song over Pharaoh (32:2). Why would Jehovah have him mourn even over an enemy?", "The mighty nations all ended up in the Grave (32:18-32). What does this show about human power?", "How does this chapter help you not to be afraid of powerful people and governments?"], ["Jehovah again made Ezekiel a watchman (33:7-9). How seriously do you take your responsibility to preach?", "“Turn back, turn back from your bad ways, for why should you die?” (33:11). How does this verse show Jehovah’s heart?", "People listened to Ezekiel like a love song but did not obey (33:31, 32). How can you make sure you don’t only enjoy the meetings but also apply what you hear?"], ["The bad shepherds fed themselves, not the sheep (34:2-4). What does Jehovah expect from those who care for the flock?", "Jehovah said he himself would search for his sheep and care for the weak and injured (34:11-16). How has Jehovah cared for you?", "Jehovah promised one shepherd, his servant David (34:23). How does Jesus care for you? Who in your group needs your care this week?"], ["Mount Seir (Edom) kept a lasting hatred against Israel (35:5). How can long-held hatred destroy a person?", "Edom spoke proudly against Jehovah and his people (35:12, 13). How does Jehovah feel when people insult his people?", "How can you get rid of bitterness toward someone who hurt you?"], ["Jehovah said he would sanctify his great name, not for Israel’s sake but for his name (36:22, 23). What does it mean to you to sanctify Jehovah’s name?", "Jehovah promised to take away the heart of stone and give a heart of flesh (36:26). Which change in your heart are you still working on?", "The desolate land would become like the garden of Eden (36:35). How does this help you picture the coming Paradise?"], ["The dry bones came to life when Jehovah’s spirit entered them (37:1-10). How does this show that Jehovah can revive his people, even when they feel hopeless?", "Asked if the bones could live, Ezekiel answered, “Jehovah, you yourself know” (37:3). How does his answer show trust?", "The two sticks became one in Jehovah’s hand (37:15-22). How does this picture the unity of Jehovah’s people today? How can you add to that unity?"], ["Gog of Magog attacks a people living in peace, without walls (38:8, 11). How does this help you understand the attack that will come on God’s people?", "Gog thinks the people are easy to attack. Why can we stay calm when it happens?", "Jehovah says he will make himself known in the eyes of many nations (38:23). What should you be doing now to be ready for that time?"], ["Jehovah defeats Gog completely (39:1-6). How does this strengthen your trust that Jehovah will protect his people?", "It took seven months to bury the dead and seven years to burn the weapons (39:9, 12). What does this show about how complete Jehovah’s victory will be?", "Jehovah says he will no longer let his holy name be profaned (39:7). How do you feel knowing his name will be cleared?"], ["Ezekiel saw a man with a measuring rod measuring the temple (40:3). Why do you think so many careful measurements are given?", "Ezekiel was told to look carefully, listen closely and pay attention (40:4). How can you do the same in your personal study and at meetings?", "The temple had walls and gates with guard rooms (40:5-16). What does this teach about protecting our worship?"], ["The Most Holy was a perfect square (41:4). What does this teach about Jehovah’s standards for worship?", "Cherubs and palm trees were carved on the walls (41:18-20). What do palm trees remind you of? (Compare Psalm 92:12.)", "How can you show respect for the place where we worship, the Kingdom Hall?"], ["The wall separated what was holy from what was common (42:20). How do you keep holy things separate from common things in your life?", "The priests had special rooms where they changed their garments (42:13, 14). What does this teach about preparing ourselves for worship?", "How can your appearance and conduct at meetings honor Jehovah?"], ["Jehovah’s glory came back to the temple from the east (43:1-5). How do you think Ezekiel felt, after seeing it leave in chapter 10?", "Ezekiel was to describe the temple so the people would feel humiliated over their errors (43:10). How does learning Jehovah’s standards help us improve?", "The altar had to be cleansed before it was used (43:18-27). Why does Jehovah want clean worship?"], ["The east gate stayed shut because Jehovah had entered through it (44:1, 2). What does this teach about respect for Jehovah?", "The priests had to teach the difference between holy and common (44:23). How can you help your family or Bible students see this difference?", "Some Levites lost privileges because of past unfaithfulness but could still serve (44:10-14). What does this teach about Jehovah’s justice and mercy?"], ["A holy portion of land was set aside for Jehovah (45:1). How do you set aside the best of your time and strength for Jehovah?", "The chieftains were told to stop violence and use honest scales (45:9, 10). Why is honesty in money matters so important for a Christian?", "How can you be fair and honest in your work and business this week?"], ["Those who came in by the north gate had to go out by the south gate (46:9). What lesson might there be about not turning back once we start on Jehovah’s way?", "The chieftain worshipped together with the people (46:10). What does that show about leaders and humility?", "The chieftain could not take the people’s inheritance (46:18). How should those with authority treat the flock?"], ["Water flowed from the temple and became deeper and deeper (47:1-5). How has your understanding of the truth grown deeper over the years?", "Wherever the river went, things came to life, even in the salty sea (47:8, 9). How does this picture the blessings that come from pure worship?", "Trees along the river gave fruit every month and leaves for healing (47:12). How can you help others receive healing from the Bible?"], ["The land was divided fairly among all the tribes (48:1-29). What does this show about Jehovah’s fairness?", "The city was named “Jehovah Is There” (48:35). What makes a congregation or a family a place where Jehovah is there?", "Looking back at the whole book of Ezekiel, what is the most important lesson you learned about Jehovah?"]];
+const BTYPE_Q = {"law": ["Which law or event here shows how much Jehovah cares about his people?", "How does this chapter help me see that Jehovah’s standards protect us?", "Which person here showed faith, or lacked it? What can I learn?", "Is there a principle here I can use in my family or at work this week?", "How does this chapter point forward to Jesus or God’s Kingdom?"], "history": ["Who in this chapter made a good choice, and who made a bad one? Why?", "How did Jehovah bless faithfulness or correct wrong conduct here?", "If I had been there, what would I have found hardest? How can I prepare for a similar test?", "What does this chapter show about the results of following or ignoring Jehovah?", "Which person here would I like to imitate, and in what way?"], "poetry": ["Which feeling did the writer express here? Have I felt the same?", "How did the writer find comfort or strength in Jehovah?", "Which verse would I like to memorize or use in my prayers?", "What practical wisdom here can I use in a decision this week?", "How can this chapter help someone I know who is going through a hard time?"], "prophets": ["What did Jehovah warn about, and what does that show about his justice?", "Which promise of hope is in this chapter? How does it strengthen my faith?", "How did the prophet keep going even when people did not listen? What can I learn for my ministry?", "Is there a fulfillment of this prophecy that I can explain to someone?", "What does this chapter show about how Jehovah feels about false worship?"], "gospels": ["What did Jesus say or do here that shows his love or compassion?", "How did Jesus treat people, and how can I treat others the same way?", "What does this chapter teach me about Jehovah through Jesus? (John 14:9)", "Which of Jesus’ teachings here can I use in the ministry this week?", "How did the disciples or others react to Jesus? What can I learn from them?"], "acts": ["How did the early Christians keep preaching despite problems?", "What did holy spirit do in this chapter?", "Which way of preaching or attitude here can I imitate?", "How did the congregation help one another here?", "What gives me courage from this chapter?"], "letters": ["What counsel here would help me in my family, the congregation or at work?", "Which quality does this chapter encourage me to grow? How?", "How do these words show the writer’s love for the brothers?", "Is there a warning here that I need to take personally?", "Which verse would encourage a brother or sister in our group? Who could I share it with?"], "revelation": ["What does this chapter teach about God’s Kingdom and its victory?", "How should this vision affect the way I live today?", "Which symbol here did I find interesting? What does it mean, according to our publications?", "What hope from this chapter can I share in the ministry?", "How does this chapter show that Jehovah will make everything right?"]};
+const ABOUT_Q = ["What does this chapter teach me about Jehovah’s personality?", "What do I learn about Jehovah from this chapter, and how does it make me feel about him?", "Which quality of Jehovah stands out in this chapter?"];
+const APPLY_Q = ["What one thing will I do this week because of what I read? Be specific.", "How will I use something from this chapter before the week ends?", "Who could I share a thought from this chapter with this week?"];
+const STUDY_Q = ["What is the main point I learned today, in one sentence?", "Which scripture in my study explains this point best? Why?", "How does this change the way I think, speak or act?", "How could I explain this to a Bible student or in the ministry?", "What question do I still have, and where can I research it?", "What does this teach me about Jehovah?"];
+/* ================= THINK DEEPER: questions after each chapter and each study ================= */
+const bookType = b => b<=5?'law': b<=17?'history': b<=22?'poetry': b<=39?'prophets': b<=43?'gospels': b===44?'acts': b<=65?'letters':'revelation';
+function chapterQs(book, ch){
+  if(book===26 && EZEKIEL_Q[ch-1]) return EZEKIEL_Q[ch-1];
+  const tq=BTYPE_Q[bookType(book)];
+  return [ABOUT_Q[(book+ch)%ABOUT_Q.length], tq[(ch-1)%tq.length], APPLY_Q[(book*7+ch)%APPLY_Q.length]];
+}
+function reflectSheet(book, ch){
+  S.reflect=S.reflect||{}; const k=book+':'+ch, r=S.reflect[k]||{}, qs=r.qs||chapterQs(book, ch), name=BOOKS[book-1][0]+' '+ch;
+  openSheet(`<h3>Think deeper: ${esc(name)}</h3>
+    <p class="muted" style="margin:-6px 0 10px">${book===26?'Questions written for this chapter of Ezekiel.':'Take a few minutes. Short answers are fine.'}</p>
+    ${qs.map((q,i)=>`<div class="f"><label style="font-weight:600;color:var(--ink)">${i+1}. ${esc(q)}</label><textarea id="rfA${i}" style="min-height:70px" placeholder="My answer…">${esc((r.as||[])[i]||'')}</textarea></div>`).join('')}
+    <div class="btns"><button class="btn ghost" style="flex:1" data-a="close">${r.date?'Close':'Not now'}</button><button class="btn" style="flex:1" data-a="rfsave" data-k="${k}">Save my answers</button></div>`, null);
+  reflectSheet.qs=qs;
+}
+function saveReflect(k){
+  const qs=reflectSheet.qs||[], as=qs.map((_,i)=>val('rfA'+i).trim());
+  if(!as.some(Boolean)){ toast('Write at least one answer'); return; }
+  S.reflect=S.reflect||{}; S.reflect[k]={id:(S.reflect[k]||{}).id||uid(), date:(S.reflect[k]||{}).date||TODAY(), updated:TODAY(), qs, as}; save(); closeSheet(); render(); toast('Saved. Well done for thinking deeper 🙏');
+}
+function reflectionsCard(){
+  const R=S.reflect||{}, list=Object.entries(R).sort((a,b)=>(b[1].updated||b[1].date).localeCompare(a[1].updated||a[1].date)).slice(0,12);
+  if(!list.length) return `<div class="card"><h2>Think deeper</h2><p class="muted" style="margin:0">After you tap <b>I read</b>, the app asks you 3 questions about that chapter. Your answers are saved here.${S.bible.book===26?' Ezekiel has questions made for each chapter.':''}</p></div>`;
+  return `<div class="card"><h2>My answers · Think deeper<span class="sp"></span><span class="chip">${Object.keys(R).length}</span></h2><div class="list">${list.map(([k,r])=>{ const [b,c]=k.split(':').map(Number); return `<div class="it" data-a="rfopen" data-k="${k}" style="cursor:pointer"><div class="x"><b>${esc(BOOKS[b-1][0])} ${c}</b><small>${nice(r.date)}</small><div style="font-size:13.5px;margin-top:2px">${esc(((r.as||[]).find(Boolean)||'').slice(0,110))}</div></div></div>`; }).join('')}</div></div>`;
+}
+function studyDeeperSheet(jid){
+  const j=S.study.journal.find(x=>x.id===jid); if(!j) return;
+  const seed=strHash(jid), qs=j.deeperQs||[0,1,2].map(i=>STUDY_Q[(seed+i*2)%STUDY_Q.length]);
+  openSheet(`<h3>Think deeper about your study</h3><p class="muted" style="margin:-6px 0 10px">${esc(j.title||'Personal study')}</p>
+    ${qs.map((q,i)=>`<div class="f"><label style="font-weight:600;color:var(--ink)">${i+1}. ${esc(q)}</label><textarea id="sdA${i}" style="min-height:70px" placeholder="My answer…">${esc((j.deeper||[])[i]||'')}</textarea></div>`).join('')}
+    <div class="btns"><button class="btn ghost" style="flex:1" data-a="close">Not now</button><button class="btn" style="flex:1" data-a="sdsave" data-id="${jid}">Save my answers</button></div>`, null);
+  studyDeeperSheet.qs=qs;
+}
 
 /* ================= FRIENDLY MESSAGES: natural texts for people you met, students and friends ================= */
 /* Placeholders: {name} first name, {me} your first name, {place} where you met, {topic} what you talked about,
@@ -1189,6 +1297,13 @@ const CLOSE = {
   afternoon:['Take care!','Enjoy the rest of your day.','Hope the rest of the day goes well 🙂','Have a nice afternoon.'],
   evening:['Have a restful night.','Sleep well! 🌙','Enjoy your evening.','Rest well tonight.','Have a good night.']
 };
+const GREET_GH = {"morning": ["Good morning {name}! How was your night?", "Good morning {name}, hope you woke up well 😊", "{name}! Good morning oo. How are you and the family?", "Morning {name}! Hope you slept well."], "afternoon": ["Good afternoon {name}! Hope the day is going well 😊", "Hello {name}, how is the day treating you?", "{name}! Good afternoon. How is everything?"], "evening": ["Good evening {name}! How was the day?", "{name}, good evening oo. Hope you're resting small now 😊", "Good evening {name}! Hope today was kind to you."]};
+const TWI_G = {"morning": ["Maakye {name}! Wo ho te sɛn? 😊", "Maakye {name}, hope you slept well."], "afternoon": ["Maaha {name}! Wo ho te sɛn?", "Maaha {name}, how is the day going?"], "evening": ["Maadwo {name}! Wo ho te sɛn?", "Maadwo {name}, how did the day go?"]};
+const TWI_C = ["Yehowa nhyira wo 🙏", "Nante yie, eh!", "Stay blessed! Yehowa nhyira wo 🙏"];
+const MIDDLE = {"pub": ["It's been a while since we sat down and talked small.", "I hope the family is keeping well too.", "You really encourage the rest of us in the group, you know.", "Hope work is not too tiring these days.", "I was just thinking about how far we've come together in the truth."], "met": ["I still remember our chat about {topic}.", "It was really nice talking with you.", "I hope work and the family are all fine.", "I enjoyed the questions you asked."], "student": ["I really enjoy the time we spend studying together.", "Your questions always make me think too.", "I hope the week has been good to you so far.", "You're making good progress, and I can see it."], "friend": ["It's been a while since we caught up properly.", "I hope the family is keeping well.", "You're always in my prayers.", "Hope work is not too tiring these days."]};
+const ASK = {"pub": ["How are things on your side?", "When will you be free so we go out in service together?", "Is there anything I can do for you this week?", "How is the family doing?"], "met": ["When will you be free so we can continue our chat?", "Can I pass by this week for a short chat?", "How has your week been?"], "student": ["Are we still meeting {day}?", "Is there any question from our last study you'd like us to look at?", "How is your reading going?"], "friend": ["How are things on your side?", "Can I pass by this week to greet you?", "When can we go out in service together?"]};
+const EXTRA = {"pub": ["Hope you're keeping strong. We really miss you when you're not around.", "Ayekoo for all your hard work in the ministry. It doesn't go unnoticed.", "Just a small hello from me. Hope the week has been good to you.", "I was going through my day and you came to mind. How are you doing?", "We should sit down and chat small one of these days. It's been a while!", "Thank you for always greeting everyone warmly at the Hall. It makes a difference."], "met": ["It's me again, {me}, the one you met at {place}. Hope you're doing well.", "Just passing by to say hello. Hope work and the family are fine.", "I was thinking about our chat the other day and wanted to greet you."], "student": ["Hope your week is going well. I'm looking forward to our study {day}.", "Just greeting you. Hope everything is fine at home.", "I was thinking about our last study. You really understood the lesson well!"], "friend": ["Long time oo! How have you been?", "Just greeting you. Hope everything is fine on your side.", "I was thinking about you today and decided to send a small hello."]};
+Object.keys(EXTRA).forEach(k=>{ /* added to the friendly pools below */ });
 const TPL = {
   pub:{
     friendly:[
@@ -1283,6 +1398,7 @@ const TPL = {
     ]
   }
 };
+Object.keys(EXTRA).forEach(k=>EXTRA[k].forEach(t=>TPL[k].friendly.unshift({t, gh:1})));
 const SITUATIONS = [['discouraged','Discouraged'],['sick','Sick'],['busy','Busy or stressed'],['grieving','Grieving'],['slowing','Slowing down'],['lonely','Lonely']];
 const SHEPHERD = {
   discouraged:[
@@ -1331,9 +1447,30 @@ function strHash(s){ let h=2166136261; for(const c of String(s)){ h^=c.charCodeA
 function fillVals(p){ return {name:firstName(p.name), me:firstName(S.settings.name), place:p.place||'', topic:p.topic||'', ask:p.ask||'', lesson:p.lesson?String(p.lesson):'', day:p.day?'on '+p.day:''}; }
 function canFill(t, v){ return (t.match(/\{(\w+)\}/g)||[]).every(k=>v[k.slice(1,-1)]); }
 function fillT(t, v){ return t.replace(/\{(\w+)\}/g,(m,k)=>v[k]??''); }
+const REPLY_TYPES = [["well", "😊 Doing well"], ["sick", "🤒 Not well"], ["sad", "😔 Sad or discouraged"], ["thanks", "🙏 Said thank you"], ["question", "❓ Asked a question"], ["busy", "⏳ Busy"], ["yes", "👍 Said yes"], ["no", "🙅 Not interested"]];
+const REPLY = {"well": ["Ah, that's good to hear, {name}! 😊 Thank God.", "Glad to hear you're fine oo, {name}!", "That's nice, {name}. I'm really happy for you."], "sick": ["Ah, sorry to hear that, {name}. Take it easy, eh. Make sure you rest well and drink enough water. I'll keep you in my prayers 🙏", "Oh {name}, sorry oo. Have you been able to see a doctor? Let me know if you need anything at all, okay?", "Sorry to hear that, {name}. Remember Jehovah really cares about you (1 Peter 5:7). Rest well and get well soon. I'll check on you tomorrow."], "sad": ["I'm sorry you're feeling this way, {name}. You're not alone, eh. Can I call you later so we talk small?", "Thank you for telling me, {name}. That's not easy. Psalm 34:18 says Jehovah is close to the brokenhearted. I'm here for you anytime.", "Ah {name}, sorry. Sometimes life is heavy. Would it help if I passed by this week? Even just to sit and chat."], "thanks": ["You're welcome, {name}! 😊 It's always a joy.", "No problem at all, {name}. You're always in my thoughts.", "Anytime, {name}! Take good care of yourself, eh."], "question": ["That's a good question, {name}! Let me look into it well and get back to you. Or we can talk about it when we meet.", "Thank you for asking, {name}. I'd love to answer that properly. When can we sit down for a few minutes?", "Good question oo, {name}! I'll find what the Bible says about it and send it to you."], "busy": ["No problem at all, {name}. I understand. Take your time, eh. We'll talk when you're free.", "Okay, {name}. Don't stress yourself. Just remember to rest small too 😊", "I understand, {name}. When will be a good time for you? I'll adjust."], "yes": ["Great! Thank you, {name} 😊 I'm really looking forward to it.", "Wonderful, {name}! I'll remind you a day before. See you then!", "That's good news, {name}. Thank you very much!"], "no": ["No problem at all, {name}. Thank you for letting me know. I wish you and your family all the best 🙏", "That's okay, {name}. Thank you for your time. If you ever have a question, I'm here."]};
+function replyText(who, type, offset){
+  const p=who.p, v=titled(who, fillVals(p)), aud=who.kind==='student'?'student':who.kind==='pub'?'pub':(p.type==='met'?'met':'friend');
+  const seed=strHash((p.id||'')+type)+offset, pool=REPLY[type]||REPLY.well;
+  let t=fillT(pool[seed%pool.length], v);
+  if(type==='well'){ const asks=ASK[aud].filter(x=>canFill(x,v)); if(asks.length) t+=' '+fillT(asks[seed%asks.length], v); }
+  if(S.settings.twi && seed%2===0 && type!=='no') t+=' '+TWI_C[seed%TWI_C.length];
+  return t;
+}
+/* greeting and goodbye, with the Ghanaian lines and the optional Twi touch */
+function greetLine(time, seed){
+  const tw=S.settings.twi && seed%2===0, pool = tw ? TWI_G[time] : GREET_GH[time].concat(GREET[time]);
+  return pool[seed%pool.length];
+}
+function closeLine(time, seed){
+  if(S.settings.twi && seed%2===1) return TWI_C[seed%TWI_C.length];
+  return CLOSE[time][(seed*3+1)%CLOSE[time].length];
+}
+function titled(who, v){ if(who.kind==='pub' && who.p.gender) v.name=(who.p.gender==='f'?'Sis. ':'Bro. ')+v.name; return v; }
 /* who: {kind:'contact'|'student', p:person}; style: 'friendly'|'scripture'|'encourage'|'mine' */
-function pickMessage(who, style, situation, time, offset){
-  const p=who.p, v=fillVals(p), aud = who.kind==='student'?'student':who.kind==='pub'?'pub':(p.type==='met'?'met':'friend');
+function pickMessage(who, style, situation, time, offset, len){
+  if(len==null) len=S.settings.msgLong?'long':'short';
+  const p=who.p, v=titled(who, fillVals(p)), aud = who.kind==='student'?'student':who.kind==='pub'?'pub':(p.type==='met'?'met':'friend');
   let pool, key;
   if(style==='encourage'){ pool=SHEPHERD[situation||'discouraged']; key='sh-'+(situation||'discouraged'); }
   else if(style==='mine'){ pool=(S.settings.myTemplates||[]).map(t=>({t})); key='mine'; }
@@ -1343,9 +1480,14 @@ function pickMessage(who, style, situation, time, offset){
   const seed=dayNum()*7 + strHash(p.id||p.name), order=seededOrder(ok.length, seed).map(i=>ok[i]);
   const sent=new Set(p.sent||[]), fresh=order.filter(x=>!sent.has(key+':'+x.i)), list=fresh.length?fresh:order;
   const pick=list[offset % list.length];
-  const g=GREET[time][(seed+offset)%GREET[time].length], c=CLOSE[time][(seed+offset*3+1)%CLOSE[time].length];
-  const body=fillT(pick.t, v);
-  const text = style==='mine' ? body : fillT(g, v)+' '+body+' '+c;
+  const g=greetLine(time, seed+offset), c=closeLine(time, seed+offset);
+  let body=fillT(pick.t, v);
+  if(len==='long' && style!=='mine' && MIDDLE[aud]){
+    const mids=MIDDLE[aud].filter(x=>canFill(x,v)), asks=ASK[aud].filter(x=>canFill(x,v));
+    if(mids.length) body = fillT(mids[(seed+offset)%mids.length], v)+' '+body;
+    if(asks.length && !/\?\s*$/.test(body)) body += ' '+fillT(asks[(seed+offset*5+2)%asks.length], v);
+  }
+  const text = style==='mine' ? body : fillT(g, v)+' '+body+(len==='long'?'\n\n':' ')+c;
   return {text, mid:key+':'+pick.i, ref:pick.ref||''};
 }
 
@@ -1397,8 +1539,9 @@ function metView(){
   return html;
 }
 V.others = () => {
-  const segs=[['met','Met in service'], ...(hasGroupData()?[['group','My group']]:[]), ['thanks','After assignments'], ['invite','Invitations'], ['help','Helping others']];
-  if(!segs.some(x=>x[0]===peopleTab)) peopleTab='met';
+  const segs=[...(partOn('met')?[['met','Met in service']]:[]), ...(hasGroupData()?[['group','My group']]:[]), ...(hasGroupData()||partOn('met')?[['thanks','After assignments']]:[]), ...(partOn('met')||partOn('students')?[['invite','Invitations']]:[]), ...(partOn('help')?[['help','Helping others']]:[])];
+  if(!segs.length) return '<div class="card"><div class="empty">Nothing here.</div></div>';
+  if(!segs.some(x=>x[0]===peopleTab)) peopleTab=segs[0][0];
   let html=`<div class="seg six">${segs.map(([k,l])=>`<button class="${k===peopleTab?'on':''}" data-a="peopletab" data-k="${k}">${l}</button>`).join('')}</div>`;
   return html + (peopleTab==='met' ? metView() : peopleTab==='group' ? groupView() : peopleTab==='thanks' ? thanksView() : peopleTab==='invite' ? eventsView() : helpView());
 };
@@ -1516,9 +1659,9 @@ function inviteText(who, ev, offset=0){
   const vals={...fillVals(p), event:evShort(ev), when:evWhen(ev), at:ev.place?' at '+ev.place:'', days:String(Math.max(0,evDays(ev)))};
   const pool = who.kind==='pub' ? INVITE_PUB : (INVITE[ev.kind]||INVITE.other);
   const body=fillT(pool[seed%pool.length], vals);
-  let t=fillT(GREET[time][seed%GREET[time].length], vals)+' '+body;
+  let t=fillT(greetLine(time, seed), titled(who, {...vals}))+' '+body;
   if(ev.link) t+='\n\n'+(who.kind==='pub'?'Here is the jw.org invitation to share: ':'Here is the invitation: ')+ev.link;
-  return t+'\n\n'+CLOSE[time][(seed*3+1)%CLOSE[time].length];
+  return t+'\n\n'+closeLine(time, seed);
 }
 function eventsView(){
   const up=upcomingEvents(), past=(S.events||[]).filter(ev=>(ev.end||ev.date)<TODAY()).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
@@ -1585,11 +1728,13 @@ let CM=null;
 function whoOf(kind,id){ const p = kind==='student' ? S.students.find(x=>x.id===id) : kind==='pub' ? ((S.sec&&S.sec.pubs)||[]).find(x=>x.id===id) : S.contacts.find(x=>x.id===id); return p?{kind,p}:null; }
 function composeSheet(kind, id, opts={}){
   const who=whoOf(kind,id); if(!who) return;
-  CM = {kind, id, time:timeOfDay(), style:opts.style||((who.p.sent||[]).length%3===2?'scripture':'friendly'), situation:'discouraged', offset:0, topic:'', link:'', edited:false};
+  CM = {kind, id, len:S.settings.msgLong?'long':'short', reply:'', time:timeOfDay(), style:opts.style||((who.p.sent||[]).length%3===2?'scripture':'friendly'), situation:'discouraged', offset:0, topic:'', link:'', edited:false};
   renderCompose();
 }
 function composeText(){
-  const who=whoOf(CM.kind,CM.id), m=pickMessage(who, CM.style, CM.situation, CM.time, CM.offset);
+  const who=whoOf(CM.kind,CM.id);
+  if(CM.reply){ CM.mid=''; CM.ref=''; return replyText(who, CM.reply, CM.offset); }
+  const m=pickMessage(who, CM.style, CM.situation, CM.time, CM.offset, CM.len);
   CM.mid=m.mid; CM.ref=m.ref;
   let t=m.text;
   if(CM.link) t += '\n\n'+ARTICLE_INTRO[(dayNum()+CM.offset)%ARTICLE_INTRO.length]+' '+CM.link;
@@ -1599,11 +1744,15 @@ function renderCompose(){
   const who=whoOf(CM.kind,CM.id); if(!who) return; const p=who.p, ph=phoneIntl(p.phone);
   const styles=[['friendly','Friendly chat'],['scripture','With a scripture'],['encourage','Encourage']].concat((S.settings.myTemplates||[]).length?[['mine','My messages']]:[]);
   const text = CM.edited && CM.text!=null ? CM.text : composeText(); CM.text=text;
-  const hist=(p.log||[]).filter(l=>l.text||l.article||l.ref).slice(-3).reverse();
+  const hist=(p.log||[]).filter(l=>l.text||l.article||l.ref).slice(-5).reverse();
   openSheet(`<h3>Message ${esc(p.name)}</h3>
     ${!ph?`<div class="f"><label>Phone number (to send directly)</label><input type="tel" id="cmPhone" placeholder="024 123 4567"></div>`:`<p class="muted" style="margin:-6px 0 10px">${esc(p.phone)}</p>`}
     <div class="chips2">${[['morning','Morning'],['afternoon','Afternoon'],['evening','Evening']].map(([k,l])=>`<button class="${k===CM.time?'on':''}" data-a="cmset" data-f="time" data-v="${k}">${l}</button>`).join('')}</div>
+    <div class="area" style="margin-top:0">They replied? Tap what they said</div>
+    <div class="chips2">${REPLY_TYPES.map(([k,l])=>`<button class="${k===CM.reply?'on':''}" data-a="cmreply" data-v="${k}">${l}</button>`).join('')}</div>
+    ${CM.reply?`<p class="muted" style="font-size:12.5px;margin:-4px 0 8px">Your answer to their reply is below. <button class="linkbtn" data-a="cmreply" data-v="">Write a new message instead</button></p>`:`<div class="area">New message</div>
     <div class="chips2">${styles.map(([k,l])=>`<button class="${k===CM.style?'on':''}" data-a="cmset" data-f="style" data-v="${k}">${l}</button>`).join('')}</div>
+    <div class="chips2"><button class="${CM.len==='short'?'on':''}" data-a="cmlen" data-v="short">Short</button><button class="${CM.len==='long'?'on':''}" data-a="cmlen" data-v="long">Longer</button><button class="${S.settings.twi?'on':''}" data-a="cmtwi">Twi touch ${S.settings.twi?'✓':''}</button></div>`}
     ${CM.style==='encourage'?`<div class="f"><label>Their situation</label><select id="cmSit">${SITUATIONS.map(([k,l])=>`<option value="${k}" ${k===CM.situation?'selected':''}>${l}</option>`).join('')}</select></div>`:''}
     <div class="f"><label style="display:flex;align-items:center"><span style="flex:1">Message (you can change anything)</span><button class="linkbtn" data-a="cmnext" style="font-size:13px">↻ Another message</button></label>
       <textarea id="cmText" style="min-height:150px">${esc(text)}</textarea></div>
@@ -1618,7 +1767,7 @@ function renderCompose(){
       <a class="btn ghost" id="cmSms" href="#" data-a="csend" data-via="sms">Send as text message (SMS)</a>
       <div class="btns"><button class="btn ghost" style="flex:1" data-a="cmcopy">Copy</button><button class="btn ghost" style="flex:1" data-a="savetpl">Save as my message</button></div>
       <button class="btn ghost" data-a="close">Close</button></div>
-    ${hist.length?`<div class="area">Already sent to ${esc(firstName(p.name))}</div><div class="list">${hist.map(l=>`<div class="it"><div class="x"><small>${nice(l.date)}${l.ref?' · '+esc(l.ref):''}${l.article?' · '+esc(l.topicName||'article'):''}</small><div style="font-size:14px">${esc((l.text||'').slice(0,120))}${(l.text||'').length>120?'…':''}</div></div></div>`).join('')}</div>`:''}`, null);
+    ${hist.length?`<div class="area">Your conversation with ${esc(firstName(p.name))}</div><div class="list">${hist.map(l=>`<div class="it"><div class="x"><small>${nice(l.date)}${l.theyReplied?' · <b>they said: '+esc(((REPLY_TYPES.find(r=>r[0]===l.theyReplied)||['',''])[1]).replace(/^\S+\s/,''))+'</b>':''}${l.ref?' · '+esc(l.ref):''}${l.article?' · '+esc(l.topicName||'article'):''}</small><div style="font-size:14px">${esc((l.text||'').slice(0,120))}${(l.text||'').length>120?'…':''}</div></div></div>`).join('')}</div>`:''}`, null);
   updCompose();
 }
 function updCompose(){
@@ -1661,9 +1810,35 @@ document.addEventListener('change', e=>{
 
 /* ================= SECTIONS AND THE SETUP CODE ================= */
 const SECTIONS = [['goals','Goals'],['faith','Bible and personal study'],['ministry','Ministry and Bible students'],['health','Health'],['money','Money'],['people','People I meet and helping others']];
-function secOn(k){ const sc=((S.settings||{}).sections||{}); return k==='secretary' ? sc.secretary===true && S.settings.sectionLock==null : sc[k]!==false; }
+const PARTS = [['bible','Bible reading','faith'],['study','Personal study','faith'],['notes','Study notes','faith'],['meeting','Meeting preparation','faith'],
+  ['mintime','Ministry time','ministry'],['students','Bible students','ministry'],['met','People I meet','people'],['help','Helping others','people'],
+  ['goals','Goals','goals'],['health','Health','health'],['money','Money','money']];
+function secOn(k){ const st=S.settings||{}, sc=st.sections||{};
+  if(k==='secretary') return sc.secretary===true && st.sectionLock==null;
+  if(sc[k]===false) return false;
+  const pa=st.parts; if(pa){ const ps=PARTS.filter(x=>x[2]===k); if(ps.length && !ps.some(x=>pa[x[0]]!==false)) return false; }
+  return true; }
+function partOn(k){ const pr=PARTS.find(x=>x[0]===k); if(!pr) return true; if(!secOn(pr[2])) return false; const pa=(S.settings||{}).parts; return !pa || pa[k]!==false; }
+const partsList = parts => PARTS.filter(([k])=>parts[k]).map(x=>x[1]);
 const B32='23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 function pin16(pin){ return strHash('lc:'+pin) & 0xffff; }
+function makeCode2(parts, pin){   // new code: 8 letters, every part can be chosen
+  let body=0; PARTS.forEach(([k],i)=>{ if(parts[k]) body+=2**i; });
+  if(pin){ body+=2**11; body+=pin16(pin)*2**12; }
+  let v=body + (body%4093)*2**28, s='';
+  for(let i=0;i<8;i++){ s=B32[v%32]+s; v=Math.floor(v/32); }
+  return 'LC-'+s.slice(0,4)+'-'+s.slice(4);
+}
+function readCode2(c){
+  if(c.length!==8 || [...c].some(ch=>!B32.includes(ch))) return null;
+  let v=0; for(const ch of c) v=v*32+B32.indexOf(ch);
+  const body=v % 2**28, chk=Math.floor(v/2**28);
+  if(chk!==body%4093) return null;
+  const parts={}; PARTS.forEach(([k],i)=>parts[k]=!!(Math.floor(body/2**i)%2));
+  if(!Object.values(parts).some(Boolean)) return null;
+  const secs={}; SECTIONS.forEach(([k])=>secs[k]=PARTS.some(x=>x[2]===k && parts[x[0]]));
+  return {parts, secs, lock: Math.floor(body/2**11)%2 ? Math.floor(body/2**12)%65536 : null};
+}
 function makeCode(secs, pin){
   let v=0; SECTIONS.forEach(([k],i)=>{ if(secs[k]) v|=1<<i; });
   if(pin){ v|=1<<6; v|=pin16(pin)<<7; }
@@ -1673,33 +1848,39 @@ function makeCode(secs, pin){
 }
 function readCode(code){
   let c=String(code||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
-  if(c.length===8 && c.startsWith('LC')) c=c.slice(2);
+  if(c.length===10 && c.startsWith('LC')) c=c.slice(2);
+  if(c.length===8){ const old=c.startsWith('LC')?readCode1(c.slice(2)):null; return old || readCode2(c); }
+  return readCode1(c);
+}
+function readCode1(c){
   if(c.length!==6 || [...c].some(ch=>!B32.includes(ch))) return null;
   let v=0; for(const ch of c) v=v*32+B32.indexOf(ch);
   const body=v % 2**23, chk=Math.floor(v/2**23);
   if(chk!==body%31) return null;
   const secs={}; SECTIONS.forEach(([k],i)=>secs[k]=!!(body&(1<<i)));
   if(!Object.values(secs).some(Boolean)) return null;
-  return {secs, lock: body&(1<<6) ? (body>>7)&0xffff : null};
+  const parts={}; PARTS.forEach(([k,,sec])=>parts[k]=!!secs[sec]);
+  return {secs, parts, lock: body&(1<<6) ? (body>>7)&0xffff : null};
 }
 function applyCode(r){
-  S.settings.sections = {...r.secs, secretary:false}; S.settings.sectionLock = r.lock; S.settings.setupAsked=true; save();
+  S.settings.sections = {...r.secs, secretary:false}; S.settings.parts = r.parts; S.settings.sectionLock = r.lock; S.settings.setupAsked=true; S.settings.setupDone=true; save();
+  const lk=document.getElementById('lock'); if(lk && lk.dataset.setup){ lk.hidden=true; delete lk.dataset.setup; }
   tab='today'; closeSheet(); render(); window.scrollTo(0,0);
-  toast('Set up: '+SECTIONS.filter(([k])=>r.secs[k]).map(x=>x[1].split(' ')[0]).join(', '));
+  toast('Set up: '+partsList(r.parts).join(', '));
 }
 function setupCodeSheet(prefill){
   openSheet(`<h3>Enter a setup code</h3>
-    <p class="muted" style="margin:0 0 10px">The person who shared Life Compass with you can give you a code like <b>LC-7QK-M4P</b>. It shows only the parts of the app meant for you.</p>
+    <p class="muted" style="margin:0 0 10px">The person who shared Life Compass with you can give you a code like <b>LC-7QK4-M2PX</b>. It shows only the parts of the app meant for you.</p>
     <div class="f"><input type="text" id="scCode" value="${esc(prefill||'')}" placeholder="LC-___-___" autocapitalize="characters" style="font-size:20px;letter-spacing:.08em;text-align:center"></div>
     <div id="scPreview" class="muted" style="min-height:22px;margin-bottom:8px"></div>
     <div class="btns"><button class="btn ghost" style="flex:1" data-a="close">Cancel</button><button class="btn" style="flex:1" data-a="scapply">Use this code</button></div>`, null);
-  const upd=()=>{ const r=readCode(val('scCode')), el=document.getElementById('scPreview'); el.innerHTML = r ? 'You will see: <b>'+SECTIONS.filter(([k])=>r.secs[k]).map(x=>esc(x[1])).join(', ')+'</b>'+(r.lock?' (locked)':'') : (val('scCode').replace(/[^A-Za-z0-9]/g,'').length>=6?'<span style="color:var(--bad)">That code is not right. Check it and try again.</span>':''); };
+  const upd=()=>{ const r=readCode(val('scCode')), el=document.getElementById('scPreview'); el.innerHTML = r ? 'You will see: <b>'+partsList(r.parts).map(esc).join(', ')+'</b>'+(r.lock?' (locked)':'') : (val('scCode').replace(/[^A-Za-z0-9]/g,'').length>=6?'<span style="color:var(--bad)">That code is not right. Check it and try again.</span>':''); };
   document.getElementById('scCode').addEventListener('input',upd); upd();
 }
 function shareAppSheet(){
   openSheet(`<h3>Share Life Compass</h3>
     <p class="muted" style="margin:0 0 10px">Choose what the other person will see. They get a code to type into their app.</p>
-    ${SECTIONS.map(([k,l])=>`<label class="row" style="cursor:pointer"><span class="lbl">${l}</span><input type="checkbox" class="shSec" value="${k}" ${['goals','faith','health'].includes(k)?'checked':''} style="width:22px;height:22px"></label>`).join('')}
+    ${[['faith','Faith'],['ministry','Ministry'],['people','People'],['other','Other']].map(([g,gl])=>`<div class="area">${gl}</div>`+PARTS.filter(x=>g==='other'?['goals','health','money'].includes(x[2]):x[2]===g).map(([k,l])=>`<label class="row" style="cursor:pointer"><span class="lbl">${l}</span><input type="checkbox" class="shSec" value="${k}" ${['bible','study','notes','meeting','goals','health'].includes(k)?'checked':''} style="width:22px;height:22px"></label>`).join('')).join('')}
     <div class="f" style="margin-top:10px"><label>Lock PIN (optional, 4 numbers)</label><input type="password" inputmode="numeric" maxlength="8" id="shPin" placeholder="Leave empty for no lock" autocomplete="off">
       <p class="muted" style="margin:4px 0 0;font-size:12.5px">With a PIN, they can't switch hidden parts back on unless they know it. It's a simple lock, not strong security.</p></div>
     <button class="btn" data-a="shmake">Make the code</button>
@@ -1717,7 +1898,7 @@ function unlockSectionsSheet(){
 function sectionsHTML(){
   const st=S.settings, locked=st.sectionLock!=null;
   return `<div class="area" style="margin-top:20px">What this app shows</div>
-    ${locked?`<p class="muted" style="margin:0 0 8px">Set up by someone else. Showing: ${SECTIONS.filter(([k])=>secOn(k)).map(x=>esc(x[1])).join(', ')}.</p><button class="btn ghost" data-a="unlocksec">Change (needs PIN)</button>`
+    ${locked?`<p class="muted" style="margin:0 0 8px">Set up by someone else. Showing: ${PARTS.filter(([k])=>partOn(k)).map(x=>esc(x[1])).join(', ')}.</p><button class="btn ghost" data-a="unlocksec">Change (needs PIN)</button>`
       :`${SECTIONS.map(([k,l])=>`<label class="row" style="cursor:pointer"><span class="lbl">${l}</span><input type="checkbox" class="secTog" value="${k}" ${secOn(k)?'checked':''} style="width:22px;height:22px"></label>`).join('')}`}
     ${locked?'':`<label class="row" style="cursor:pointer"><span class="lbl">Congregation secretary<small>Only for you. Never included when you share the app.</small></span><input type="checkbox" class="secTog" value="secretary" ${secOn('secretary')?'checked':''} style="width:22px;height:22px"></label>`}
     <div class="btns" style="margin-top:10px"><button class="btn ghost" style="flex:1" data-a="shareapp">Share the app</button><button class="btn ghost" style="flex:1" data-a="setupcode">Enter setup code</button></div>`;
@@ -1727,6 +1908,7 @@ document.addEventListener('change', e=>{
   if(t.classList.contains('secTog')){
     const secs={...(S.settings.sections||{})}; secs[t.value]=t.checked;
     if(t.value!=='secretary' && !SECTIONS.some(([k])=>secs[k]!==false)){ t.checked=true; toast('Keep at least one part on'); return; }
+    if(S.settings.parts && t.value!=='secretary'){ PARTS.filter(x=>x[2]===t.value).forEach(x=>S.settings.parts[x[0]]=t.checked); }
     S.settings.sections=secs; save(); renderNav(); toast(t.checked?'Shown':'Hidden');
   }
 });
@@ -2052,9 +2234,15 @@ function secPubs(){
 function pubSheet(id){
   const d=SEC(), p = id ? d.pubs.find(x=>x.id===id) : {name:'',phone:'',group:secGroup!=='all'?secGroup:'',type:'pub',status:'active',baptized:'',notes:'',visits:[]};
   openSheet(`<h3>${id?esc(p.name):'Add a publisher'}</h3>
+    ${id&&(p.phone||p.emPhone)?`<div class="btns" style="margin:-4px 0 12px">${p.phone?`<a class="btn sm ghost" href="tel:+${phoneIntl(p.phone)}">📞 Call ${esc(firstName(p.name))}</a>`:''}${p.emPhone?`<a class="btn sm" style="background:var(--bad);border-color:var(--bad)" href="tel:+${phoneIntl(p.emPhone)}">🚨 Emergency: ${esc(p.emName||'call')}${p.emRel?' ('+esc(p.emRel)+')':''}</a>`:''}</div>`:''}
     <div class="f"><label>Name</label><input type="text" id="puName" value="${esc(p.name)}"></div>
     <div class="f2"><div class="f"><label>Phone</label><input type="tel" id="puPhone" value="${esc(p.phone||'')}"></div>
       <div class="f"><label>Group</label><input type="text" id="puGroup" value="${esc(p.group||'')}" list="grpList" placeholder="Group 1"><datalist id="grpList">${groupsList().map(g=>`<option>${esc(g)}</option>`).join('')}</datalist></div></div>
+    <div class="area">Emergency contact</div>
+    <div class="f2"><div class="f"><label>Name</label><input type="text" id="puEmName" value="${esc(p.emName||'')}" placeholder="Akosua Mensah"></div>
+      <div class="f"><label>Relationship</label><input type="text" id="puEmRel" value="${esc(p.emRel||'')}" list="emRelList" placeholder="Wife"><datalist id="emRelList">${['Wife','Husband','Mother','Father','Brother','Sister','Son','Daughter','Friend','Neighbour'].map(x=>`<option>${x}</option>`).join('')}</datalist></div></div>
+    <div class="f"><label>Emergency phone</label><input type="tel" id="puEmPhone" value="${esc(p.emPhone||'')}" placeholder="024 123 4567"></div>
+    <div class="area">Details</div>
     <div class="f2"><div class="f"><label>Type</label><select id="puType">${PTYPES.map(([k,l])=>`<option value="${k}" ${k===p.type?'selected':''}>${l}</option>`).join('')}</select></div>
       <div class="f"><label>Status</label><select id="puStatus">${PSTATUS.map(([k,l])=>`<option value="${k}" ${k===(p.status||'active')?'selected':''}>${l}</option>`).join('')}</select></div></div>
     <div class="f2"><div class="f"><label>Date of birth</label><input type="date" id="puDob" value="${p.dob||''}"></div>
@@ -2072,7 +2260,7 @@ function pubSheet(id){
     ${id?`<div class="btns" style="margin-top:12px"><button class="btn ghost" style="flex:1" data-a="pubvisit" data-id="${id}">Log a visit</button><button class="btn danger" style="flex:1" data-a="delpub" data-id="${id}">Delete</button></div>`:''}`, ()=>{
       const nm=val('puName').trim(); if(!nm) return fail('puName','Enter the name');
       const rec = id ? p : {id:uid(), visits:[], since:MONTH()};
-      Object.assign(rec,{name:nm, phone:val('puPhone').trim(), group:val('puGroup').trim(), type:val('puType'), status:val('puStatus'), baptized:val('puBap'), dob:val('puDob'), gender:val('puSex'), hope:val('puHope'), elder:document.getElementById('puElder').checked, ms:document.getElementById('puMs').checked, notes:val('puNotes').trim(), ask:val('puAsk').trim()});
+      Object.assign(rec,{name:nm, phone:val('puPhone').trim(), emName:val('puEmName').trim(), emRel:val('puEmRel').trim(), emPhone:val('puEmPhone').trim(), group:val('puGroup').trim(), type:val('puType'), status:val('puStatus'), baptized:val('puBap'), dob:val('puDob'), gender:val('puSex'), hope:val('puHope'), elder:document.getElementById('puElder').checked, ms:document.getElementById('puMs').checked, notes:val('puNotes').trim(), ask:val('puAsk').trim()});
       if(!id) d.pubs.push(rec); return true;
     });
 }
@@ -2733,7 +2921,108 @@ function goalEnd(g){
   if(g.horizon==='1y') return (g.period||YEAR())+'-12-31';
   return (n(S.settings.started.slice(0,4))+5)+S.settings.started.slice(4);
 }
+function goalKind(g){
+  const t=(g.title||'').toLowerCase();
+  if(/bethel/.test(t)) return 'bethel';
+  if(/pioneer|hours|field service|preach/.test(t)) return 'pioneer';
+  if(/\b(bible|chapters?|scriptures?)\b/.test(t) && /\b(read|reading|finish|whole|entire|through)\b/.test(t) && !/stud(y|ent)/.test(t)) return 'bible';
+  if(/\b(house|home|land|plot|building|build|car|motor|wedding|marry|marriage|school fees|university|degree|shop|business|farm)\b/.test(t)) return 'big';
+  if(/₵/.test(t) || /\b(save|saving|savings|money|cedis?|ghs|debt|budget|buy|purchase|afford|costs?|price|pay for)\b/.test(t)) return 'money';
+  return 'other';
+}
+function goalQSheet(id){
+  const g=S.goals.find(x=>x.id===id); if(!g) return;
+  const k=goalKind(g), pl=g.plan||{}, end=goalEnd(g), t=(g.title||'').toLowerCase();
+  const date=(idn,lab,v)=>`<div class="f"><label>${lab}</label><input type="date" id="${idn}" value="${v||''}" min="${TODAY()}"></div>`;
+  const num=(idn,lab,v,ph)=>`<div class="f"><label>${lab}</label><input type="text" inputmode="decimal" id="${idn}" value="${v||''}" placeholder="${ph||''}"></div>`;
+  let q='';
+  if(k==='money') q=`<div class="f2">${num('qCost','How much does it cost? ('+esc(S.settings.currency)+')', pl.cost||moneyNum(t)||g.target||'', '500')}${num('qHave','How much do you have now?', pl.have!=null?pl.have:'', '0')}</div>${date('qBy','When do you want it by?', pl.by||end)}`;
+  else if(k==='bethel') q=`<div class="f"><label>What do you want to do?</label><select id="qBethel"><option value="visit" ${pl.bethel!=='serve'?'selected':''}>Visit Bethel (a tour)</option><option value="serve" ${pl.bethel==='serve'?'selected':''}>Apply to serve at Bethel</option></select></div>${date('qBy','By when?', pl.by||end)}`;
+  else if(k==='pioneer') q=`<div class="f"><label>Which one?</label><select id="qPio">${[['aux15','Auxiliary pioneer, 15 hours'],['aux30','Auxiliary pioneer, 30 hours'],['rp','Regular pioneer, 50 hours a month']].map(([v,l])=>`<option value="${v}" ${(pl.pio||(/aux/.test(t)?'aux30':'rp'))===v?'selected':''}>${l}</option>`).join('')}</select></div>`;
+  else if(k==='bible') q=`<div class="f"><label>What do you want to read?</label><select id="qScope"><option value="whole" ${pl.scope!=='nt'&&pl.scope!=='book'?'selected':''}>The whole Bible</option><option value="nt" ${pl.scope==='nt'?'selected':''}>The Christian Greek Scriptures (Matthew to Revelation)</option><option value="book" ${pl.scope==='book'?'selected':''}>One book</option></select></div>
+    <div class="f" id="qBookRow" ${pl.scope==='book'?'':'hidden'}><label>Which book?</label><select id="qBook">${BOOKS.map((b,i)=>`<option value="${i+1}" ${(pl.book||S.bible.book)===i+1?'selected':''}>${b[0]}</option>`).join('')}</select></div>${date('qBy','Finish by', pl.by||end)}`;
+  else if(k==='big') q=`<div class="f"><label>Big goals are done in stages. What is the first stage?</label><input type="text" id="qStage" value="${esc(pl.stage||'')}" placeholder="${/house|home|build/.test(t)?'Buy the land':/car|motor/.test(t)?'Save for the first part of the money':/wedding|marr/.test(t)?'Talk to the elders and family':'The first big step'}"></div>
+    <div class="f2">${num('qCost','What will that stage cost? (optional)', pl.cost||'', '')}${num('qHave','How much do you have now?', pl.have!=null?pl.have:'', '0')}</div>${date('qBy','Finish this stage by', pl.by||end)}`;
+  else q=`<div class="f"><label>What is the first small step?</label><input type="text" id="qStep" value="${esc(pl.step||'')}" placeholder="Ask Bro. Mensah how he did it"></div>${date('qBy','When do you want to reach this goal?', pl.by||end)}`;
+  openSheet(`<h3>Let's plan it</h3><p class="muted" style="margin:-6px 0 10px">${esc(g.title)}</p>
+    <p class="muted" style="font-size:13px;margin:0 0 10px">Answer these, and the app makes a plan that fits you.</p>${q}
+    <div class="btns"><button class="btn ghost" style="flex:1" data-a="close">Not now</button><button class="btn" style="flex:1" data-a="goalplan" data-id="${id}">Make my plan</button></div>`, null);
+  const sc=document.getElementById('qScope'); if(sc) sc.addEventListener('change',()=>{ document.getElementById('qBookRow').hidden=sc.value!=='book'; });
+}
+function saveGoalPlan(id){
+  const g=S.goals.find(x=>x.id===id), pl={kind:goalKind(g)}, has=i=>document.getElementById(i);
+  if(has('qCost')) pl.cost=n(val('qCost'))||0; if(has('qHave')) pl.have=n(val('qHave'))||0; if(has('qBy')) pl.by=val('qBy')||'';
+  if(has('qBethel')) pl.bethel=val('qBethel'); if(has('qPio')) pl.pio=val('qPio');
+  if(has('qScope')){ pl.scope=val('qScope'); pl.book=n(val('qBook')); }
+  if(has('qStage')) pl.stage=val('qStage').trim(); if(has('qStep')) pl.step=val('qStep').trim();
+  g.plan=pl; save(); suggestSheet(id);
+}
+function chaptersLeft(pl){
+  const R=S.bible.read, left=b=>BOOKS[b-1][1]-(R[b]||[]).length;
+  if(pl.scope==='book') return left(pl.book||1);
+  let s=0; for(let b=(pl.scope==='nt'?40:1); b<=66; b++) s+=left(b); return s;
+}
 function suggestSteps(g){
+  if(g.plan) { const st=planSteps(g); if(st) return st; }
+  return oldSteps(g);
+}
+function planSteps(g){
+  const pl=g.plan, m=MONTH(), d=k=>{ const x=parse(m+'-01'); x.setDate(k); return ymd(x)<TODAY()?TODAY():ymd(x); };
+  const last=ymd(new Date(parse(m+'-01').getFullYear(), parse(m+'-01').getMonth()+1, 0));
+  const sundays=sundaysLeft(), steps=[], add=(text,date,kind='todo',extra={})=>steps.push({text,date,kind,...extra}), weekly=t=>sundays.forEach(s=>add(t,s));
+  const by=pl.by && pl.by>=TODAY() ? pl.by : goalEnd(g), inMonth=x=>x<=last?x:last;
+  const days=Math.max(1, Math.round((parse(by)-parse(TODAY()))/864e5)+1), weeks=Math.max(1, Math.ceil(days/7));
+  const thing=goalThing(g.title);
+  const saveSteps=(label, cost, have)=>{
+    const need=Math.max(0, cost-have);
+    if(!cost){ add('Find out the real price: ask in two or three places', d(3)); add('Edit this goal\'s plan and put in the price', d(4)); return; }
+    if(!need){ add(`You already have ${money(have)}, enough for ${label}! Compare prices before you pay.`, d(1)); add(`Pay for ${label}`, d(7)); return; }
+    const perWeek=Math.ceil(need/weeks), inc=monthlyIncome(), share=inc?Math.round(perWeek*4.33/inc*100):0;
+    add(`Open a savings goal "${label}" for ${money(cost)}`, d(1), 'savegoal', {name:label, amount:cost, deadline:by});
+    add(`${have?`You have ${money(have)}. You need ${money(need)} more. `:''}Save ${money(perWeek)} a week for ${weeks} week${weeks===1?'':'s'}${inc?`, about ${share}% of the ${money(inc)} you pay yourself each month`:''}.`, d(1));
+    if(inc && share>50) add(`Check: that's more than half of what you earn. A later date would make it easier.`, d(1));
+    sundays.forEach(s=>add(`Put ${money(perWeek)} into savings for ${label}`, s));
+  };
+  if(pl.kind==='money'){
+    saveSteps(thing, pl.cost||0, pl.have||0);
+    if(pl.cost && pl.cost>(pl.have||0)) add(`Compare prices in two or three shops for ${thing}`, d(10));
+    if(pl.cost) add(`Buy ${thing} when your savings reach ${money(pl.cost)}`, inMonth(by));
+  } else if(pl.kind==='big'){
+    const stage=pl.stage||'the first stage';
+    add(`Write down all the stages for "${g.title}". Start with: ${stage}`, d(1));
+    add(`Ask two people who have done "${stage}" what it really costs and what to watch out for`, d(5));
+    if(pl.cost) saveSteps(stage, pl.cost, pl.have||0); else add(`Find out the cost of "${stage}"`, d(7));
+    weekly(`Weekly check: what did I do this week for "${stage}"?`);
+    add('Keep Kingdom interests first (Matthew 6:33). Check that this goal is not taking time from meetings and ministry.', d(14));
+    add(`Review: is "${stage}" on track? Plan next month's part`, last);
+  } else if(pl.kind==='bethel'){
+    return null;   // the built-in Bethel steps already use the choice below
+  } else if(pl.kind==='pioneer'){
+    const h={aux15:15, aux30:30, rp:50}[pl.pio]||50, done=ministryMonth(m), leftH=Math.max(0,h-done), wl=Math.max(1,Math.ceil((parse(last)-parse(TODAY()))/864e5/7)), pw=r1(leftH/wl);
+    if(pl.pio!=='rp') add('Hand in the auxiliary pioneer application to the elders', d(3)); else add('Talk to the elders about the regular pioneer application', d(3));
+    add(leftH?`You have ${r1(done)} hours this month. ${r1(leftH)} hours to go: about ${pw} hours a week.`:`You already have ${r1(done)} hours this month. Well done!`, d(1));
+    add('Field service', '', 'routine', {type:'service', days:[6], time:'08:30', title:'Field service'});
+    add('Plan two short service times in the week too (morning or evening)', d(2));
+    add('Invite someone to work with you in service this week', d(5));
+    add(`Halfway check: you should have about ${Math.round(h/2)} hours by today`, d(15));
+    weekly('Check your hours on Faith → Ministry');
+  } else if(pl.kind==='bible'){
+    const rem=chaptersLeft(pl), per=Math.ceil(rem/days), what=pl.scope==='book'?BOOKS[(pl.book||1)-1][0]:pl.scope==='nt'?'the Christian Greek Scriptures':'the whole Bible';
+    add('Daily Bible reading', '', 'routine', {type:'bible', days:[0,1,2,3,4,5,6], time:'05:30', title:'Daily Bible reading'});
+    add(`${rem} chapters left in ${what}. Read ${per} chapter${per===1?'':'s'} a day to finish by ${nice(by)}.`, d(1));
+    if(per>8){ const easy=addDays(TODAY(), Math.ceil(rem/4)); add(`That's a lot each day. With 4 chapters a day you would finish on ${nice(easy)}. Think about moving the date.`, d(1)); }
+    weekly('Write one thought from this week\'s reading in My notes');
+    add('Look back: how many chapters did you read this month?', last);
+  } else {
+    if(pl.step) add(pl.step, d(2));
+    add('Decide the next small step after that', d(7));
+    weekly('Weekly check: what did I do this week for this goal?');
+    add('Tell one person who can encourage you', d(4));
+    if(pl.by && pl.by<=last) add('Goal day: '+g.title, pl.by);
+  }
+  return steps;
+}
+function oldSteps(g){
   const t=(g.title||'').toLowerCase(), num=n((t.match(/(\d[\d,.]*)/)||[])[1])||n(g.target), left=monthsLeft(g), monthNeed=num?Math.ceil(num/left):0;
   const m=MONTH(), d=k=>{ const x=parse(m+'-01'); x.setDate(k); return ymd(x)<TODAY()?TODAY():ymd(x); };
   const last=ymd(new Date(parse(m+'-01').getFullYear(), parse(m+'-01').getMonth()+1, 0));
@@ -2742,7 +3031,7 @@ function suggestSteps(g){
   const weekly=(text)=>sundays.forEach(s=>add(text,s));
   const isMoney = /₵/.test(t) || /\b(save|saving|savings|money|cedis?|ghs|debt|budget|buy|purchase|afford|costs?|price|pay for)\b/.test(t);
   if(/bethel/.test(t)){
-    if(/\b(visit|tour|go to|see)\b/.test(t) && !/\b(serve|service|apply|application|work)\b/.test(t)){
+    if(g.plan&&g.plan.bethel ? g.plan.bethel==='visit' : /\b(visit|tour|go to|see)\b/.test(t) && !/\b(serve|service|apply|application|work)\b/.test(t)){
       add('Check the tour days and book your visit on jw.org (About Us → Offices and Tours)', d(1));
       add('Choose the date and ask who would like to come with you', d(3));
       add('Plan the transport: how you will get there and what it will cost', d(5));
@@ -2785,7 +3074,7 @@ function suggestSteps(g){
     add('Invite someone to work with you in service this week', d(5));
     weekly('Check your hours on Faith → Ministry');
   } else if(/bible|chapter|read the|scripture/.test(t) && !/study with|student|bible stud/.test(t)){
-    const ch = /whole bible|entire bible|1189/.test(t) ? Math.ceil(1189/(left*30)) : monthNeed ? Math.ceil(monthNeed/30) : 1;
+    const ch = Math.min(8, /whole bible|entire bible|1189/.test(t) ? Math.ceil(1189/(left*30)) : monthNeed ? Math.ceil(monthNeed/30) : 1);
     add('Daily Bible reading', '', 'routine', {type:'bible', days:[0,1,2,3,4,5,6], time:'05:30', title:'Daily Bible reading'});
     add(`Read about ${ch} chapter${ch===1?'':'s'} each day`, d(1));
     weekly('Write one thought from this week\'s reading in My notes');
@@ -2828,6 +3117,7 @@ function suggestSheet(id){
     <p class="muted" style="font-size:12.5px;margin:0 0 8px">A simple plan for this month. Each ticked step goes into Today's plan on its date. Untick anything that doesn't fit.</p>
     ${steps.map((st,i)=>`<label class="row" style="cursor:pointer;align-items:flex-start"><input type="checkbox" class="sgStep" value="${i}" ${exists(st)?'':'checked'} style="width:22px;height:22px;margin-top:2px"><span class="lbl">${esc(st.text)}<small>${st.kind==='routine'?'Repeats: '+esc(daysText(st.days))+' at '+fmtTime(st.time)+(exists(st)?' · you already have one':''):st.kind==='savegoal'?'Creates it on Money → Savings'+(exists(st)?' · already there':''):'On your plan for '+nice(st.date)+(exists(st)?' · already there':'')}</small></span></label>`).join('')}
     <div class="btns" style="flex-direction:column;margin-top:10px"><button class="btn" data-a="sgadd" data-id="${id}">Add ticked steps to my plan</button>
+      <button class="btn ghost" data-a="sgsheet" data-id="${id}">Change my answers</button>
       <a class="btn ghost" href="https://claude.ai/new?q=${encodeURIComponent(ask)}" target="_blank" rel="noopener">Ask Claude for a more detailed plan ↗</a>
       <button class="btn ghost" data-a="close">Close</button></div>`, null);
   suggestSheet.steps=steps;
@@ -2912,7 +3202,8 @@ V.goals = () => {
 
 let faithTab='reading', reportMonth=null;
 V.faith = () => {
-  const segs=[...(secOn('faith')?[['reading','Bible'],['study','Study']]:[]), ...(secOn('ministry')?[['ministry','Ministry'],['students','Students']]:[])];
+  const segs=[...(partOn('bible')?[['reading','Bible']]:[]), ...(partOn('study')||partOn('meeting')?[['study','Study']]:[]), ...(partOn('mintime')?[['ministry','Ministry']]:[]), ...(partOn('students')?[['students','Students']]:[])];
+  if(!segs.length) return '<div class="card"><div class="empty">Nothing here.</div></div>';
   if(!segs.some(x=>x[0]===faithTab)) faithTab=segs[0][0];
   let html = `<div class="seg">${segs.map(([k,l])=>`<button class="${k===faithTab?'on':''}" data-a="faithtab" data-k="${k}">${l}</button>`).join('')}</div>`;
   if(faithTab==='reading'){
@@ -2920,7 +3211,8 @@ V.faith = () => {
     html += bibleCard();
     html += `<div class="card"><h2>Bible reading · ${readDays}/${dayOfMonth} days</h2>${calendar(m)}
       <div class="legend"><span><i style="background:var(--navy)"></i>Read</span><span><i style="background:#F5B700;border-radius:50%"></i>Ministry</span></div></div>`;
-    html += notesCard();
+    if(partOn('notes')) html += notesCard();
+    html += reflectionsCard();
   }
   if(faithTab==='study') html += studyView();
   if(faithTab==='ministry') html += ministryView();
@@ -3022,16 +3314,18 @@ function studentsView(){
   }).join('');
   return html;
 }
+const STUDY_BOOKS=['Enjoy Life Forever!','Enjoy Life Forever! brochure','Listen to God and Live Forever','Listen to God','Good News From God!','Bible reading'];
 function studentSheet(id){
   const x = id ? S.students.find(s=>s.id===id) : {name:'',phone:'',pub:'Enjoy Life Forever!',total:60,lesson:1,status:'steady',stage:'Studying',day:'',notes:'',started:TODAY()};
   setTimeout(()=>{ const pub=document.getElementById('stPub'), un=document.getElementById('stUnit'); if(!pub||!un) return;
     const lbl=()=>{ const u=UNITS[un.value]; document.getElementById('stTotalLbl').textContent='Number of '+u[0]+'s (optional)'; document.getElementById('stLessonLbl').textContent='Current '+u[0]; };
-    pub.addEventListener('change',()=>{ un.value=autoUnit(pub.value); const tt=document.getElementById('stTotal'); if(un.value!=='lp' && tt.value==='60') tt.value=''; lbl(); });
+    pub.addEventListener('change',()=>{ const oth=document.getElementById('stPubOther'); oth.hidden=pub.value!=='other'; if(pub.value==='other') oth.focus(); un.value=autoUnit(pub.value==='other'?oth.value:pub.value); const tt=document.getElementById('stTotal'); if(un.value!=='lp' && tt.value==='60') tt.value=''; lbl(); });
     un.addEventListener('change',lbl); },0);
   openSheet(`<h3>${id?'Edit Bible student':'New Bible student'}</h3>
     <div class="f"><label>Name</label><input type="text" id="stName" value="${esc(x.name)}" placeholder="Ama Mensah"></div>
     <div class="f"><label>Phone (WhatsApp)</label><input type="tel" id="stPhone" value="${esc(x.phone)}" placeholder="024 123 4567"></div>
-    <div class="f2"><div class="f"><label>Studying</label><input type="text" id="stPub" value="${esc(x.pub)}" list="pubList"><datalist id="pubList"><option>Enjoy Life Forever!</option><option>Enjoy Life Forever! brochure</option><option>Listen to God and Live Forever</option><option>Listen to God</option><option>Good News From God!</option><option>Bible reading</option></datalist></div>
+    <div class="f2"><div class="f"><label>Studying</label><select id="stPub">${STUDY_BOOKS.map(b=>`<option ${b===x.pub?'selected':''}>${esc(b)}</option>`).join('')}<option value="other" ${x.pub&&!STUDY_BOOKS.includes(x.pub)?'selected':''}>Something else…</option></select>
+      <input type="text" id="stPubOther" value="${esc(x.pub&&!STUDY_BOOKS.includes(x.pub)?x.pub:'')}" placeholder="Type the name" style="margin-top:6px" ${x.pub&&!STUDY_BOOKS.includes(x.pub)?'':'hidden'}></div>
     <div class="f"><label>How you count</label><select id="stUnit">${Object.entries(UNITS).map(([k,u])=>`<option value="${k}" ${k===(x.unit||autoUnit(x.pub))?'selected':''}>${u[2]}</option>`).join('')}</select></div></div>
     <div class="f2"><div class="f"><label id="stTotalLbl">Number of ${unitOf(x)[0]}s (optional)</label><input type="text" inputmode="decimal" id="stTotal" value="${x.total||''}" placeholder="${unitOf(x)[0]==='lesson'?'60':''}"></div>
     <div class="f"><label id="stLessonLbl">Current ${unitOf(x)[0]}</label><input type="text" inputmode="decimal" id="stLesson" value="${x.lesson||''}" placeholder="1"></div>
@@ -3045,7 +3339,7 @@ function studentSheet(id){
     ${actions}${id?`<button class="btn danger" data-a="delstudent" data-id="${id}" style="margin-top:8px">Delete student</button>`:''}`, ()=>{
       const nm=val('stName').trim(); if(!nm) return fail('stName','Enter the name');
       const rec = id ? x : {id:uid(), sessions:[], started:TODAY()};
-      Object.assign(rec,{name:nm, phone:val('stPhone').trim(), pub:val('stPub').trim(), unit:val('stUnit'), total:n(val('stTotal')), lesson:n(val('stLesson')), day:val('stDay').trim(), status:val('stStatus'), stage:val('stStage'), notes:val('stNotes').trim()});
+      Object.assign(rec,{name:nm, phone:val('stPhone').trim(), pub:(val('stPub')==='other'?val('stPubOther'):val('stPub')).trim(), unit:val('stUnit'), total:n(val('stTotal')), lesson:n(val('stLesson')), day:val('stDay').trim(), status:val('stStatus'), stage:val('stStage'), notes:val('stNotes').trim()});
       if(!id) S.students.push(rec); return true;
     });
 }
@@ -3068,6 +3362,17 @@ function parseRef(txt){
   if(c<1 || c>BOOKS[b-1][1]) return null;
   return {book:b, chapter:c, verse:v, link:jworg(bcode(b,c,v))};
 }
+const SUMKEYS = [["name|jehovah", "God has a personal name, Jehovah, and he wants us to know him and use his name.", "Psalm 83:18"], ["care|cares|caring|love|loves", "Jehovah really cares about us. He loves us and wants the best for us.", "1 Peter 5:7"], ["pray|prayer", "We can talk to Jehovah in prayer anytime, about anything that is on our mind.", "Philippians 4:6, 7"], ["kingdom", "God's Kingdom is a real government in heaven that will soon solve the world's problems.", "Daniel 2:44"], ["paradise|earth|future|live forever", "God's purpose is for the earth to become a paradise where good people will live forever.", "Psalm 37:29"], ["resurrect", "Jehovah promises to bring back to life people who have died.", "Acts 24:15"], ["death|dead|die|died", "The dead are not suffering. They are like people in a deep sleep.", "Ecclesiastes 9:5"], ["suffer|pain|why god|bad things", "God is not the cause of our suffering, and he will soon remove all pain and tears.", "Revelation 21:3, 4"], ["jesus|ransom|christ", "Jesus gave his life for us so that we can have the hope of living forever.", "John 3:16"], ["bible|word of god|inspired|book", "The Bible is God's message to us, and its advice really works in our life today.", "2 Timothy 3:16, 17"], ["friend|close to god|draw close", "We can become Jehovah's friends when we come close to him.", "James 4:8"], ["holy spirit|spirit", "Holy spirit is God's active force, the power he uses to do his will.", "Luke 11:13"], ["satan|devil|demon", "Satan is real, but Jehovah is far stronger and will soon remove him.", "James 4:7"], ["family|marriage|husband|wife|child|children|parent", "The Bible gives good advice that helps families to be happy and united.", "Ephesians 5:33"], ["meeting|congregation|kingdom hall|brothers", "Meeting with other Christians strengthens our faith and encourages us.", "Hebrews 10:24, 25"], ["baptism|baptize|dedicat", "Baptism shows that we have given our life to Jehovah.", "Matthew 28:19, 20"], ["idol|image|worship", "Jehovah wants us to worship him alone, in the way he approves.", "John 4:24"], ["money|work|job|rich", "Money is useful, but our friendship with Jehovah is worth much more.", "Matthew 6:33"], ["health|alcohol|smok|drug|body", "Jehovah wants us to keep our body clean and healthy, because life is a gift from him.", "2 Corinthians 7:1"], ["promise|hope", "Jehovah's promises always come true, so we can trust them completely.", "Joshua 23:14"], ["forgive|sin|mercy|sorry", "Jehovah is ready to forgive us when we are truly sorry and try to change.", "Psalm 86:5"], ["trust|faith", "We can trust Jehovah with all our heart, even when things are hard.", "Proverbs 3:5, 6"], ["last days|end|world|news", "Bible prophecy shows that we are living in the last days, and God's Kingdom will soon take action.", "2 Timothy 3:1-5"], ["creat|creator|evolution|nature", "Everything around us shows that there is a wise and loving Creator.", "Romans 1:20"], ["memorial|lord's evening|evening meal", "Jesus asked his followers to remember his death every year.", "Luke 22:19"], ["angel", "Angels are real, and Jehovah uses them to help his people.", "Hebrews 1:14"], ["happy|happiness|joy", "True happiness comes from knowing Jehovah and doing what he asks.", "Matthew 5:3"]];
+const SUMENC = ["You understood this really well. Keep it up! 😊", "I really enjoyed your questions today. Jehovah sees the effort you are making.", "You're making good progress, and I'm proud of you!", "Keep reading a little every day, and you'll see how much Jehovah cares for you.", "Thank you for making time for Jehovah. It's the best thing you can do."];
+function summaryFromKeys(keys, seed){
+  const parts=String(keys||'').split(/[,;\n]+|\band\b/i).map(x=>x.trim()).filter(Boolean);
+  const lines=[], used=new Set(); let ref='';
+  parts.forEach(k=>{ const hit=SUMKEYS.find(([re])=>new RegExp('\\b('+re+')','i').test(k));
+    if(hit){ if(used.has(hit[0])) return; used.add(hit[0]); lines.push('• '+hit[1]); if(!ref) ref=hit[2]; }
+    else { const c=k.replace(/\.$/,''); lines.push('• '+c.charAt(0).toUpperCase()+c.slice(1)+'.'); } });
+  if(!lines.length) return null;
+  return {text: lines.join('\n')+'\n\n'+SUMENC[seed%SUMENC.length], ref};
+}
 function studySheet(id){
   const x=S.students.find(s=>s.id===id), les=n(x.lesson)||1, from=n(x.nextPara)||1, [U1,U2]=unitOf(x);
   openSheet(`<h3>Study with ${esc(x.name)}</h3>
@@ -3075,6 +3380,8 @@ function studySheet(id){
     <div class="f"><label>${cap(U1)}</label><input type="text" inputmode="decimal" id="ssLesson" value="${les}"></div></div>
     <div class="f"><label>${cap(U2)}s studied</label><div class="pararow"><span>From</span><input type="text" inputmode="numeric" id="ssFrom" value="${from}"><span>to</span><input type="text" inputmode="numeric" id="ssTo" value="" placeholder="${from+5}"></div></div>
     <label class="row" style="cursor:pointer;border:0;padding-top:0"><span class="lbl">We finished this ${U1}<small id="ssNextTxt">Next time: ${U1} ${les}, from ${U2} …</small></span><input type="checkbox" id="ssDone" style="width:22px;height:22px"></label>
+    <div class="f"><label>Key points (a few words, separated by commas)</label><div class="sndrow"><input type="text" id="ssKeys" placeholder="God's name, he cares about us, prayer"><button class="btn ghost" data-a="sswrite" style="font-size:13px">Write it</button></div>
+      <p class="muted" style="font-size:12.5px;margin:4px 0 0">Tap <b>Write it</b> and the app writes a warm summary with a scripture. You can change anything.</p></div>
     <div class="f"><label>Summary of what we learned</label><textarea id="ssSum" style="min-height:110px" placeholder="God has a name, Jehovah. He wants us to know him as a friend. We can talk to him in prayer anytime."></textarea></div>
     <div class="f"><label>Scripture to remember</label><input type="text" id="ssRef" placeholder="Psalm 83:18"><div id="ssRefOk" class="muted" style="font-size:12.5px;margin-top:4px;min-height:16px"></div></div>
     <div class="f"><label>To prepare for next time (optional)</label><input type="text" id="ssPrep" placeholder="Read the next paragraphs and the scriptures"></div>
@@ -3468,7 +3775,7 @@ function goalSheet(id, h, area){
       rec.horizon=hz;
       if(id && document.getElementById('gProg')) rec.progress=n(val('gProg'));
       if(rec.target>0){ const was=rec.done; rec.done = rec.progress>=rec.target; if(rec.done&&!was) rec.doneDate=TODAY(); if(!rec.done) rec.doneDate=null; }
-      if(!id){ S.goals.push(rec); if(!rec.done) setTimeout(()=>suggestSheet(rec.id), 250); }
+      if(!id){ S.goals.push(rec); if(!rec.done) setTimeout(()=>goalQSheet(rec.id), 250); }
       return true;
     });
 }
@@ -3867,7 +4174,8 @@ document.addEventListener('click', e => {
     case 'printgo': printGo(t.dataset.k); break;
     case 'printzip': printZip(t); break;
     case 'sendcard': sendCard(id, t); break;
-    case 'sgsheet': suggestSheet(id); break;
+    case 'sgsheet': goalQSheet(id); break;
+    case 'goalplan': saveGoalPlan(id); break;
     case 'sgadd': addSuggested(id); break;
     case 'histnav': histMonth=t.dataset.m; render(); break;
     case 'gosec': tab='sec'; secTab=t.dataset.k||'glance'; render(); window.scrollTo(0,0); break;
@@ -3945,9 +4253,18 @@ document.addEventListener('click', e => {
     case 'invsend': { const ev=S.events.find(x=>x.id===t.dataset.ev); ev.sent=ev.sent||{}; ev.sent[t.dataset.kind+':'+id]=TODAY(); recordSend(t.dataset.kind, id, 'wa', t.dataset.text, '', '', ev.link||'', evName(ev)); setTimeout(()=>{ inviteSheet(ev.id); render(); },400); return; }
     case 'invedit': { const ev=S.events.find(x=>x.id===t.dataset.ev), who=whoOf(t.dataset.kind,id); if(!who) break; composeSheet(t.dataset.kind, id); CM.edited=true; CM.text=inviteText(who, ev); CM.invite=ev.id; renderCompose(); break; }
     case 'cmset': CM[t.dataset.f]=t.dataset.v; CM.offset=0; CM.edited=false; renderCompose(); break;
+    case 'sswrite': { const r=summaryFromKeys(val('ssKeys'), dayNum()+strHash(val('ssKeys'))); if(!r){ fail('ssKeys','Type a few key points first'); break; } const sm=document.getElementById('ssSum'); sm.value=r.text; const rf=document.getElementById('ssRef'); if(r.ref && !rf.value.trim()){ rf.value=r.ref; rf.dispatchEvent(new Event('input')); } toast('Summary written. Check it before sending.'); break; }
+    case 'todaycfg': todayCfgSheet(); break;
+    case 'tcshow': { const c=todayCfg(); if(t.checked) delete c.hide[t.dataset.k]; else c.hide[t.dataset.k]=1; save(); render(); return; }
+    case 'tcmove': { const c=todayCfg(), o=c.order, i=o.indexOf(t.dataset.k), j=i+n(t.dataset.d); if(j>=0&&j<o.length){ [o[i],o[j]]=[o[j],o[i]]; save(); render(); todayCfgSheet(); } break; }
+    case 'tcreset': S.settings.today={}; todayCfg(); save(); render(); todayCfgSheet(); toast('Suggested layout'); break;
+    case 'encmore': encOpen=true; render(); break;
     case 'cmnext': CM.offset++; CM.edited=false; renderCompose(); break;
+    case 'cmreply': CM.reply=t.dataset.v; CM.offset=0; CM.edited=false; renderCompose(); break;
+    case 'cmlen': CM.len=t.dataset.v; S.settings.msgLong=CM.len==='long'; save(); CM.offset=0; CM.edited=false; renderCompose(); break;
+    case 'cmtwi': S.settings.twi=!S.settings.twi; save(); CM.edited=false; renderCompose(); toast(S.settings.twi?'Twi touch on':'Twi touch off'); break;
     case 'cmcopy': { const txt=val('cmText'); (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast('Copied'),()=>{ const ta=document.getElementById('cmText'); ta.focus(); ta.select(); toast('Press and hold to copy'); }); break; }
-    case 'csend': { const txt=val('cmText'); if(!txt.trim()){ e.preventDefault(); toast('Write a message first'); break; } if(CM.invite){ const ev=(S.events||[]).find(x=>x.id===CM.invite); if(ev){ ev.sent=ev.sent||{}; ev.sent[CM.kind+':'+CM.id]=TODAY(); } } recordSend(CM.kind, CM.id, t.dataset.via, txt, CM.edited?'':CM.mid, CM.edited?'':CM.ref, CM.link, CM.link?(TOPICS.find(x=>x[0]===CM.topic)||['',''])[1]:''); toast('Opening '+(t.dataset.via==='wa'?'WhatsApp':'messages')+'…'); setTimeout(()=>{ closeSheet(); render(); }, 600); return; }
+    case 'csend': { const txt=val('cmText'), rpl=CM.reply; if(!txt.trim()){ e.preventDefault(); toast('Write a message first'); break; } if(CM.invite){ const ev=(S.events||[]).find(x=>x.id===CM.invite); if(ev){ ev.sent=ev.sent||{}; ev.sent[CM.kind+':'+CM.id]=TODAY(); } } recordSend(CM.kind, CM.id, t.dataset.via, txt, CM.edited?'':CM.mid, CM.edited?'':CM.ref, CM.link, CM.link?(TOPICS.find(x=>x[0]===CM.topic)||['',''])[1]:''); if(rpl){ const w0=whoOf(CM.kind,CM.id), lg=w0&&w0.p.log; if(lg&&lg.length) lg[lg.length-1].theyReplied=rpl; save(); } toast('Opening '+(t.dataset.via==='wa'?'WhatsApp':'messages')+'…'); setTimeout(()=>{ closeSheet(); render(); }, 600); return; }
     case 'sendall': recordSend('student', id, 'wa', t.dataset.text, t.dataset.mid, t.dataset.ref, '', ''); setTimeout(()=>{ encourageAllSheet(); render(); },400); return;
     case 'setupcode': setupCodeSheet(); break;
     case 'nosetup': S.settings.setupAsked=true; save(); render(); break;
@@ -3957,9 +4274,9 @@ document.addEventListener('click', e => {
       const secs={}; document.querySelectorAll('.shSec').forEach(c=>secs[c.value]=c.checked);
       if(!Object.values(secs).some(Boolean)){ toast('Choose at least one part'); break; }
       const pin=val('shPin').trim(); if(pin && !/^\d{4,8}$/.test(pin)){ fail('shPin','Use 4 to 8 numbers'); break; }
-      const code=makeCode(secs,pin), msg=shareMessage(code);
+      const code=makeCode2(secs,pin), msg=shareMessage(code);
       document.getElementById('shOut').innerHTML=`<div class="codebox">${code}</div>
-        <p class="muted" style="margin:0 0 8px;text-align:center">They will see: ${SECTIONS.filter(([k])=>secs[k]).map(x=>esc(x[1])).join(', ')}${pin?'. Locked with your PIN.':'.'}</p>
+        <p class="muted" style="margin:0 0 8px;text-align:center">They will see: ${partsList(secs).map(esc).join(', ')}${pin?'. Locked with your PIN.':'. Tip: add a PIN so they can\'t switch the other parts back on.'}</p>
         <div class="btns" style="flex-direction:column"><a class="btn wa" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">Send on WhatsApp</a>
         <a class="btn ghost" href="sms:?body=${encodeURIComponent(msg)}">Send as text message</a></div>`;
       break;
@@ -4081,8 +4398,11 @@ document.addEventListener('click', e => {
       day().bible=true;
       const done=BOOKS[B.book-1][0]+' '+B.chapter;
       if(B.chapter<BOOKS[B.book-1][1]) B.chapter++; else { B.book = B.book%66+1; B.chapter=1; }
-      save(); render(); toast(done+' read — well done'); break;
+      save(); render(); toast(done+' read — well done'); { const rb=B.chapter===1?(B.book===1?66:B.book-1):B.book, rc=B.chapter===1?BOOKS[rb-1][1]:B.chapter-1; setTimeout(()=>reflectSheet(rb, rc), 350); } break;
     }
+    case 'rfsave': saveReflect(t.dataset.k); break;
+    case 'rfopen': { const [b,c]=t.dataset.k.split(':').map(Number); reflectSheet(b,c); break; }
+    case 'sdsave': { const j=S.study.journal.find(x=>x.id===id); if(j){ j.deeperQs=studyDeeperSheet.qs; j.deeper=studyDeeperSheet.qs.map((_,i)=>val('sdA'+i).trim()); save(); } closeSheet(); render(); toast('Saved 🙏'); break; }
     case 'close': case 'closebg': closeSheet(); break;
     case 'save': if(openSheet.save && openSheet.save()!==false){ save(); closeSheet(); render(); toast('Saved'); } break;
   }
@@ -4848,6 +5168,32 @@ function showProblem(msg){
 window.addEventListener('error', e=>{ if(e && e.message && !/ResizeObserver|Script error/i.test(e.message)) showProblem(e.message + (e.lineno?' (line '+e.lineno+')':'')); });
 window.addEventListener('unhandledrejection', e=>{ const r=e && e.reason; if(r && r.name!=='AbortError' && !/fetch|network/i.test(String(r.message||r))) showProblem(r.message||r); });
 
+/* ---------- first open: the setup code is required ---------- */
+function ownerSignal(d){ return !!d && ((((d.settings||{}).sections)||{}).secretary===true || !!(d.sec && (d.sec.pubs||[]).length)); }
+function needsSetup(){
+  if(typeof FORM!=='undefined' && FORM) return false;   // report links for group overseers never ask
+  const st=S.settings||{};
+  if(st.setupDone || ('sectionLock' in st) || st.parts) return false;     // a code was already entered
+  if(ownerSignal(S)) return false;                                         // the owner's own device
+  if(P.current!=='main'){ try{ if(ownerSignal(JSON.parse(localStorage.getItem(keyFor('main'))||'null'))) return false; }catch(e){} }
+  return true;
+}
+function showSetup(prefill){
+  const el=document.getElementById('lock'); el.hidden=false; el.dataset.setup='1';
+  el.innerHTML=`<div class="lockbox"><img src="icon.svg" alt="" width="64" height="64"><h2>Welcome to Life Compass</h2>
+    <p class="muted" style="margin:0 0 12px">Type the setup code you were given to open the app.</p>
+    <input type="text" id="suCode" value="${esc(prefill||'')}" placeholder="LC-____-____" autocapitalize="characters" autocomplete="off" style="font-size:20px;letter-spacing:.08em;text-align:center">
+    <div id="suPrev" class="muted" style="min-height:20px;margin:8px 0;font-size:13.5px"></div>
+    <button class="btn" id="suGo">Open Life Compass</button>
+    <p class="muted" style="font-size:13px;margin:14px 0 0">No code? Ask the person who shared Life Compass with you to send you one.</p></div>`;
+  const inp=document.getElementById('suCode'), prev=document.getElementById('suPrev');
+  const upd=()=>{ const r=readCode(inp.value); prev.innerHTML = r ? 'You will see: <b>'+partsList(r.parts).map(esc).join(', ')+'</b>' : (inp.value.replace(/[^A-Za-z0-9]/g,'').length>=8?'<span style="color:var(--bad)">That code is not right. Check it and try again.</span>':''); };
+  inp.addEventListener('input',upd); upd();
+  const go=()=>{ const r=readCode(inp.value); if(!r){ prev.innerHTML='<span style="color:var(--bad)">That code is not right. Check it and try again.</span>'; inp.focus(); return; } applyCode(r); };
+  document.getElementById('suGo').addEventListener('click',go); inp.addEventListener('keydown',e=>{ if(e.key==='Enter') go(); });
+  setTimeout(()=>inp.focus(),100);
+}
+
 /* ---------- lock screen ---------- */
 function needsLock(){ if(P.list.length<2 && !curProfile().pin) return false; try{ return sessionStorage.getItem('lc.unlocked')!==P.current; }catch(e){ return true; } }
 function showLock(sel){
@@ -4868,6 +5214,7 @@ async function tryUnlock(id){
   if(!S.settings.name && prof.name) { S.settings.name=prof.name; save(); }
   try{ sessionStorage.setItem('lc.unlocked',id); }catch(e){}
   document.getElementById('lock').hidden=true; tab='today'; closeSheet(); render(); window.scrollTo(0,0);
+  if(needsSetup()) showSetup();
 }
 function lockNow(){ try{ sessionStorage.removeItem('lc.unlocked'); }catch(e){} closeSheet(); showLock(); }
 document.addEventListener('click', e=>{
@@ -4904,8 +5251,8 @@ function personSheet(){
     });
 }
 
-if(FORM) renderForm(); else if(needsLock()) showLock(); else render();
-try{ const sc=new URLSearchParams(location.search).get('setup'); if(sc){ history.replaceState(null,'',location.pathname); setTimeout(()=>setupCodeSheet(sc), 400); } }catch(e){}
+let SETUP_PREFILL=''; try{ SETUP_PREFILL=new URLSearchParams(location.search).get('setup')||''; if(SETUP_PREFILL) history.replaceState(null,'',location.pathname); }catch(e){}
+if(FORM) renderForm(); else if(needsLock()) showLock(); else { render(); if(needsSetup()) showSetup(SETUP_PREFILL); else if(SETUP_PREFILL) setTimeout(()=>setupCodeSheet(SETUP_PREFILL), 400); }
 setTimeout(checkAlarms, 1500);
 if(!NATIVE && 'serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
 if(NATIVE) setTimeout(nativeInit, 300);
