@@ -242,7 +242,7 @@ body.formmode main{padding-bottom:40px}
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 33;
+const APP_VERSION = 34;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -2928,6 +2928,7 @@ async function checkLinkSheet(){
     <p class="muted" style="margin:0 0 10px">The attendant gets a list of all ${activePubs().length} active publishers, already ticked. At each meeting he unticks anyone absent, adds the visitors and a note, and sends it back to you on WhatsApp.</p>
     <div class="f2"><div class="f"><label>Month</label><select id="ckMonth">${[prevMonth(MONTH()), MONTH(), nextMonth(MONTH())].map(x=>`<option value="${x}" ${x===m?'selected':''}>${monthName(x)}</option>`).join('')}</select></div>
       <div class="f"><label>Your WhatsApp number</label><input type="tel" id="alMe" value="${esc(c.secPhone||'')}" placeholder="024 123 4567"></div></div>
+    <div class="f2"><div class="f"><label>Midweek meeting day</label><select id="alMid">${ckDayOpts(meetDays().mid)}</select></div><div class="f"><label>Weekend meeting day</label><select id="alWk">${ckDayOpts(meetDays().wk)}</select></div></div>
     <div class="f2"><div class="f"><label>Attendant's name</label><input type="text" id="alName" value="${esc(info.name||'')}" list="ckMen"></div><div class="f"><label>His WhatsApp number</label><input type="tel" id="alPhone" value="${esc(info.phone||'')}"></div></div>
     <datalist id="ckMen">${d.pubs.filter(p=>p.status!=='moved' && p.gender!=='f').map(p=>`<option>${esc(p.name)}</option>`).join('')}</datalist>
     ${st.sent?`<p class="muted" style="margin:0 0 8px">Checklist sent ${nice(st.sent)}${st.got?' · last reply added '+nice(st.got)+' ✓':''}</p>`:''}
@@ -2943,22 +2944,27 @@ function checkFormHTML(){
   const F=FORM, all=[...(F.d||[]), ...(FS.x||[])].sort((x,y)=>x[0].localeCompare(y[0])||y[1].localeCompare(x[1])), today=ymd(new Date());
   FS.c=FS.c||{};
   if(!FS.cur || !all.some(([d,k])=>d+'|'+k===FS.cur)){ const past=all.filter(([d])=>d<=today); const pick=(past[past.length-1]||all[0]); FS.cur=pick?pick[0]+'|'+pick[1]:''; }
-  const cur=FS.c[FS.cur]||(FS.c[FS.cur]={abs:{}, v:'', note:'', ok:0}), ps=F.p||[], absN=ps.filter(([id])=>cur.abs[id]).length, pres=ps.length-absN, vis=n(cur.v)||0;
+  const cur=FS.c[FS.cur]||(FS.c[FS.cur]={abs:{}, v:'', t:'', note:'', ok:0}), ps=F.p||[], absN=ps.filter(([id])=>cur.abs[id]).length, pres=ps.length-absN;
   const doneN=all.filter(([d,k])=>(FS.c[d+'|'+k]||{}).ok).length;
   const groups=[...new Set(ps.map(x=>x[2]))];
   let html=`<div class="card hello"><div class="big">Attendance checklist</div><div class="sub">${monthName(F.m)}</div><div class="chips"><span class="chip">${doneN} of ${all.length} meetings done</span></div></div>
-    <p class="muted" style="margin:0 4px 12px">Choose the meeting. Everyone is ticked. <b>Untick anyone who is absent</b>, add the visitors, then tap <b>This meeting is done</b>. Send at the end. What you do stays on this phone.</p>
-    <div class="card"><div class="chips2">${all.map(([d,k])=>{ const kk=d+'|'+k, x=FS.c[kk]||{}; return `<button class="${kk===FS.cur?'on':''}" data-fr="cpick" data-k="${kk}">${x.sent?'🔒 ':x.ok?'✓ ':''}${nice(d)} · ${k==='mid'?'Midweek':'Weekend'}</button>`; }).join('')}</div>
+    <p class="muted" style="margin:0 4px 12px">Choose the meeting. Everyone is ticked. <b>Untick anyone who is absent</b>. Then type the <b>total you counted</b> in the hall and tap <b>This meeting is done</b>. What you do stays on this phone.</p>
+    <div class="card"><div class="chips2">${all.map(([d,k])=>{ const kk=d+'|'+k, x=FS.c[kk]||{}; return `<button class="${kk===FS.cur?'on':''}" data-fr="cpick" data-k="${kk}">${x.sent?'🔒 ':x.none?'— ':x.ok?'✓ ':''}${nice(d)} · ${k==='mid'?'Midweek':'Weekend'}</button>`; }).join('')}</div>
       <details><summary class="muted" style="font-size:13.5px">Meeting on a different day?</summary><div class="f2" style="margin-top:8px"><input type="date" id="frDate" min="${F.m}-01" max="${F.m}-31"><select id="frKind"><option value="mid">Midweek</option><option value="wk">Weekend</option></select></div><button class="btn ghost" data-fr="addd" style="margin-top:8px">Add this day</button></details></div>`;
   if(FS.cur){
     const [cd,ck]=FS.cur.split('|');
     html+=`<div class="card"><h2>${nice(cd)} · ${ck==='mid'?'Midweek':'Weekend'} meeting</h2>
+      ${cur.none?`<div class="banner" style="margin:0"><span style="flex:1">No meeting this day (convention, assembly or other)</span>${cur.sent?'':'<button class="btn sm ghost" data-fr="cnone">Undo</button>'}</div>`:`
       <div class="stat"><div><small>Publishers present</small><b>${pres}</b></div><div><small>Absent</small><b style="color:${absN?'var(--bad)':'var(--ok)'}">${absN}</b></div></div>
-      <div class="f2" style="margin-top:10px"><div class="f"><label>Visitors (not on the list)</label><input type="text" inputmode="numeric" data-fr="cv" value="${esc(cur.v)}" placeholder="0" ${cur.sent?'readonly':''}></div><div class="f"><label>Total</label><div id="ckTotal" data-p="${pres}" style="font-size:22px;font-weight:700;padding:6px 0">${pres+vis}</div></div></div></div>`;
+      <div class="f" style="margin-top:10px"><label>Total counted in the hall (everyone, for the S-88)</label><input type="text" inputmode="numeric" data-fr="ct" value="${esc(cur.t||'')}" placeholder="Count heads and type the number" ${cur.sent?'readonly':''} style="font-size:20px"></div>
+      ${cur.sent?'':'<button class="btn sm ghost" data-fr="cnone" style="width:100%">No meeting this day (convention, assembly…)</button>'}`}</div>`;
+    if(cur.none){ html+=`<div class="card"><div class="f"><label>Note (optional)</label><textarea data-fr="cnote" ${cur.sent?'readonly':''}>${esc(cur.note||'')}</textarea></div>${cur.sent?'':`<button class="btn ${cur.ok?'ghost':''}" data-fr="cok">${cur.ok?'✓ Done. Tap to change':'This meeting is done'}</button>`}</div>`; }
+    else {
     groups.forEach(g=>{ const l=ps.filter(x=>x[2]===g);
       html+=`<div class="card"><h2>${esc(g||'No group')}<span class="sp"></span><span class="chip">${l.filter(([id])=>!cur.abs[id]).length}/${l.length}</span></h2>${l.map(([id,nm])=>`<label class="row" style="cursor:pointer"><span class="lbl" style="${cur.abs[id]?'color:var(--bad);text-decoration:line-through':''}">${esc(nm)}</span><input type="checkbox" data-fr="ctick" data-id="${esc(id)}" ${cur.abs[id]?'':'checked'} ${cur.sent?'disabled':''} style="width:24px;height:24px"></label>`).join('')}</div>`; });
-    html+=`<div class="card"><div class="f"><label>Notes about this meeting (optional)</label><textarea data-fr="cnote" placeholder="Heavy rain, many came late…" ${cur.sent?'readonly':''}>${esc(cur.note||'')}</textarea></div>
+    html+=`<div class="card"><div class="f"><label>Notes: visitors or anything else (optional)</label><textarea data-fr="cnote" placeholder="2 new people came with Sister Ama. Heavy rain…" ${cur.sent?'readonly':''}>${esc(cur.note||'')}</textarea></div>
       ${cur.sent?'<div class="banner" style="margin:0"><span>🔒 Sent to the secretary. This meeting is locked and can\'t be changed.</span></div>':`<button class="btn ${cur.ok?'ghost':''}" data-fr="cok">${cur.ok?'✓ Done. Tap to change':'This meeting is done'}</button>`}</div>`;
+    }
   }
   html+=`<div class="card"><a class="btn wa" id="frSend" href="${formWaHref()}" target="_blank" rel="noopener" data-fr="send">Send to ${esc(F.sn||'the secretary')} on WhatsApp</a>
     <p class="muted" style="margin:8px 0 0;font-size:13px">Only meetings marked done are sent. After you send, those meetings are locked. You can still fill in the meetings that have not happened yet.</p>
@@ -2967,9 +2973,9 @@ function checkFormHTML(){
 }
 function checkFormMessage(){
   const F=FORM, ps=F.p||[], all=[...(F.d||[]), ...(FS.x||[])].filter(([d,k])=>((FS.c||{})[d+'|'+k]||{}).ok).sort((x,y)=>x[0].localeCompare(y[0]));
-  const rows=all.map(([d,k])=>{ const x=FS.c[d+'|'+k], ab=ps.filter(([id])=>x.abs[id]), pres=ps.length-ab.length, v=n(x.v)||0; return {d,k,ab,pres,v,note:(x.note||'').trim()}; });
-  const code=[1, F.m, rows.map(r=>[+r.d.slice(8), r.k==='mid'?'m':'w', r.pres, r.v, r.ab.map(a=>a[0]).join('.'), r.note])];
-  return `Attendance checklist: ${monthName(F.m)}\n\n${rows.map(r=>`${nice(r.d)} (${r.k==='mid'?'midweek':'weekend'}): ${r.pres} publishers + ${r.v} visitors = ${r.pres+r.v}${r.ab.length?'\nAbsent: '+r.ab.map(a=>a[1]).join(', '):''}${r.note?'\nNote: '+r.note:''}`).join('\n\n')||'(no meeting marked done yet)'}\n\n(For the secretary's app. Please don't change the line below.)\nLC-CHECK:${b64uEnc(code)}`;
+  const rows=all.map(([d,k])=>{ const x=FS.c[d+'|'+k], ab=x.none?[]:ps.filter(([id])=>x.abs[id]), pres=x.none?0:ps.length-ab.length, v=n(x.v)||0, t=n(x.t)||0; return {d,k,ab,pres,v,t,none:!!x.none,note:(x.note||'').trim()}; });
+  const code=[1, F.m, rows.map(r=>[+r.d.slice(8), r.k==='mid'?'m':'w', r.pres, r.v, r.ab.map(a=>a[0]).join('.'), r.note, r.t, r.none?1:0])];
+  return `Attendance checklist: ${monthName(F.m)}\n\n${rows.map(r=>r.none?`${nice(r.d)} (${r.k==='mid'?'midweek':'weekend'}): no meeting${r.note?' ('+r.note+')':''}`:`${nice(r.d)} (${r.k==='mid'?'midweek':'weekend'}): ${r.t?'total counted '+r.t+' · ':''}${r.pres} publishers present${r.ab.length?'\nAbsent: '+r.ab.map(a=>a[1]).join(', '):''}${r.note?'\nNote: '+r.note:''}`).join('\n\n')||'(no meeting marked done yet)'}\n\n(For the secretary's app. Please don't change the line below.)\nLC-CHECK:${b64uEnc(code)}`;
 }
 /* the secretary's side: flags for anyone who missed 2 meetings in a row */
 function checkKeys(){ return Object.keys(SEC().checks||{}).sort().reverse(); }
@@ -2993,11 +2999,11 @@ function checksCard(){
   return `<div class="card"><h2>Attendance checklist</h2><p class="muted" style="margin:0 0 10px">The attendant ticks who is present at each meeting and sends it to you. Anyone absent twice in a row is flagged for his group overseer.</p>
     ${st.sent?`<p class="muted" style="margin:-4px 0 10px">${monthName(MONTH())} checklist sent ${nice(st.sent)}${st.got?' · reply added '+nice(st.got)+' ✓':''}</p>`:''}
     <div class="btns"><button class="btn wa" style="flex:1" data-a="x31cklink">Send checklist</button><button class="btn ghost" style="flex:1" data-a="attpaste">Paste his reply</button></div>
-    ${keys.length?`<div class="area">Last meetings</div><div class="list">${keys.map(k=>{ const c=d.checks[k], [dt,kd]=k.split('|'); return `<div class="it" data-a="x31ckview" data-k="${k}" style="cursor:pointer"><div class="x"><b>${nice(dt)} · ${kd==='mid'?'Midweek':'Weekend'}</b><small>${c.present} publishers + ${c.v} visitors · ${(c.abs||[]).length} absent${c.note?' · '+esc(c.note):''}</small></div><span class="amt">${n(c.present)+n(c.v)}</span></div>`; }).join('')}</div>`:''}</div>`;
+    ${keys.length?`<div class="area">Last meetings</div><div class="list">${keys.map(k=>{ const c=d.checks[k], [dt,kd]=k.split('|'); return `<div class="it" data-a="x31ckview" data-k="${k}" style="cursor:pointer"><div class="x"><b>${nice(dt)} · ${kd==='mid'?'Midweek':'Weekend'}</b><small>${c.t?'Counted '+c.t+' · ':''}${c.present} publishers present · ${(c.abs||[]).length} absent${c.note?' · '+esc(c.note):''}</small></div><span class="amt">${n(c.t)||n(c.present)+n(c.v)}</span></div>`; }).join('')}</div>`:''}</div>`;
 }
 function checkView(k){
   const c=SEC().checks[k], [dt,kd]=k.split('|'), ab=(c.abs||[]).map(id=>SEC().pubs.find(p=>p.id===id)).filter(Boolean);
-  openSheet(`<h3>${nice(dt)} · ${kd==='mid'?'Midweek':'Weekend'}</h3><div class="stat"><div><small>Present</small><b>${c.present} + ${c.v}</b></div><div><small>Absent</small><b>${ab.length}</b></div></div>
+  openSheet(`<h3>${nice(dt)} · ${kd==='mid'?'Midweek':'Weekend'}</h3><div class="stat"><div><small>${c.t?'Total counted':'Present'}</small><b>${c.t?c.t:c.present+' + '+c.v}</b></div><div><small>Absent</small><b>${ab.length}</b></div></div>
     ${c.note?`<p style="margin:10px 0 0"><b>Note:</b> ${esc(c.note)}</p>`:''}
     ${ab.length?`<div class="area">Absent</div><div class="list">${ab.map(p=>`<div class="it" data-a="pubsheet" data-id="${p.id}" style="cursor:pointer"><div class="x"><b>${esc(p.name)}</b><small>${esc(p.group||'No group')}</small></div></div>`).join('')}</div>`:''}
     <div class="btns" style="margin-top:12px"><button class="btn ghost" style="flex:1" data-a="close">Close</button><button class="btn danger" style="flex:1" data-a="x33ckdel" data-k="${k}">Remove</button></div>`, null);
@@ -3025,6 +3031,7 @@ function backupPinSheet(){
       if(!/^\d{4,8}$/.test(a)) return fail('bkPin','Use 4 to 8 numbers'); if(a!==b) return fail('bkPin2','The two passcodes are not the same'); res(a); });
   });
 }
+function ckDayOpts(sel){ return DAYS_FULL.map((nm,i)=>`<option value="${i}" ${i===n(sel)?'selected':''}>${nm}</option>`).join(''); }
 
 /* ================= MONTHLY CONGREGATION REPORT ================= */
 function monthReportText(m){
@@ -5039,13 +5046,14 @@ function reportFormHTML(){
   const F=FORM, r=FS.r||(FS.r={}), ps=F.p||[];
   const done=ps.filter(([id])=>r[id] && r[id].s!=null).length;
   let html=`<div class="card hello"><div class="big">${esc(F.g)}</div><div class="sub">Reports for ${monthName(F.m)}${F.cn?' · '+esc(F.cn):''}</div><div class="chips"><span class="chip">${done} of ${ps.length} filled</span></div></div>
-    <p class="muted" style="margin:0 4px 12px">For each publisher, tap <b>Shared</b> or <b>Did not share</b>, then add their Bible studies. Tap <b>Send</b> at the bottom when you finish. What you type stays on this phone, so you can come back and finish later.</p>`;
+    <p class="muted" style="margin:0 4px 12px">For each publisher, tap <b>Shared</b> or <b>Did not share</b>, then add their Bible studies. If a publisher wants to explain something, write it in <b>Remarks</b>. Tap <b>Send</b> at the bottom when you finish. What you type stays on this phone, so you can come back and finish later.</p>`;
   if(!ps.length) html+=`<div class="card"><div class="empty">There are no names on this link. Ask the secretary to send it again.</div></div>`;
   html+=ps.map(([id,nm,pio])=>{ const x=r[id]||{};
     return `<div class="card person ${x.s===1?'green':x.s===0?'orange':''}"><b style="font-size:16.5px">${esc(nm)}</b>${pio?' <span class="chip">Pioneer</span>':''}
       <div class="chips2" style="margin:10px 0 4px"><button class="${x.s===1?'on':''}" data-fr="s" data-id="${esc(id)}" data-v="1">Shared ✓</button><button class="${x.s===0?'on':''}" data-fr="s" data-id="${esc(id)}" data-v="0">Did not share</button></div>
       ${x.s===1?`${pio?'':`<label class="row" style="cursor:pointer;border:0;padding:4px 0"><span class="lbl">Auxiliary pioneer this month</span><input type="checkbox" data-fr="a" data-id="${esc(id)}" ${x.a?'checked':''} style="width:22px;height:22px"></label>`}
       <div class="f2">${pio||x.a?`<div class="f"><label>Hours</label><input type="text" inputmode="decimal" data-fr="h" data-id="${esc(id)}" value="${esc(x.h??'')}"></div>`:''}<div class="f"><label>Bible studies</label><input type="text" inputmode="numeric" data-fr="st" data-id="${esc(id)}" value="${esc(x.st??'')}" placeholder="0"></div></div>`:''}
+      ${x.s!=null?`<div class="f" style="margin:6px 0 0"><label>Remarks for the record card (optional)</label><input type="text" data-fr="rm" data-id="${esc(id)}" value="${esc(x.rm||'')}" placeholder="Sick this month, travelled…" maxlength="60"></div>`:''}
     </div>`; }).join('');
   html+=`<div class="card"><div class="f"><label>Note for the secretary (optional)</label><textarea data-fr="note" placeholder="Anyone new in the group, or anything he should know">${esc(FS.note||'')}</textarea></div>
     <a class="btn wa" id="frSend" href="${formWaHref()}" target="_blank" rel="noopener" data-fr="send">Send to ${esc(F.sn||'the secretary')} on WhatsApp</a>
@@ -5072,8 +5080,8 @@ function formMessage(){
   if(F.t==='r'){
     const r=FS.r||{}, rows=(F.p||[]).filter(([id])=>r[id] && r[id].s!=null);
     const lines=rows.map(([id,nm,pio])=>{ const x=r[id], st=n(x.st)||0;
-      return nm+': '+(x.s ? 'shared'+((pio||x.a)&&String(x.h??'').trim()!==''?', '+n(x.h)+' h':'')+(x.a?', auxiliary pioneer':'')+', '+st+' Bible stud'+(st===1?'y':'ies') : 'did not share'); });
-    const note=(FS.note||'').trim(), rs=rows.map(([id,nm,pio])=>{ const x=r[id]; return [id, x.s, x.s&&(pio||x.a)&&String(x.h??'').trim()!==''?n(x.h):'', x.s?n(x.st)||0:0, x.s&&x.a?1:0].join(','); }).join(';');
+      return nm+': '+(x.s ? 'shared'+((pio||x.a)&&String(x.h??'').trim()!==''?', '+n(x.h)+' h':'')+(x.a?', auxiliary pioneer':'')+', '+st+' Bible stud'+(st===1?'y':'ies') : 'did not share')+((x.rm||'').trim()?' (remarks: '+x.rm.trim()+')':''); });
+    const note=(FS.note||'').trim(), rs=rows.map(([id,nm,pio])=>{ const x=r[id]; return [id, x.s, x.s&&(pio||x.a)&&String(x.h??'').trim()!==''?n(x.h):'', x.s?n(x.st)||0:0, x.s&&x.a?1:0, (x.rm||'').trim()?encodeURIComponent(x.rm.trim()).replace(/[,;]/g,c=>c===','?'%2C':'%3B'):''].join(',').replace(/,+$/,''); }).join(';');
     const code=note?[1,F.m,F.g,rs,note]:[1,F.m,F.g,rs];
     return `Field service reports: ${F.g}, ${monthName(F.m)}\n\n${lines.join('\n')||'(nothing filled in yet)'}${note?'\n\nNote: '+note:''}\n\n(For the secretary's app. Please don't change the line below.)\nLC-REPORT:${b64uEnc(code)}`;
   }
@@ -5094,6 +5102,7 @@ document.addEventListener('click', e=>{
 });
 document.addEventListener('input', e=>{
   if(!FORM) return; const t=e.target, f=t.dataset.fr; if(!f) return;
+  if(f==='rm'){ const r=FS.r||(FS.r={}); const x=r[t.dataset.id]||(r[t.dataset.id]={}); x.rm=t.value; }
   if(f==='h'||f==='st'){ const r=FS.r||(FS.r={}); const x=r[t.dataset.id]||(r[t.dataset.id]={}); x[f]=t.value.trim(); }
   if(f==='note') FS.note=t.value;
   if(f==='ac'){ FS.a=FS.a||{}; FS.a[t.dataset.k]=t.value.replace(/[^\d]/g,''); }
@@ -5159,7 +5168,7 @@ document.addEventListener('change', e=>{
   if(t.id==='lkMonth'){ linkMonth=t.value; linksSheet(); }
   if(t.id==='lkMe'){ congInfo().secPhone=t.value.trim(); save(); linksSheet(); }
   if(t.id==='alMonth'){ attLinkMonth=t.value; attLinkSheet(); }
-  if(t.id==='alMid'||t.id==='alWk'){ meetDays()[t.id==='alMid'?'mid':'wk']=n(t.value); save(); attLinkSheet(); }
+  if(t.id==='alMid'||t.id==='alWk'){ meetDays()[t.id==='alMid'?'mid':'wk']=n(t.value); save(); if(document.getElementById('ckMonth')) checkLinkSheet(); else attLinkSheet(); }
   if(t.id==='alName'){ const info=SEC().attInfo, p=SEC().pubs.find(x=>nameKey(x.name)===nameKey(t.value)), ph=document.getElementById('alPhone'); if(p && p.phone && !ph.value.trim()){ ph.value=p.phone; info.phone=p.phone; save(); alUpd(); } }
 });
 document.addEventListener('input', e=>{
@@ -5171,18 +5180,18 @@ document.addEventListener('input', e=>{
 /* ---------- reading the replies ---------- */
 function readCodes(text){ const out=[], re=/LC-(REPORT|ATTEND|CHECK):([A-Za-z0-9.\-+\/]+)/g; let m; while((m=re.exec(String(text||'')))){ try{ let d=b64uDec(m[2]);
     if(Array.isArray(d)){
-      if(m[1]==='REPORT') d={t:'r', m:d[1], g:d[2], n:d[4]||'', r:String(d[3]||'').split(';').filter(Boolean).map(x=>{ const [id,s,h,st,a]=x.split(','); return [id, n(s), h===''||h==null?null:n(h), n(st), n(a)]; })};
-      else if(m[1]==='CHECK'){ const mo=d[1]; d={t:'c', m:mo, c:(d[2]||[]).map(r=>[mo+'-'+String(r[0]).padStart(2,'0'), r[1]==='m'?'mid':'wk', n(r[2]), n(r[3]), String(r[4]||'').split('.').filter(Boolean), String(r[5]||'')])}; }
+      if(m[1]==='REPORT') d={t:'r', m:d[1], g:d[2], n:d[4]||'', r:String(d[3]||'').split(';').filter(Boolean).map(x=>{ const [id,s,h,st,a,rm]=x.split(','); let r2=''; try{ r2=rm?decodeURIComponent(rm):''; }catch(e){} return [id, n(s), h===''||h==null?null:n(h), n(st), n(a), r2]; })};
+      else if(m[1]==='CHECK'){ const mo=d[1]; d={t:'c', m:mo, c:(d[2]||[]).map(r=>[mo+'-'+String(r[0]).padStart(2,'0'), r[1]==='m'?'mid':'wk', n(r[2]), n(r[3]), String(r[4]||'').split('.').filter(Boolean), String(r[5]||''), n(r[6]), n(r[7])])}; }
       else { const mo=d[1]; d={t:'a', m:mo, a:String(d[2]||'').split(';').map(x=>x.match(/^(\d+)([mw])(\d+)$/)).filter(Boolean).map(x=>[mo+'-'+x[1].padStart(2,'0'), x[2]==='m'?'mid':'wk', n(x[3])])}; }
     }
     if(d && ((d.t==='r'&&Array.isArray(d.r))||(d.t==='a'&&Array.isArray(d.a))||(d.t==='c'&&Array.isArray(d.c)))) out.push(d); }catch(e){} } return out; }
 function codePreviewHTML(codes){
   const d=SEC();
   return codes.map(c=>{
-    if(c.t==='r'){ const rows=c.r.map(([id,s,h,st,a])=>({p:findPub(id,c.g),s,h,st:n(st),a})), ok=rows.filter(r=>r.p);
+    if(c.t==='r'){ const rows=c.r.map(([id,s,h,st,a,rm])=>({p:findPub(id,c.g),s,h,st:n(st),a,rm})), ok=rows.filter(r=>r.p);
       return `<div class="area">${esc(c.g)} · ${monthName(c.m)} · ${ok.length} report${ok.length===1?'':'s'}</div>${c.n?`<p class="muted" style="margin:0 0 6px"><b>Note:</b> ${esc(c.n)}</p>`:''}
-        <div class="list">${rows.map(r=>{ const had=r.p&&rep(c.m,r.p.id); return `<div class="it"><span class="wdot ${!r.p?'red':r.s?'green':'orange'}" style="margin-top:6px"></span><div class="x"><b>${r.p?esc(r.p.name):'Not on your list any more (skipped)'}</b><small>${r.s?'Shared'+(r.h!=null?' · '+r.h+' h':'')+' · '+r.st+' stud'+(r.st===1?'y':'ies')+(r.a?' · Aux':''):'Did not share'}${had?' · replaces the report already entered':''}</small></div></div>`; }).join('')}</div>`; }
-    if(c.t==='c') return `<div class="area">Attendance checklist · ${monthName(c.m)}</div><div class="list">${c.c.map(([dt,k,pres,v,abs,note])=>`<div class="it"><div class="x"><b>${nice(dt)} · ${k==='mid'?'Midweek':'Weekend'}</b><small>${(d.checks||{})[dt+'|'+k]?'<b style="color:var(--bad)">Already added, will be skipped</b> · ':''}${pres} publishers + ${v} visitors${abs.length?' · absent: '+abs.map(id=>{ const p=findPub(id,''); return p?esc(p.name):'?'; }).join(', '):''}${note?' · '+esc(note):''}</small></div><span class="amt">${pres+v}</span></div>`).join('')}</div>`;
+        <div class="list">${rows.map(r=>{ const had=r.p&&rep(c.m,r.p.id); return `<div class="it"><span class="wdot ${!r.p?'red':r.s?'green':'orange'}" style="margin-top:6px"></span><div class="x"><b>${r.p?esc(r.p.name):'Not on your list any more (skipped)'}</b><small>${r.s?'Shared'+(r.h!=null?' · '+r.h+' h':'')+' · '+r.st+' stud'+(r.st===1?'y':'ies')+(r.a?' · Aux':''):'Did not share'}${r.rm?' · Remarks: '+esc(r.rm):''}${had?' · replaces the report already entered':''}</small></div></div>`; }).join('')}</div>`; }
+    if(c.t==='c') return `<div class="area">Attendance checklist · ${monthName(c.m)}</div><div class="list">${c.c.map(([dt,k,pres,v,abs,note,tot,none])=>none?`<div class="it"><div class="x"><b>${nice(dt)} · ${k==='mid'?'Midweek':'Weekend'}</b><small>No meeting${note?' · '+esc(note):''}</small></div></div>`:`<div class="it"><div class="x"><b>${nice(dt)} · ${k==='mid'?'Midweek':'Weekend'}</b><small>${(d.checks||{})[dt+'|'+k]?'<b style="color:var(--bad)">Already added, will be skipped</b> · ':''}${tot?'Counted '+tot+' · ':''}${pres} publishers present${v?' + '+v+' visitors':''}${abs.length?' · absent: '+abs.map(id=>{ const p=findPub(id,''); return p?esc(p.name):'?'; }).join(', '):''}${note?' · '+esc(note):''}</small></div><span class="amt">${tot||pres+v}</span></div>`).join('')}</div>`;
     const ms=d.meetings||[];
     return `<div class="area">Attendance · ${monthName(c.m)}</div><div class="list">${c.a.map(([dt,k,cnt])=>{ const had=ms.find(x=>x.date===dt&&x.kind===k); return `<div class="it"><div class="x"><b>${nice(dt)} · ${k==='mid'?'Midweek':'Weekend'}</b>${had&&n(had.count)!==n(cnt)?`<small>Replaces ${had.count}</small>`:''}</div><span class="amt">${n(cnt)}</span></div>`; }).join('')}</div>`;
   }).join('');
@@ -5192,12 +5201,12 @@ function applyCodes(codes){
   CK_SKIP=0; const d=SEC(); let nr=0, na=0, lastM=null, notes=[];
   codes.forEach(c=>{
     if(c.t==='r'){ d.reports[c.m]=d.reports[c.m]||{};
-      c.r.forEach(([id,s,h,st,a])=>{ const p=findPub(id,c.g); if(!p) return; const old=d.reports[c.m][p.id]||{};
-        d.reports[c.m][p.id]={got:TODAY(), shared:!!s, aux:!!a&&!isPioneer(p), hours:s&&h!=null?n(h):null, studies:s?n(st):0, remarks:old.remarks||''}; nr++; });
+      c.r.forEach(([id,s,h,st,a,rm])=>{ const p=findPub(id,c.g); if(!p) return; const old=d.reports[c.m][p.id]||{};
+        d.reports[c.m][p.id]={got:TODAY(), shared:!!s, aux:!!a&&!isPioneer(p), hours:s&&h!=null?n(h):null, studies:s?n(st):0, remarks:(rm||'').trim()||old.remarks||''}; nr++; });
       const lg=linkLog('r',c.m); lg[c.g]=lg[c.g]||{}; lg[c.g].got=TODAY(); lastM=c.m; if(c.n) notes.push(c.g+': '+c.n); }
     else if(c.t==='c'){ d.meetings=d.meetings||[]; d.checks=d.checks||{};
-      c.c.forEach(([dt,k,pres,v,abs,note])=>{ if(d.checks[dt+'|'+k]){ CK_SKIP++; return; } d.checks[dt+'|'+k]={present:pres, v, abs:abs.map(id=>(findPub(id,'')||{}).id).filter(Boolean), note, got:TODAY()};
-        const cnt=pres+v; if(cnt>0){ const ex=d.meetings.find(x=>x.date===dt&&x.kind===k); if(ex) ex.count=cnt; else d.meetings.push({id:uid(), date:dt, kind:k, count:cnt}); na++; } });
+      c.c.forEach(([dt,k,pres,v,abs,note,tot,none])=>{ if(none) return; if(d.checks[dt+'|'+k]){ CK_SKIP++; return; } d.checks[dt+'|'+k]={present:pres, v, t:tot||0, abs:abs.map(id=>(findPub(id,'')||{}).id).filter(Boolean), note, got:TODAY()};
+        const cnt=tot>0?tot:pres+v; if(cnt>0){ const ex=d.meetings.find(x=>x.date===dt&&x.kind===k); if(ex) ex.count=cnt; else d.meetings.push({id:uid(), date:dt, kind:k, count:cnt}); na++; } });
       linkLog('c',c.m).got=TODAY(); }
     else { d.meetings=d.meetings||[];
       c.a.forEach(([dt,k,cnt])=>{ if(!(n(cnt)>0)) return; const ex=d.meetings.find(x=>x.date===dt&&x.kind===k); if(ex) ex.count=n(cnt); else d.meetings.push({id:uid(), date:dt, kind:k, count:n(cnt)}); na++; });
@@ -5874,6 +5883,7 @@ document.addEventListener('click', e=>{
   const t=e.target.closest('[data-fr]'); if(!t) return; const f=t.dataset.fr;
   if(f==='cpick'){ FS.cur=t.dataset.k; formSave(); renderForm(); window.scrollTo(0,0); }
   if(f==='ctick'){ const c=FS.c[FS.cur]; if(c.sent){ t.checked=!c.abs[t.dataset.id]; toast('This meeting was sent, so it is locked'); return; } if(t.checked) delete c.abs[t.dataset.id]; else c.abs[t.dataset.id]=1; c.ok=0; formSave(); const y=window.scrollY; renderForm(); window.scrollTo(0,y); }
+  if(f==='cnone'){ const c=FS.c[FS.cur]; if(c.sent) return; c.none=c.none?0:1; c.ok=c.none?1:0; formSave(); renderForm(); if(c.none) toast('Marked: no meeting this day'); }
   if(f==='cok'){ const c=FS.c[FS.cur]; if(c.sent){ toast('This meeting was sent, so it is locked'); return; } c.ok=c.ok?0:1; formSave(); renderForm(); if(c.ok) toast('Saved. Choose the next meeting, or tap Send'); }
 });
 document.addEventListener('input', e=>{
@@ -5881,6 +5891,7 @@ document.addEventListener('input', e=>{
   const c=FS.c[FS.cur]; if(!c || c.sent) return;
   if(f==='cv'){ c.v=t.value.replace(/[^\d]/g,''); const tt=document.getElementById('ckTotal'); if(tt) tt.textContent=n(tt.dataset.p)+(n(c.v)||0); }
   if(f==='cnote'){ c.note=t.value; }
+  if(f==='ct'){ c.t=t.value.replace(/[^\d]/g,''); }
   formSave(); const s=document.getElementById('frSend'); if(s) s.href=formWaHref();
 });
 
