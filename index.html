@@ -242,7 +242,7 @@ body.formmode main{padding-bottom:40px}
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 34;
+const APP_VERSION = 35;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -1884,12 +1884,13 @@ function setupCodeSheet(prefill){
 }
 function shareAppSheet(){
   openSheet(`<h3>Share Life Compass</h3>
-    ${shareFullHTML()}<p class="muted" style="margin:0 0 10px">Choose what the other person will see. They get a code to type into their app.</p>
+    <p class="muted" style="margin:0 0 10px">Tick only the parts the other person should see, then tap <b>Make the code</b>. They type the code into their app.</p>
     ${[['faith','Faith'],['ministry','Ministry'],['people','People'],['other','Other']].map(([g,gl])=>`<div class="area">${gl}</div>`+PARTS.filter(x=>g==='other'?['goals','health','money'].includes(x[2]):x[2]===g).map(([k,l])=>`<label class="row" style="cursor:pointer"><span class="lbl">${l}</span><input type="checkbox" class="shSec" value="${k}" ${['bible','study','notes','meeting','goals','health'].includes(k)?'checked':''} style="width:22px;height:22px"></label>`).join('')).join('')}
-    <div class="f" style="margin-top:10px"><label>Lock PIN (optional, 4 numbers)</label><input type="password" inputmode="numeric" maxlength="8" id="shPin" placeholder="Leave empty for no lock" autocomplete="off">
-      <p class="muted" style="margin:4px 0 0;font-size:12.5px">With a PIN, they can't switch hidden parts back on unless they know it. It's a simple lock, not strong security.</p></div>
-    <button class="btn" data-a="shmake">Make the code</button>
-    <div id="shOut"></div>`, null);
+    <div class="f" style="margin-top:10px"><label>Lock PIN (optional, 4 numbers)</label><input type="text" inputmode="numeric" maxlength="8" id="shPin" placeholder="Leave empty and the app picks one" autocomplete="off">
+      <p class="muted" style="margin:4px 0 0;font-size:12.5px">The PIN stops them switching the other parts back on in Settings. Keep it; don't send it to them.</p></div>
+    <button class="btn" data-a="shmake">Make the code for these parts</button>
+    <div id="shOut"></div>
+    <div class="area" style="margin-top:18px">Or send everything</div>${shareFullHTML()}`, null);
 }
 function shareMessage(code){
   return `Hi! I'd like to share Life Compass with you. It's the app I use to plan my day, track Bible reading and more. It works offline.\n\n1) Android: download and install it here:\n${APK_URL}\n(If your phone warns you, allow installing from Chrome, then tap Install anyway.)\n\n2) Open the app, tap the gear ⚙ at the top, then "Enter setup code", and type:\n${code}\n\niPhone or computer? Open this link instead:\n${WEB_URL}?setup=${code.replace(/-/g,'')}`;
@@ -1988,6 +1989,7 @@ function secReports(){
     <div class="btns" style="margin-top:10px"><button class="btn" style="flex:1" data-a="secpaste">Paste a group's report</button><button class="btn ghost" style="flex:1" data-a="seccopy">Copy totals</button></div>
     <button class="btn wa" data-a="linkssheet" style="margin-top:8px">Send report links to group overseers</button>
     <button class="btn" data-a="monthreport" data-m="${m}" style="margin-top:8px">Monthly congregation report (PDF)</button>
+    <button class="btn ghost" data-a="x35grprep" data-m="${m}" style="margin-top:8px">Every publisher's report, by group (PDF)</button>
     <button class="btn ghost" data-a="printsheet" data-k="s21" style="margin-top:8px">Print publisher records for the service year (S-21)</button></div>`;
   if(att.length) html+=`<div class="card"><h2>Needs encouragement<span class="sp"></span><span class="chip" style="background:#FBEAEA;color:#A32D2D">${att.length}</span></h2>
     <p class="muted" style="margin:0 0 6px">No report or no ministry for 2 months in a row.</p>
@@ -2098,7 +2100,7 @@ function secGlance(){
 async function makeCOSummary(){
   const L=await loadPdfLib(), doc=await L.PDFDocument.create();
   const font=await doc.embedFont(L.StandardFonts.Helvetica), bold=await doc.embedFont(L.StandardFonts.HelveticaBold);
-  const ink=themeRgb(L), grey=L.rgb(0.4,0.45,0.52), line=L.rgb(0.85,0.88,0.92), W=595, H=842, M=40;
+  const ink=printRgb(L), grey=L.rgb(0.4,0.45,0.52), line=L.rgb(0.85,0.88,0.92), W=595, H=842, M=40;
   const clean=x=>String(x??'').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[–—]/g,'-').replace(/✓/g,'Yes').replace(/[^\x20-\x7E\xA0-\xFF]/g,'');
   const fit=(x,w,size,f)=>{ x=clean(x); while(x && f.widthOfTextAtSize(x,size)>w) x=x.slice(0,-1); return x; };
   let page, y;
@@ -2259,6 +2261,7 @@ function pubSheet(id){
       <div class="f"><label>Hope</label><select id="puHope"><option value="">—</option><option value="os" ${p.hope==='os'?'selected':''}>Other sheep</option><option value="an" ${p.hope==='an'?'selected':''}>Anointed</option></select></div></div>
     <div class="f2"><label class="row" style="cursor:pointer;border:0"><span class="lbl">Elder</span><input type="checkbox" id="puElder" ${p.elder?'checked':''} style="width:22px;height:22px"></label>
       <label class="row" style="cursor:pointer;border:0"><span class="lbl">Ministerial servant</span><input type="checkbox" id="puMs" ${p.ms?'checked':''} style="width:22px;height:22px"></label></div>
+    <div class="f"><label>Roles and assignments</label><input type="text" id="puRoles" value="${esc(p.roles||'')}" placeholder="Coordinator, attendant, reader, audio-video, cleaning"></div>
     <div class="f"><label>Something to ask about next time (for friendly messages)</label><input type="text" id="puAsk" value="${esc(p.ask||'')}" placeholder="your new job, the children's exams, your mother's health"></div>
     <div class="f"><label>Notes</label><textarea id="puNotes">${esc(p.notes||'')}</textarea></div>
     ${actions}
@@ -2268,7 +2271,7 @@ function pubSheet(id){
     ${id?`<div class="btns" style="margin-top:12px"><button class="btn ghost" style="flex:1" data-a="pubvisit" data-id="${id}">Log a visit</button><button class="btn danger" style="flex:1" data-a="delpub" data-id="${id}">Delete</button></div>`:''}`, ()=>{
       const nm=val('puName').trim(); if(!nm) return fail('puName','Enter the name');
       const rec = id ? p : {id:uid(), visits:[], since:MONTH()};
-      Object.assign(rec,{name:nm, phone:val('puPhone').trim(), emName:val('puEmName').trim(), emRel:val('puEmRel').trim(), emPhone:val('puEmPhone').trim(), group:val('puGroup').trim(), type:val('puType'), status:val('puStatus'), baptized:val('puBap'), dob:val('puDob'), gender:val('puSex'), hope:val('puHope'), elder:document.getElementById('puElder').checked, ms:document.getElementById('puMs').checked, notes:val('puNotes').trim(), ask:val('puAsk').trim()});
+      Object.assign(rec,{roles:val('puRoles').trim(), name:nm, phone:val('puPhone').trim(), emName:val('puEmName').trim(), emRel:val('puEmRel').trim(), emPhone:val('puEmPhone').trim(), group:val('puGroup').trim(), type:val('puType'), status:val('puStatus'), baptized:val('puBap'), dob:val('puDob'), gender:val('puSex'), hope:val('puHope'), elder:document.getElementById('puElder').checked, ms:document.getElementById('puMs').checked, notes:val('puNotes').trim(), ask:val('puAsk').trim()});
       if(!id) d.pubs.push(rec); return true;
     });
 }
@@ -2431,8 +2434,9 @@ function ltFacts(G){
   if(G.one){ const p=G.p, He=cap(G.he); if(!p.id) return '';
     const bap = p.baptized && p.type!=='unbap' ? `${He} was baptized on ${longDate(p.baptized)}. ` : '';
     const plain = !p.elder && !p.ms && !isPioneer(p);
-    return bap + `${He} is ${plain?'':'serving as '}${joinAnd(privOf(p))}.`; }
-  return G.ps.map(p=>!p.id?`- ${titleOf(p)}${p.name}`:`- ${titleOf(p)}${p.name}: ${[p.baptized&&p.type!=='unbap'?'baptized '+longDate(p.baptized):'', ...privOf(p)].filter(Boolean).join(', ')}`).join('\n');
+    const roles = p.roles ? ` ${He} also serves as ${joinAnd(p.roles.split(/\s*[,;]\s*/).filter(Boolean).map(x=>x.toLowerCase()))}.` : '';
+    return bap + `${He} is ${plain?'':'serving as '}${joinAnd(privOf(p))}.` + roles; }
+  return G.ps.map(p=>!p.id?`- ${titleOf(p)}${p.name}`:`- ${titleOf(p)}${p.name}: ${[p.baptized&&p.type!=='unbap'?'baptized '+longDate(p.baptized):'', ...privOf(p), p.roles?p.roles.toLowerCase():''].filter(Boolean).join(', ')}`).join('\n');
 }
 function ltBodyText(){
   const c=congInfo(), G=ltG(), facts=ltFacts(G), other=LT.cong||'[congregation]', when=longDate(LT.date), st=LT.style||'A';
@@ -2497,8 +2501,8 @@ function ltBodyText(){
   const head=`${us}${c.city?'\n'+c.city:''}\n${today}\n\n${to}\n\n${hi}\n\n`;
   return {subj:sub(t.s), body:head+t.b.replace(/[ \t]{2,}/g,' ').replace(/ +\n/g,'\n').replace(/\n /g,'\n').trim()+(LT.note?'\n\n'+LT.note.trim():'')};
 }
-function signers(){ const c=congInfo(); return [[c.coordName||'',"Coordinator of the body of elders"],[c.secName||'','Secretary'],[c.soName||'','Service overseer']]; }
-function signText(){ const c=congInfo(); return '\n\nWith warm Christian love,\n\n'+signers().map(([nm,t])=>(nm||'________________')+'\n'+t).join('\n\n')+`\n\nFor the body of elders, ${c.name||'[our]'} Congregation`; }
+function signers(){ const c=congInfo(); return [[c.coordName||'',"Coordinator of the body of elders",c.coordPhone||''],[c.secName||'','Secretary',c.secPhone||''],[c.soName||'','Service overseer',c.soPhone||'']]; }
+function signText(){ const c=congInfo(); return '\n\nWith warm Christian love,\n\n'+signers().map(([nm,t,ph])=>(nm||'________________')+'\n'+t+(ph?'\nTel: '+ph:'')).join('\n\n')+`\n\nFor the body of elders, ${c.name||'[our]'} Congregation`; }
 function letterFull(){ return val('ltBody')+signText(); }
 function secLetters(){
   const d=SEC(), c=congInfo(), log=[...d.letters].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,15), sg=signers();
@@ -2605,7 +2609,7 @@ const pdfClean = x => String(x??'').replace(/[‘’]/g,"'").replace(/[“”]/g
 async function pdfKit(){
   const L=await loadPdfLib(), doc=await L.PDFDocument.create();
   const font=await doc.embedFont(L.StandardFonts.Helvetica), bold=await doc.embedFont(L.StandardFonts.HelveticaBold);
-  const K={L, doc, font, bold, W:595, H:842, M:48, ink:themeRgb(L), grey:L.rgb(0.4,0.45,0.52), line:L.rgb(0.82,0.86,0.91), page:null, y:0};
+  const K={L, doc, font, bold, W:595, H:842, M:48, ink:printRgb(L), grey:L.rgb(0.35,0.35,0.35), line:L.rgb(0.75,0.75,0.75), page:null, y:0};
   K.newPage=()=>{ K.page=doc.addPage([K.W,K.H]); K.y=K.H-K.M; };
   K.need=h=>{ if(!K.page || K.y-h<K.M) K.newPage(); };
   K.lines=(txt,size,f,w)=>{ const out=[]; pdfClean(txt).split('\n').forEach(par=>{ if(!par.trim()){ out.push(''); return; } let ln=''; par.split(/ +/).forEach(word=>{ const tryL=ln?ln+' '+word:word; if(f.widthOfTextAtSize(tryL,size)>w && ln){ out.push(ln); ln=word; } else ln=tryL; }); out.push(ln); }); return out; };
@@ -2616,7 +2620,7 @@ async function pdfKit(){
     const tw=K.W-2*K.M, tot=cols.reduce((a,c)=>a+c[1],0), ws=cols.map(c=>c[1]/tot*tw), pad=4;
     const drawRow=(cells,f,fill)=>{ const ls=cells.map((c,i)=>K.lines(c,size,f,ws[i]-2*pad)), h=Math.max(1,...ls.map(l=>l.length))*size*1.3+2*pad;
       if(K.y-h<K.M){ K.newPage(); if(head && f!==bold) drawRow(cols.map(c=>c[0]),bold,true); }
-      if(fill) K.page.drawRectangle({x:K.M,y:K.y-h,width:tw,height:h,color:L.rgb(0.91,0.95,0.99)});
+      if(fill) K.page.drawRectangle({x:K.M,y:K.y-h,width:tw,height:h,color:S.settings.printColour?L.rgb(0.91,0.95,0.99):L.rgb(0.9,0.9,0.9)});
       let x=K.M; ls.forEach((l,i)=>{ l.forEach((t,j)=>{ if(t) K.page.drawText(t,{x:x+pad,y:K.y-pad-size-(j*size*1.3),size,font:f,color:K.ink}); }); x+=ws[i]; });
       K.page.drawLine({start:{x:K.M,y:K.y-h},end:{x:K.W-K.M,y:K.y-h},thickness:0.5,color:K.line}); K.y-=h; };
     if(head) drawRow(cols.map(c=>c[0]),bold,true);
@@ -2637,10 +2641,11 @@ async function makeLetterPdf(body, subj, withCards){
   K.text(lines.join('\n').replace(/^\n+/,''),{size:10.5});
   K.gap(10); K.need(150); K.text('With warm Christian love,',{size:10.5}); K.gap(34);
   const sg=signers(), w=(K.W-2*K.M-24)/3;
-  sg.forEach(([nm,t],i)=>{ const x=K.M+i*(w+12); K.page.drawLine({start:{x,y:K.y},end:{x:x+w,y:K.y},thickness:0.7,color:K.ink});
+  sg.forEach(([nm,t,ph],i)=>{ const x=K.M+i*(w+12); K.page.drawLine({start:{x,y:K.y},end:{x:x+w,y:K.y},thickness:0.7,color:K.ink});
     K.page.drawText(pdfClean(nm||' '),{x,y:K.y-13,size:10,font:K.bold,color:K.ink});
-    K.lines(t,8.5,K.font,w).forEach((l,j)=>K.page.drawText(l,{x,y:K.y-26-j*10,size:8.5,font:K.font,color:K.grey})); });
-  K.y-=52; K.text('For the body of elders, '+(c.name||'')+' Congregation',{size:9,c:K.grey});
+    const tl=K.lines(t,8.5,K.font,w); tl.forEach((l,j)=>K.page.drawText(l,{x,y:K.y-26-j*10,size:8.5,font:K.font,color:K.grey}));
+    if(ph) K.page.drawText(pdfClean('Tel: '+ph),{x,y:K.y-26-tl.length*10,size:8.5,font:K.font,color:K.ink}); });
+  K.y-=64; K.text('For the body of elders, '+(c.name||'')+' Congregation',{size:9,c:K.grey});
   if(withCards){ for(const p of withCards){ const src=await K.L.PDFDocument.load(await s21Both(p)); (await K.doc.copyPages(src, src.getPageIndices())).forEach(pg=>K.doc.addPage(pg)); } }
   return K.save();
 }
@@ -2790,7 +2795,7 @@ function secCO(){
     ${co.prog.length?byDay.filter(x=>x[1].length).map(([dy,l])=>`<div class="area">${dy}${coDayDate(dy)?' · '+shortD(coDayDate(dy)):''}</div><div class="list">${l.map(p=>`<div class="it" data-a="x31coprog" data-id="${p.id}" style="cursor:pointer"><div class="x"><b>${p.time?fmtTime(p.time)+' · ':''}${esc(p.what)}</b><small>${esc([p.place, p.prayer&&'Prayer: '+p.prayer].filter(Boolean).join(' · '))}</small></div></div>`).join('')}</div>`).join('')
       :`<div class="empty">Add each activity: day, time, place and who prays.</div><button class="btn ghost" data-a="x31cousual" style="margin-top:8px">Start with the usual week</button>`}</div>`;
   html+=`<div class="card"><h2>Field service partners and lunch</h2><div class="list">${CO_DAYS.map(dy=>{ const l=co.lunch[dy]||{}; return `<div class="it" data-a="x31colunch" data-k="${dy}" style="cursor:pointer"><div class="x"><b>${dy}</b><small>${esc([l.am&&'Morning: '+l.am, l.pm&&'Afternoon: '+l.pm, l.food&&'Lunch: '+l.food+(l.cook?' ('+l.cook+')':'')].filter(Boolean).join(' · ')||'Tap to add partners and lunch')}</small></div><span class="muted">›</span></div>`; }).join('')}</div>
-    <div class="btns" style="margin-top:10px;flex-direction:column"><button class="btn" data-a="x31copdf" data-k="prog">Programme, partners and lunch (PDF)</button><a class="btn wa" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(coProgText())}">Share the programme on WhatsApp</a></div></div>`;
+    <div class="btns" style="margin-top:10px;flex-direction:column"><button class="btn" data-a="x31copdf" data-k="prog">Programme for the notice board (PDF)</button><button class="btn ghost" data-a="x31copdf" data-k="lunch">Partners and lunch (PDF)</button><a class="btn wa" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(coProgText())}">Share the programme on WhatsApp</a></div></div>`;
   html+=`<div class="card"><h2>Shepherding calls<span class="sp"></span><button class="btn sm ghost" data-a="x31coshep">${svg('plus',15)} Add</button></h2>
     ${co.shep.length?`<div class="list">${co.shep.map((s,i)=>`<div class="it"><span class="wdot ${s.done?'green':'orange'}" style="margin-top:6px"></span><div class="x" data-a="x31coshep" data-id="${s.id}" style="cursor:pointer"><b>${i+1}. ${esc(s.name)}</b><small>${esc([s.when, s.elder&&s.elder+' with the C.O.'].filter(Boolean).join(' · '))}</small>${s.notes?`<div style="font-size:13.5px;margin-top:2px">${esc(s.notes.slice(0,110))}${s.notes.length>110?'…':''}</div>`:''}</div>${s.elder?`<a class="btn sm ghost" target="_blank" rel="noopener" href="https://wa.me/${phoneIntl((letterWho(s.elder)||{}).phone)}?text=${encodeURIComponent(shepMsg(s))}">Remind</a>`:''}</div>`).join('')}</div>`:'<div class="empty">Who to visit with the circuit overseer, when, which elder goes, and why.</div>'}</div>`;
   html+=`<div class="card"><h2>Recommendations<span class="sp"></span><button class="btn sm ghost" data-a="x31corec">${svg('plus',15)} Add</button></h2>
@@ -2851,6 +2856,7 @@ function coRecSheet(id){
     ${actions}${id?`<button class="btn danger" data-a="x31codel" data-k="recs" data-id="${id}" style="margin-top:8px">Delete</button>`:''}`, ()=>{
       const nm=val('crName').trim(); if(!nm) return fail('crName','Enter the name');
       const rec=id?x:{id:uid()}; Object.assign(rec,{name:nm, for:val('crFor'), notes:val('crNotes').trim()}); if(!id) co.recs.push(rec); return true; });
+  const cn=document.getElementById('crName'); cn.addEventListener('change',()=>{ const p=letterWho(cn.value), nt=document.getElementById('crNotes'); if(p && !nt.value.trim()){ const bits=[p.baptized?'Baptized '+longDate(p.baptized)+'.':'', isPioneer(p)?'Serving as a regular pioneer.':'', p.roles?'Assignments: '+p.roles+'.':'']; nt.value=bits.filter(Boolean).join(' ')+(bits.some(Boolean)?' ':''); } });
 }
 async function coPdf(kind){
   const co=COV(), K=await pdfKit();
@@ -2858,7 +2864,9 @@ async function coPdf(kind){
     K.letterhead('Schedule for the circuit overseer\'s visit'+(co.date?'  ·  week of '+longDate(co.date):''));
     K.h('Programme',12);
     K.table([['Day',1.3],['Activity',3.6],['Time',1],['Location',1.6],['Prayer',1.8]], CO_DAYS.flatMap(dy=>co.prog.filter(p=>p.day===dy).sort((a,b)=>(a.time||'').localeCompare(b.time||'')).map((p,i)=>[i?'':dy.toUpperCase()+(coDayDate(dy)?'\n'+shortD(coDayDate(dy)):''), p.what, p.time?fmtTime(p.time):'', p.place, p.prayer])));
-    K.h('Field service partners and lunch',12);
+    K.footer((congInfo().name||'')+' Congregation');
+  } else if(kind==='lunch'){
+    K.letterhead('Field service partners and lunch'+(co.date?'  ·  week of '+longDate(co.date):''));
     K.table([['Day',1.2],['Morning',3],['Afternoon',2.6],['Lunch',2.2]], CO_DAYS.map(dy=>{ const l=co.lunch[dy]||{}; return [dy, l.am, l.pm, [l.food, l.cook&&'('+l.cook+')'].filter(Boolean).join(' ')]; }).filter(r=>r.slice(1).some(Boolean)));
     K.footer((congInfo().name||'')+' Congregation');
   } else {
@@ -3015,7 +3023,7 @@ function shareFullHTML(){
   return `<div class="card" style="box-shadow:none;border:1.5px solid var(--sky2);margin:0 0 14px"><h2 style="margin-top:0">Full package</h2>
     <p class="muted" style="margin:0 0 10px">Everything in Life Compass, including the <b>Secretary section</b>. It starts empty on their phone: none of your publishers, reports or notes are sent. Good for another congregation's secretary.</p>
     <a class="btn wa" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(shareFullMessage())}">Send the full package on WhatsApp</a></div>
-    <div class="area">Or choose parts</div>`;
+`;
 }
 function shareFullMessage(){ return `Hi! I'd like to share Life Compass with you. It helps with daily Bible reading, ministry, and the congregation secretary's work: reports, attendance, S-21 cards, letters, the circuit overseer's visit and more. It works offline, and everything stays on your own phone.\n\n1) Android: download and install it here:\n${APK_URL}\n(If your phone warns you, allow installing from Chrome, then tap Install anyway.)\n\n2) Open the app, tap the gear ⚙ at the top, then "Enter setup code", and type:\n${FULL_CODE}\n\niPhone or computer? Open this link instead:\n${WEB_URL}?setup=${FULL_CODE.replace(/-/g,'')}\n\nThen set a passcode in the Secretary section, because those records are confidential.`; }
 
@@ -3041,7 +3049,7 @@ function monthReportText(m){
 async function makeMonthReport(m){
   const L=await loadPdfLib(), doc=await L.PDFDocument.create();
   const font=await doc.embedFont(L.StandardFonts.Helvetica), bold=await doc.embedFont(L.StandardFonts.HelveticaBold);
-  const ink=themeRgb(L), grey=L.rgb(0.4,0.45,0.52), line=L.rgb(0.85,0.88,0.92), W=595, H=842, M=40;
+  const ink=printRgb(L), grey=L.rgb(0.4,0.45,0.52), line=L.rgb(0.85,0.88,0.92), W=595, H=842, M=40;
   const clean=x=>String(x??'').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[–—]/g,'-').replace(/₵/g,'C').replace(/[^\x20-\x7E\xA0-\xFF]/g,'');
   const fit=(x,w,size,f)=>{ x=clean(x); while(x && f.widthOfTextAtSize(x,size)>w) x=x.slice(0,-1); return x; };
   let page, y;
@@ -4816,10 +4824,10 @@ document.addEventListener('click', e => {
     case 'shmake': {
       const secs={}; document.querySelectorAll('.shSec').forEach(c=>secs[c.value]=c.checked);
       if(!Object.values(secs).some(Boolean)){ toast('Choose at least one part'); break; }
-      const pin=val('shPin').trim(); if(pin && !/^\d{4,8}$/.test(pin)){ fail('shPin','Use 4 to 8 numbers'); break; }
+      let pin=val('shPin').trim(); if(pin && !/^\d{4,8}$/.test(pin)){ fail('shPin','Use 4 to 8 numbers'); break; } if(!pin){ pin=String(1000+Math.floor(Math.random()*9000)); document.getElementById('shPin').value=pin; }
       const code=makeCode2(secs,pin), msg=shareMessage(code);
       document.getElementById('shOut').innerHTML=`<div class="codebox">${code}</div>
-        <p class="muted" style="margin:0 0 8px;text-align:center">They will see: ${partsList(secs).map(esc).join(', ')}${pin?'. Locked with your PIN.':'. Tip: add a PIN so they can\'t switch the other parts back on.'}</p>
+        <p class="muted" style="margin:0 0 8px;text-align:center">They will see: ${partsList(secs).map(esc).join(', ')}. Locked with PIN <b>${pin}</b>. Keep this PIN for yourself.</p>
         <div class="btns" style="flex-direction:column"><a class="btn wa" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">Send on WhatsApp</a>
         <a class="btn ghost" href="sms:?body=${encodeURIComponent(msg)}">Send as text message</a></div>`;
       break;
@@ -5867,7 +5875,7 @@ document.addEventListener('click', e=>{
     case 'x31codel': { const co=COV(), k=t.dataset.k; co[k]=co[k].filter(z=>z.id!==id); save(); closeSheet(); render(); break; }
     case 'x31conew': { const d=SEC(), co=COV(); if(!confirm('Start a new visit? This visit is kept under Past visits, and the programme is copied so you only change the dates and names.')) break;
       d.coHist=d.coHist||[]; d.coHist.push(JSON.parse(JSON.stringify(co))); d.co={date:'', notes:'', prog:co.prog.map(p=>({...p, id:uid(), prayer:''})), lunch:{}, shep:[], recs:[], host:'', name:co.name||'', problems:''}; save(); render(); toast('New visit started'); break; }
-    case 'x31copdf': { const k=t.dataset.k; (async()=>{ const was=t.textContent; t.textContent='Making the PDF…'; t.disabled=true; try{ await savePdfFile(await coPdf(k), (k==='prog'?'CO visit programme':'CO visit agenda')+(COV().date?' '+COV().date:'')+'.pdf', k==='prog'?coProgText():''); toast('PDF ready'); }catch(err){ toast(err.message||'Could not make the PDF'); } t.textContent=was; t.disabled=false; })(); break; }
+    case 'x31copdf': { const k=t.dataset.k; (async()=>{ const was=t.textContent; t.textContent='Making the PDF…'; t.disabled=true; try{ await savePdfFile(await coPdf(k), ({prog:'CO visit programme',lunch:'CO visit partners and lunch'}[k]||'CO visit agenda')+(COV().date?' '+COV().date:'')+'.pdf', k==='prog'?coProgText():''); toast('PDF ready'); }catch(err){ toast(err.message||'Could not make the PDF'); } t.textContent=was; t.disabled=false; })(); break; }
     /* contacts */
     case 'x31contacts': (async()=>{ const was=t.textContent; t.textContent='Making…'; t.disabled=true; try{ await savePdfFile(await contactsPdf(), 'Publisher contact list '+TODAY()+'.pdf'); toast('Contact list ready'); }catch(err){ toast(err.message||'Could not make the PDF'); } t.textContent=was; t.disabled=false; })(); break;
     /* attendance checklist */
@@ -5921,6 +5929,7 @@ function personaliseSheet(first){
     <div class="area">Colour</div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">${THEMES.map(([k,l,h])=>`<button data-a="x33theme" data-k="${k}" style="border:3px solid ${PZ.theme===k?'var(--ink)':'transparent'};border-radius:12px;padding:10px 4px;background:${h};color:#fff;font-size:12px;font-weight:600">${PZ.theme===k?'✓ ':''}${l}</button>`).join('')}</div>
     <label class="row" style="cursor:pointer;margin-top:8px"><span class="lbl">My own colour${PZ.theme==='custom'?' ✓':''}<small>Tap the box to pick any colour</small></span><input type="color" id="pzCustom" value="${esc(PZ.custom)}" style="width:52px;height:40px;border:0;background:none"></label>
+    <label class="row" style="cursor:pointer;margin-top:8px"><span class="lbl">Print PDFs in colour<small>Off: black and white, best for any printer</small></span><input type="checkbox" id="pzPrint" ${S.settings.printColour?'checked':''} style="width:22px;height:22px"></label>
     <div class="card hello" style="margin-top:10px"><div class="big" style="font-size:18px" id="pzPrev">${esc(appName())}</div><div class="sub">This is how the top of the app will look</div></div>
     <div class="btns" style="margin-top:6px">${first?`<button class="btn ghost" style="flex:1" data-a="x33skip">Keep blue</button>`:`<button class="btn ghost" style="flex:1" data-a="x33cancel">Cancel</button>`}<button class="btn" style="flex:1" data-a="x33save">Save</button></div>`, null);
   const prev=()=>{ applyTheme(PZ.theme==='custom'?PZ.custom:THEMES.find(x=>x[0]===PZ.theme)[2]); const n=document.getElementById('pzPrev'); if(n) n.textContent=val('pzApp').trim()||'Life Compass'; };
@@ -5933,6 +5942,7 @@ function personaliseSave(){
   const st=S.settings; st.name=val('pzName').trim()||st.name; st.appName=val('pzApp').trim();
   if(PZ.theme==='custom'){ st.themeCustom=PZ.custom; st.theme='custom'; } else { st.theme=PZ.theme; delete st.themeCustom; }
   const cg=document.getElementById('pzCong'); if(cg && cg.value.trim()) congInfo().name=cg.value.trim().replace(/\s+congregation$/i,'');
+  const pp=document.getElementById('pzPrint'); if(pp) st.printColour=pp.checked;
   st.themeAsked=true; PZ=null; save(); applyTheme(); closeSheet(); render(); toast('Saved. The app is yours now');
 }
 document.addEventListener('click', e=>{
@@ -5947,6 +5957,44 @@ document.addEventListener('click', e=>{
 });
 
 try{ applyTheme(); }catch(e){}
+/* ================= v35: all publishers' reports for the month, by group ================= */
+function printRgb(L){ return S.settings.printColour ? themeRgb(L) : L.rgb(0,0,0); }
+async function groupsReportPdf(m){
+  const K=await pdfKit(), d=SEC(), groups=groupsList(), ps=activePubs();
+  K.letterhead('Field service reports  ·  '+monthName(m));
+  const tot={n:0,in:0,shared:0,none:0,st:0,aux:0,auxH:0,rp:0,rpH:0,miss:[]};
+  const gs=[...groups, ...(ps.some(p=>!p.group)?['']:[])];
+  gs.forEach(g=>{
+    const l=ps.filter(p=>(p.group||'')===g).sort((a,b)=>a.name.localeCompare(b.name)); if(!l.length) return;
+    const gi=g?groupInfo(g):{}, s={n:l.length,in:0,shared:0,none:0,st:0,aux:0,auxH:0,rp:0,rpH:0,miss:[]};
+    const rows=l.map((p,i)=>{ const r=(d.reports[m]||{})[p.id];
+      const kind=isPioneer(p)?({sp:'Special pioneer',fm:'Field missionary'}[p.type]||'Regular pioneer'):(r&&r.aux?'Auxiliary pioneer':p.type==='unbap'?'Unbaptized':'Publisher');
+      if(!r||!r.got){ s.miss.push(p.name); return [i+1,p.name,kind,'Not in','','','']; }
+      s.in++; if(r.shared){ s.shared++; s.st+=n(r.studies); if(isPioneer(p)){ s.rp++; s.rpH+=n(r.hours); } else if(r.aux){ s.aux++; s.auxH+=n(r.hours); } } else s.none++;
+      return [i+1, p.name, kind, r.shared?'Yes':'No', r.shared?n(r.studies):'', r.shared&&r.hours!=null&&(isPioneer(p)||r.aux)?r1(n(r.hours)):'', r.remarks||''];
+    });
+    const need=Math.min(rows.length,8)*17+90; if(K.y-need<K.M) K.newPage();
+    K.h((g||'No group')+(gi.overseer?'   ·   Overseer: '+gi.overseer:''),12);
+    K.table([['#',0.45],['Name',2.6],['Type',1.7],['Shared',0.9],['Studies',0.9],['Hours',0.8],['Remarks',2.6]], rows, {size:9});
+    K.text(`Group summary: ${s.in} of ${s.n} reported · ${s.shared} shared in the ministry · ${s.st} Bible studies · ${s.aux} auxiliary pioneers (${r1(s.auxH)} h) · ${s.rp} pioneers (${r1(s.rpH)} h)${s.miss.length?' · Not in: '+s.miss.join(', '):''}`,{size:9.5,f:K.bold});
+    K.gap(8);
+    Object.keys(tot).forEach(k=>{ if(k==='miss') tot.miss.push(...s.miss); else tot[k]+=s[k]; });
+  });
+  K.need(120); K.h('Congregation total',13);
+  K.table([['',3],['Number',1],['Bible studies',1.2],['Hours',1]],[
+    ['Publishers who shared (not pioneers)', tot.shared-tot.aux-tot.rp, '', ''],
+    ['Auxiliary pioneers', tot.aux, '', r1(tot.auxH)],
+    ['Regular, special pioneers and missionaries', tot.rp, '', r1(tot.rpH)],
+    ['All who shared in the ministry', tot.shared, tot.st, r1(tot.auxH+tot.rpH)],
+    ['Did not share', tot.none, '', ''],
+    ['Reports still missing', tot.miss.length, '', '']],{size:10});
+  if(tot.miss.length) K.text('Still missing: '+tot.miss.join(', '),{size:9.5});
+  K.footer('Confidential · '+(congInfo().name||'')+' Congregation · '+monthName(m)+' · '+tot.in+' of '+tot.n+' reports in');
+  return K.save();
+}
+
+document.addEventListener('click', e=>{ const t=e.target.closest('[data-a=x35grprep]'); if(!t) return; const m=t.dataset.m||secMonth||secMonthDefault();
+  (async()=>{ const was=t.textContent; t.textContent='Making the PDF…'; t.disabled=true; try{ await savePdfFile(await groupsReportPdf(m), 'Reports by group '+m+'.pdf'); toast('PDF ready'); }catch(err){ toast(err.message||'Could not make the PDF'); } t.textContent=was; t.disabled=false; })(); });
 </script>
 </body>
 </html>
