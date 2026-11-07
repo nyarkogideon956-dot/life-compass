@@ -123,7 +123,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .wkmini{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:14px;color:var(--muted)}
 .wkmini b{color:var(--navy);font-size:16px}
 .up{color:var(--ok);font-size:12.5px}
-#alarm{position:fixed;inset:0;z-index:60;background:rgba(12,60,120,.96);display:flex;align-items:center;justify-content:center;padding:24px}
+#alarm{position:fixed;inset:0;z-index:60;background:color-mix(in srgb,var(--navy) 96%,transparent);display:flex;align-items:center;justify-content:center;padding:24px}
 #alarm[hidden]{display:none}
 .alarmbox{background:#fff;border-radius:22px;padding:26px 20px 20px;width:100%;max-width:360px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
 .alarmbox .bell{color:var(--navy);animation:shake .6s infinite}
@@ -242,7 +242,7 @@ body.formmode main{padding-bottom:40px}
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 32;
+const APP_VERSION = 33;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -542,7 +542,7 @@ function render(){
   if(tab==='notes' && !partOn('notes')) tab='today';
   const nb=document.querySelector('header [data-a=gonotes]'); if(nb) nb.hidden=!partOn('notes');
   renderNav();
-  document.getElementById('title').textContent = tab==='today'?'Life Compass':tab==='notes'?'My notes':TABS.find(t=>t[0]===tab)[1];
+  document.getElementById('title').textContent = tab==='today'?appName():tab==='notes'?'My notes':TABS.find(t=>t[0]===tab)[1];
   document.getElementById('main').innerHTML = V[tab]();
   if(tab==='faith') loadVideo();
   hydratePhotos();
@@ -1871,6 +1871,7 @@ function applyCode(r){
   const lk=document.getElementById('lock'); if(lk && lk.dataset.setup){ lk.hidden=true; delete lk.dataset.setup; }
   tab='today'; closeSheet(); render(); window.scrollTo(0,0);
   toast(r.full?'Full package set up. Open Secretary to start.':'Set up: '+partsList(r.parts).join(', '));
+  if(!S.settings.themeAsked) setTimeout(()=>personaliseSheet(true),500);
 }
 function setupCodeSheet(prefill){
   openSheet(`<h3>Enter a setup code</h3>
@@ -2097,7 +2098,7 @@ function secGlance(){
 async function makeCOSummary(){
   const L=await loadPdfLib(), doc=await L.PDFDocument.create();
   const font=await doc.embedFont(L.StandardFonts.Helvetica), bold=await doc.embedFont(L.StandardFonts.HelveticaBold);
-  const ink=L.rgb(0.05,0.13,0.3), grey=L.rgb(0.4,0.45,0.52), line=L.rgb(0.85,0.88,0.92), W=595, H=842, M=40;
+  const ink=themeRgb(L), grey=L.rgb(0.4,0.45,0.52), line=L.rgb(0.85,0.88,0.92), W=595, H=842, M=40;
   const clean=x=>String(x??'').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[–—]/g,'-').replace(/✓/g,'Yes').replace(/[^\x20-\x7E\xA0-\xFF]/g,'');
   const fit=(x,w,size,f)=>{ x=clean(x); while(x && f.widthOfTextAtSize(x,size)>w) x=x.slice(0,-1); return x; };
   let page, y;
@@ -2604,7 +2605,7 @@ const pdfClean = x => String(x??'').replace(/[‘’]/g,"'").replace(/[“”]/g
 async function pdfKit(){
   const L=await loadPdfLib(), doc=await L.PDFDocument.create();
   const font=await doc.embedFont(L.StandardFonts.Helvetica), bold=await doc.embedFont(L.StandardFonts.HelveticaBold);
-  const K={L, doc, font, bold, W:595, H:842, M:48, ink:L.rgb(0.05,0.13,0.3), grey:L.rgb(0.4,0.45,0.52), line:L.rgb(0.82,0.86,0.91), page:null, y:0};
+  const K={L, doc, font, bold, W:595, H:842, M:48, ink:themeRgb(L), grey:L.rgb(0.4,0.45,0.52), line:L.rgb(0.82,0.86,0.91), page:null, y:0};
   K.newPage=()=>{ K.page=doc.addPage([K.W,K.H]); K.y=K.H-K.M; };
   K.need=h=>{ if(!K.page || K.y-h<K.M) K.newPage(); };
   K.lines=(txt,size,f,w)=>{ const out=[]; pdfClean(txt).split('\n').forEach(par=>{ if(!par.trim()){ out.push(''); return; } let ln=''; par.split(/ +/).forEach(word=>{ const tryL=ln?ln+' '+word:word; if(f.widthOfTextAtSize(tryL,size)>w && ln){ out.push(ln); ln=word; } else ln=tryL; }); out.push(ln); }); return out; };
@@ -2947,20 +2948,20 @@ function checkFormHTML(){
   const groups=[...new Set(ps.map(x=>x[2]))];
   let html=`<div class="card hello"><div class="big">Attendance checklist</div><div class="sub">${monthName(F.m)}</div><div class="chips"><span class="chip">${doneN} of ${all.length} meetings done</span></div></div>
     <p class="muted" style="margin:0 4px 12px">Choose the meeting. Everyone is ticked. <b>Untick anyone who is absent</b>, add the visitors, then tap <b>This meeting is done</b>. Send at the end. What you do stays on this phone.</p>
-    <div class="card"><div class="chips2">${all.map(([d,k])=>{ const kk=d+'|'+k, x=FS.c[kk]||{}; return `<button class="${kk===FS.cur?'on':''}" data-fr="cpick" data-k="${kk}">${x.ok?'✓ ':''}${nice(d)} · ${k==='mid'?'Midweek':'Weekend'}</button>`; }).join('')}</div>
+    <div class="card"><div class="chips2">${all.map(([d,k])=>{ const kk=d+'|'+k, x=FS.c[kk]||{}; return `<button class="${kk===FS.cur?'on':''}" data-fr="cpick" data-k="${kk}">${x.sent?'🔒 ':x.ok?'✓ ':''}${nice(d)} · ${k==='mid'?'Midweek':'Weekend'}</button>`; }).join('')}</div>
       <details><summary class="muted" style="font-size:13.5px">Meeting on a different day?</summary><div class="f2" style="margin-top:8px"><input type="date" id="frDate" min="${F.m}-01" max="${F.m}-31"><select id="frKind"><option value="mid">Midweek</option><option value="wk">Weekend</option></select></div><button class="btn ghost" data-fr="addd" style="margin-top:8px">Add this day</button></details></div>`;
   if(FS.cur){
     const [cd,ck]=FS.cur.split('|');
     html+=`<div class="card"><h2>${nice(cd)} · ${ck==='mid'?'Midweek':'Weekend'} meeting</h2>
       <div class="stat"><div><small>Publishers present</small><b>${pres}</b></div><div><small>Absent</small><b style="color:${absN?'var(--bad)':'var(--ok)'}">${absN}</b></div></div>
-      <div class="f2" style="margin-top:10px"><div class="f"><label>Visitors (not on the list)</label><input type="text" inputmode="numeric" data-fr="cv" value="${esc(cur.v)}" placeholder="0"></div><div class="f"><label>Total</label><div style="font-size:22px;font-weight:700;padding:6px 0">${pres+vis}</div></div></div></div>`;
+      <div class="f2" style="margin-top:10px"><div class="f"><label>Visitors (not on the list)</label><input type="text" inputmode="numeric" data-fr="cv" value="${esc(cur.v)}" placeholder="0" ${cur.sent?'readonly':''}></div><div class="f"><label>Total</label><div id="ckTotal" data-p="${pres}" style="font-size:22px;font-weight:700;padding:6px 0">${pres+vis}</div></div></div></div>`;
     groups.forEach(g=>{ const l=ps.filter(x=>x[2]===g);
-      html+=`<div class="card"><h2>${esc(g||'No group')}<span class="sp"></span><span class="chip">${l.filter(([id])=>!cur.abs[id]).length}/${l.length}</span></h2>${l.map(([id,nm])=>`<label class="row" style="cursor:pointer"><span class="lbl" style="${cur.abs[id]?'color:var(--bad);text-decoration:line-through':''}">${esc(nm)}</span><input type="checkbox" data-fr="ctick" data-id="${esc(id)}" ${cur.abs[id]?'':'checked'} style="width:24px;height:24px"></label>`).join('')}</div>`; });
-    html+=`<div class="card"><div class="f"><label>Notes about this meeting (optional)</label><textarea data-fr="cnote" placeholder="Heavy rain, many came late…">${esc(cur.note||'')}</textarea></div>
-      <button class="btn ${cur.ok?'ghost':''}" data-fr="cok">${cur.ok?'✓ Done. Tap to change':'This meeting is done'}</button></div>`;
+      html+=`<div class="card"><h2>${esc(g||'No group')}<span class="sp"></span><span class="chip">${l.filter(([id])=>!cur.abs[id]).length}/${l.length}</span></h2>${l.map(([id,nm])=>`<label class="row" style="cursor:pointer"><span class="lbl" style="${cur.abs[id]?'color:var(--bad);text-decoration:line-through':''}">${esc(nm)}</span><input type="checkbox" data-fr="ctick" data-id="${esc(id)}" ${cur.abs[id]?'':'checked'} ${cur.sent?'disabled':''} style="width:24px;height:24px"></label>`).join('')}</div>`; });
+    html+=`<div class="card"><div class="f"><label>Notes about this meeting (optional)</label><textarea data-fr="cnote" placeholder="Heavy rain, many came late…" ${cur.sent?'readonly':''}>${esc(cur.note||'')}</textarea></div>
+      ${cur.sent?'<div class="banner" style="margin:0"><span>🔒 Sent to the secretary. This meeting is locked and can\'t be changed.</span></div>':`<button class="btn ${cur.ok?'ghost':''}" data-fr="cok">${cur.ok?'✓ Done. Tap to change':'This meeting is done'}</button>`}</div>`;
   }
   html+=`<div class="card"><a class="btn wa" id="frSend" href="${formWaHref()}" target="_blank" rel="noopener" data-fr="send">Send to ${esc(F.sn||'the secretary')} on WhatsApp</a>
-    <p class="muted" style="margin:8px 0 0;font-size:13px">Only meetings marked done are sent. You can send after each meeting, or at the end of the month.</p>
+    <p class="muted" style="margin:8px 0 0;font-size:13px">Only meetings marked done are sent. After you send, those meetings are locked. You can still fill in the meetings that have not happened yet.</p>
     ${FS.sentAt?`<p class="muted" style="margin:6px 0 0;font-size:13px">Last sent ${new Date(FS.sentAt).toLocaleString()}</p>`:''}</div>`;
   return html;
 }
@@ -2999,7 +3000,7 @@ function checkView(k){
   openSheet(`<h3>${nice(dt)} · ${kd==='mid'?'Midweek':'Weekend'}</h3><div class="stat"><div><small>Present</small><b>${c.present} + ${c.v}</b></div><div><small>Absent</small><b>${ab.length}</b></div></div>
     ${c.note?`<p style="margin:10px 0 0"><b>Note:</b> ${esc(c.note)}</p>`:''}
     ${ab.length?`<div class="area">Absent</div><div class="list">${ab.map(p=>`<div class="it" data-a="pubsheet" data-id="${p.id}" style="cursor:pointer"><div class="x"><b>${esc(p.name)}</b><small>${esc(p.group||'No group')}</small></div></div>`).join('')}</div>`:''}
-    <button class="btn ghost" data-a="close" style="margin-top:12px">Close</button>`, null);
+    <div class="btns" style="margin-top:12px"><button class="btn ghost" style="flex:1" data-a="close">Close</button><button class="btn danger" style="flex:1" data-a="x33ckdel" data-k="${k}">Remove</button></div>`, null);
 }
 
 /* ================= SHARE THE FULL PACKAGE (with an empty Secretary section) ================= */
@@ -3033,7 +3034,7 @@ function monthReportText(m){
 async function makeMonthReport(m){
   const L=await loadPdfLib(), doc=await L.PDFDocument.create();
   const font=await doc.embedFont(L.StandardFonts.Helvetica), bold=await doc.embedFont(L.StandardFonts.HelveticaBold);
-  const ink=L.rgb(0.05,0.13,0.3), grey=L.rgb(0.4,0.45,0.52), line=L.rgb(0.85,0.88,0.92), W=595, H=842, M=40;
+  const ink=themeRgb(L), grey=L.rgb(0.4,0.45,0.52), line=L.rgb(0.85,0.88,0.92), W=595, H=842, M=40;
   const clean=x=>String(x??'').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[–—]/g,'-').replace(/₵/g,'C').replace(/[^\x20-\x7E\xA0-\xFF]/g,'');
   const fit=(x,w,size,f)=>{ x=clean(x); while(x && f.widthOfTextAtSize(x,size)>w) x=x.slice(0,-1); return x; };
   let page, y;
@@ -4440,6 +4441,7 @@ function daySheet(s){
 function settingsSheet(){
   const st=S.settings;
   openSheet(`<h3>Settings</h3>
+    <button class="btn ghost" data-a="x33open" style="margin:-2px 0 12px">🎨 Colours and app name</button>
     <div class="f2"><div class="f"><label>Your name</label><input type="text" id="sName" value="${esc(st.name)}" placeholder="Gideon"></div>
     <div class="f"><label>Currency</label><input type="text" id="sCur" value="${esc(st.currency)}"></div></div>
     <div class="f"><label>I serve as</label><select id="sPubType"><option value="">Not chosen</option>${PUBTYPES.map(([k,l])=>`<option value="${k}" ${k===st.pubType?'selected':''}>${l}</option>`).join('')}</select></div>
@@ -5088,7 +5090,7 @@ document.addEventListener('click', e=>{
   if(f==='a'){ const x=r[t.dataset.id]||(r[t.dataset.id]={}); x.a=t.checked; formSave(); renderForm(); }
   if(f==='addd'){ const d=val('frDate'), k=val('frKind'); if(!d || d.slice(0,7)!==FORM.m){ toast('Choose a day in '+monthName(FORM.m)); return; }
     FS.x=FS.x||[]; if(![...(FORM.d||[]),...FS.x].some(z=>z[0]===d&&z[1]===k)) FS.x.push([d,k]); formSave(); renderForm(); toast('Day added'); }
-  if(f==='send'){ FS.sentAt=Date.now(); formSave(); setTimeout(renderForm,800); }
+  if(f==='send'){ FS.sentAt=Date.now(); if(FORM.t==='c') Object.values(FS.c||{}).forEach(c=>{ if(c.ok) c.sent=1; }); formSave(); setTimeout(renderForm,800); }
 });
 document.addEventListener('input', e=>{
   if(!FORM) return; const t=e.target, f=t.dataset.fr; if(!f) return;
@@ -5180,20 +5182,21 @@ function codePreviewHTML(codes){
     if(c.t==='r'){ const rows=c.r.map(([id,s,h,st,a])=>({p:findPub(id,c.g),s,h,st:n(st),a})), ok=rows.filter(r=>r.p);
       return `<div class="area">${esc(c.g)} · ${monthName(c.m)} · ${ok.length} report${ok.length===1?'':'s'}</div>${c.n?`<p class="muted" style="margin:0 0 6px"><b>Note:</b> ${esc(c.n)}</p>`:''}
         <div class="list">${rows.map(r=>{ const had=r.p&&rep(c.m,r.p.id); return `<div class="it"><span class="wdot ${!r.p?'red':r.s?'green':'orange'}" style="margin-top:6px"></span><div class="x"><b>${r.p?esc(r.p.name):'Not on your list any more (skipped)'}</b><small>${r.s?'Shared'+(r.h!=null?' · '+r.h+' h':'')+' · '+r.st+' stud'+(r.st===1?'y':'ies')+(r.a?' · Aux':''):'Did not share'}${had?' · replaces the report already entered':''}</small></div></div>`; }).join('')}</div>`; }
-    if(c.t==='c') return `<div class="area">Attendance checklist · ${monthName(c.m)}</div><div class="list">${c.c.map(([dt,k,pres,v,abs,note])=>`<div class="it"><div class="x"><b>${nice(dt)} · ${k==='mid'?'Midweek':'Weekend'}</b><small>${pres} publishers + ${v} visitors${abs.length?' · absent: '+abs.map(id=>{ const p=findPub(id,''); return p?esc(p.name):'?'; }).join(', '):''}${note?' · '+esc(note):''}</small></div><span class="amt">${pres+v}</span></div>`).join('')}</div>`;
+    if(c.t==='c') return `<div class="area">Attendance checklist · ${monthName(c.m)}</div><div class="list">${c.c.map(([dt,k,pres,v,abs,note])=>`<div class="it"><div class="x"><b>${nice(dt)} · ${k==='mid'?'Midweek':'Weekend'}</b><small>${(d.checks||{})[dt+'|'+k]?'<b style="color:var(--bad)">Already added, will be skipped</b> · ':''}${pres} publishers + ${v} visitors${abs.length?' · absent: '+abs.map(id=>{ const p=findPub(id,''); return p?esc(p.name):'?'; }).join(', '):''}${note?' · '+esc(note):''}</small></div><span class="amt">${pres+v}</span></div>`).join('')}</div>`;
     const ms=d.meetings||[];
     return `<div class="area">Attendance · ${monthName(c.m)}</div><div class="list">${c.a.map(([dt,k,cnt])=>{ const had=ms.find(x=>x.date===dt&&x.kind===k); return `<div class="it"><div class="x"><b>${nice(dt)} · ${k==='mid'?'Midweek':'Weekend'}</b>${had&&n(had.count)!==n(cnt)?`<small>Replaces ${had.count}</small>`:''}</div><span class="amt">${n(cnt)}</span></div>`; }).join('')}</div>`;
   }).join('');
 }
+var CK_SKIP=0;
 function applyCodes(codes){
-  const d=SEC(); let nr=0, na=0, lastM=null, notes=[];
+  CK_SKIP=0; const d=SEC(); let nr=0, na=0, lastM=null, notes=[];
   codes.forEach(c=>{
     if(c.t==='r'){ d.reports[c.m]=d.reports[c.m]||{};
       c.r.forEach(([id,s,h,st,a])=>{ const p=findPub(id,c.g); if(!p) return; const old=d.reports[c.m][p.id]||{};
         d.reports[c.m][p.id]={got:TODAY(), shared:!!s, aux:!!a&&!isPioneer(p), hours:s&&h!=null?n(h):null, studies:s?n(st):0, remarks:old.remarks||''}; nr++; });
       const lg=linkLog('r',c.m); lg[c.g]=lg[c.g]||{}; lg[c.g].got=TODAY(); lastM=c.m; if(c.n) notes.push(c.g+': '+c.n); }
     else if(c.t==='c'){ d.meetings=d.meetings||[]; d.checks=d.checks||{};
-      c.c.forEach(([dt,k,pres,v,abs,note])=>{ d.checks[dt+'|'+k]={present:pres, v, abs:abs.map(id=>(findPub(id,'')||{}).id).filter(Boolean), note, got:TODAY()};
+      c.c.forEach(([dt,k,pres,v,abs,note])=>{ if(d.checks[dt+'|'+k]){ CK_SKIP++; return; } d.checks[dt+'|'+k]={present:pres, v, abs:abs.map(id=>(findPub(id,'')||{}).id).filter(Boolean), note, got:TODAY()};
         const cnt=pres+v; if(cnt>0){ const ex=d.meetings.find(x=>x.date===dt&&x.kind===k); if(ex) ex.count=cnt; else d.meetings.push({id:uid(), date:dt, kind:k, count:cnt}); na++; } });
       linkLog('c',c.m).got=TODAY(); }
     else { d.meetings=d.meetings||[];
@@ -5203,7 +5206,9 @@ function applyCodes(codes){
   if(lastM) secMonth=lastM;
   if(notes.length) d.notes.push({id:uid(), date:TODAY(), title:'Notes from group overseers', text:notes.join('\n')});
   save(); closeSheet(); render();
+  if(!nr && !na && CK_SKIP) toast(CK_SKIP+' meeting'+(CK_SKIP===1?' was':'s were')+' already added. The first reply is kept.'); else {
   toast([nr?nr+' report'+(nr===1?'':'s'):'', na?na+' attendance number'+(na===1?'':'s'):''].filter(Boolean).join(' and ')+' added'+(notes.length?' · note saved in Committee':''));
+  if(CK_SKIP) setTimeout(()=>toast(CK_SKIP+' meeting'+(CK_SKIP===1?' was':'s were')+' already in, kept the first reply'),2200); }
 }
 function attLinkCard(){
   const m=MONTH(), st=linkLog('a',m);
@@ -5745,7 +5750,7 @@ function showLock(sel){
   const pick = sel || P.current;
   const el=document.getElementById('lock'); el.hidden=false;
   const prof=P.list.find(x=>x.id===pick)||P.list[0];
-  el.innerHTML=`<div class="lockbox"><img src="icon.svg" alt="" width="64" height="64"><h2>Life Compass</h2>
+  el.innerHTML=`<div class="lockbox"><img src="icon.svg" alt="" width="64" height="64"><h2>${esc(appName())}</h2>
     ${P.list.length>1?`<p class="muted" style="margin:0 0 8px">Who is using the app?</p><div class="people">${P.list.map(x=>`<button class="${x.id===prof.id?'on':''}" data-lock-pick="${x.id}">${esc(x.name||'Me')}</button>`).join('')}</div>`:''}
     ${prof.pin?`<input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" id="lockPin" placeholder="Enter passcode" autocomplete="off"><div class="err" id="lockErr" hidden>Wrong passcode. Try again.</div>`:''}
     <button class="btn" id="lockGo" data-lock-go="${prof.id}">${prof.pin?'Unlock':'Open'}</button></div>`;
@@ -5868,18 +5873,69 @@ document.addEventListener('click', e=>{
   if(!FORM || FORM.t!=='c' || FORM.pending) return;
   const t=e.target.closest('[data-fr]'); if(!t) return; const f=t.dataset.fr;
   if(f==='cpick'){ FS.cur=t.dataset.k; formSave(); renderForm(); window.scrollTo(0,0); }
-  if(f==='ctick'){ const c=FS.c[FS.cur]; if(t.checked) delete c.abs[t.dataset.id]; else c.abs[t.dataset.id]=1; c.ok=0; formSave(); const y=window.scrollY; renderForm(); window.scrollTo(0,y); }
-  if(f==='cok'){ const c=FS.c[FS.cur]; c.ok=c.ok?0:1; formSave(); renderForm(); if(c.ok) toast('Saved. Choose the next meeting, or tap Send'); }
+  if(f==='ctick'){ const c=FS.c[FS.cur]; if(c.sent){ t.checked=!c.abs[t.dataset.id]; toast('This meeting was sent, so it is locked'); return; } if(t.checked) delete c.abs[t.dataset.id]; else c.abs[t.dataset.id]=1; c.ok=0; formSave(); const y=window.scrollY; renderForm(); window.scrollTo(0,y); }
+  if(f==='cok'){ const c=FS.c[FS.cur]; if(c.sent){ toast('This meeting was sent, so it is locked'); return; } c.ok=c.ok?0:1; formSave(); renderForm(); if(c.ok) toast('Saved. Choose the next meeting, or tap Send'); }
 });
 document.addEventListener('input', e=>{
   if(!FORM || FORM.t!=='c') return; const t=e.target, f=t.dataset.fr; if(!f) return;
-  const c=FS.c[FS.cur]; if(!c) return;
-  if(f==='cv'){ c.v=t.value.replace(/[^\d]/g,''); }
+  const c=FS.c[FS.cur]; if(!c || c.sent) return;
+  if(f==='cv'){ c.v=t.value.replace(/[^\d]/g,''); const tt=document.getElementById('ckTotal'); if(tt) tt.textContent=n(tt.dataset.p)+(n(c.v)||0); }
   if(f==='cnote'){ c.note=t.value; }
   formSave(); const s=document.getElementById('frSend'); if(s) s.href=formWaHref();
 });
-document.addEventListener('change', e=>{ if(!FORM || FORM.t!=='c') return; if(e.target.dataset.fr==='cv'){ renderForm(); } });
 
+
+/* ================= v33: make it yours (colours and app name) ================= */
+const THEMES=[['blue','Navy blue','#0C3C78'],['green','Forest green','#1B5E3A'],['maroon','Maroon','#7A1F2B'],['purple','Royal purple','#4A2A7A'],['teal','Teal','#0F5E66'],['brown','Earth brown','#5C3A1E'],['charcoal','Charcoal','#263238'],['wine','Wine red','#8E1B3A']];
+function hexRgb(h){ h=String(h||'').replace('#',''); if(h.length===3) h=h.split('').map(c=>c+c).join(''); const v=parseInt(h,16); return isNaN(v)?[12,60,120]:[(v>>16)&255,(v>>8)&255,v&255]; }
+function mixHex(h,w){ const c=hexRgb(h); return '#'+c.map(x=>Math.round(x+(255-x)*w).toString(16).padStart(2,'0')).join(''); }
+function themeHex(){ const st=(typeof S!=='undefined'&&S&&S.settings)||{}; if(st.themeCustom) return st.themeCustom; const t=THEMES.find(x=>x[0]===st.theme); return t?t[2]:THEMES[0][2]; }
+function themeRgb(L){ const c=hexRgb(themeHex()); return L.rgb(c[0]/255,c[1]/255,c[2]/255); }
+function appName(){ const st=(typeof S!=='undefined'&&S&&S.settings)||{}; return (st.appName||'').trim()||'Life Compass'; }
+function applyTheme(hex){
+  hex=hex||themeHex(); const r=document.documentElement.style;
+  r.setProperty('--navy',hex); r.setProperty('--blue',mixHex(hex,0.18)); r.setProperty('--sky',mixHex(hex,0.9)); r.setProperty('--sky2',mixHex(hex,0.8)); r.setProperty('--bg',mixHex(hex,0.955));
+  const m=document.querySelector('meta[name=theme-color]'); if(m) m.setAttribute('content',hex);
+  try{ document.title=appName(); }catch(e){}
+}
+let PZ=null;
+function personaliseSheet(first){
+  const st=S.settings, c=SEC?((st.sections||{}).secretary?congInfo():null):null;
+  PZ = PZ || {theme:st.themeCustom?'custom':(st.theme||'blue'), custom:st.themeCustom||'#0C3C78'};
+  openSheet(`<h3>${first?'Make it yours':'Colours and app name'}</h3>
+    ${first?'<p class="muted" style="margin:-4px 0 10px">Choose how the app looks on your phone. You can change it later in Settings.</p>':''}
+    <div class="f"><label>Your name</label><input type="text" id="pzName" value="${esc(st.name||'')}" placeholder="Your first name"></div>
+    <div class="f"><label>Name at the top of the app</label><input type="text" id="pzApp" value="${esc(st.appName||'')}" placeholder="Life Compass" maxlength="28"></div>
+    ${c?`<div class="f"><label>Your congregation (goes on letters and PDFs)</label><input type="text" id="pzCong" value="${esc(c.name||'')}" placeholder="Congregation name"></div>`:''}
+    <div class="area">Colour</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">${THEMES.map(([k,l,h])=>`<button data-a="x33theme" data-k="${k}" style="border:3px solid ${PZ.theme===k?'var(--ink)':'transparent'};border-radius:12px;padding:10px 4px;background:${h};color:#fff;font-size:12px;font-weight:600">${PZ.theme===k?'✓ ':''}${l}</button>`).join('')}</div>
+    <label class="row" style="cursor:pointer;margin-top:8px"><span class="lbl">My own colour${PZ.theme==='custom'?' ✓':''}<small>Tap the box to pick any colour</small></span><input type="color" id="pzCustom" value="${esc(PZ.custom)}" style="width:52px;height:40px;border:0;background:none"></label>
+    <div class="card hello" style="margin-top:10px"><div class="big" style="font-size:18px" id="pzPrev">${esc(appName())}</div><div class="sub">This is how the top of the app will look</div></div>
+    <div class="btns" style="margin-top:6px">${first?`<button class="btn ghost" style="flex:1" data-a="x33skip">Keep blue</button>`:`<button class="btn ghost" style="flex:1" data-a="x33cancel">Cancel</button>`}<button class="btn" style="flex:1" data-a="x33save">Save</button></div>`, null);
+  const prev=()=>{ applyTheme(PZ.theme==='custom'?PZ.custom:THEMES.find(x=>x[0]===PZ.theme)[2]); const n=document.getElementById('pzPrev'); if(n) n.textContent=val('pzApp').trim()||'Life Compass'; };
+  document.getElementById('pzCustom').addEventListener('input',e=>{ PZ.theme='custom'; PZ.custom=e.target.value; prev(); });
+  document.getElementById('pzCustom').addEventListener('change',()=>{ const keep={name:val('pzName'),app:val('pzApp'),cong:val('pzCong')}; personaliseSheet(first); document.getElementById('pzName').value=keep.name; document.getElementById('pzApp').value=keep.app; const cg=document.getElementById('pzCong'); if(cg) cg.value=keep.cong; });
+  document.getElementById('pzApp').addEventListener('input',prev);
+  prev();
+}
+function personaliseSave(){
+  const st=S.settings; st.name=val('pzName').trim()||st.name; st.appName=val('pzApp').trim();
+  if(PZ.theme==='custom'){ st.themeCustom=PZ.custom; st.theme='custom'; } else { st.theme=PZ.theme; delete st.themeCustom; }
+  const cg=document.getElementById('pzCong'); if(cg && cg.value.trim()) congInfo().name=cg.value.trim().replace(/\s+congregation$/i,'');
+  st.themeAsked=true; PZ=null; save(); applyTheme(); closeSheet(); render(); toast('Saved. The app is yours now');
+}
+document.addEventListener('click', e=>{
+  const t=e.target.closest('[data-a]'); if(!t || !/^x33/.test(t.dataset.a)) return;
+  const a=t.dataset.a;
+  if(a==='x33theme'){ const keep={name:val('pzName'),app:val('pzApp'),cong:val('pzCong')}; PZ.theme=t.dataset.k; const first=!!document.querySelector('[data-a=x33skip]'); personaliseSheet(first); document.getElementById('pzName').value=keep.name; document.getElementById('pzApp').value=keep.app; const cg=document.getElementById('pzCong'); if(cg) cg.value=keep.cong; document.getElementById('pzPrev').textContent=keep.app.trim()||'Life Compass'; }
+  if(a==='x33save') personaliseSave();
+  if(a==='x33skip'){ S.settings.themeAsked=true; PZ=null; save(); applyTheme(); closeSheet(); render(); }
+  if(a==='x33cancel'){ PZ=null; applyTheme(); closeSheet(); }
+  if(a==='x33open'){ PZ=null; closeSheet(); setTimeout(()=>personaliseSheet(false),60); }
+  if(a==='x33ckdel'){ const k=t.dataset.k; if(!confirm('Remove this meeting\'s checklist? Then you can paste a corrected reply.')) return; delete SEC().checks[k]; save(); closeSheet(); render(); toast('Removed. Paste the corrected reply'); }
+});
+
+try{ applyTheme(); }catch(e){}
 </script>
 </body>
 </html>
