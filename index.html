@@ -242,7 +242,7 @@ body.formmode main{padding-bottom:40px}
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 35;
+const APP_VERSION = 36;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -637,6 +637,7 @@ V.today = () => {
   cards.diary=()=>{ let html='';
   html += diaryCard(t);
   return html; };
+  html += backupBannerHTML();
   const cfg=todayCfg(), tm=T();
   cfg.order.forEach(k=>{ if(cards[k] && (!cfg.hide[k] || (k==='timer' && (tm.running||tm.sessionMs)))) html += cards[k](); });
   html += `<button class="btn ghost" data-a="todaycfg" style="margin:4px 0 10px">Customise my Today page</button>`;
@@ -676,6 +677,7 @@ function secNeedsMe(){
   if((d.tasks||[]).some(x=>!x.done && x.due && daysSince(x.due)>=-2)) return true;
   if((d.branch||[]).some(x=>!x.done && x.due && daysSince(x.due)>=-n(x.remind||3))) return true;
   if(missedTwice().length) return true;
+  if(shepDue().due.some(x=>!x.plan)) return true;
   if(newlyBaptized().some(p=>{ const lv=lastVisit(p); return !lv || daysSince(lv)>90; })) return true;
   return false;
 }
@@ -1966,7 +1968,7 @@ V.sec = () => {
   const segs=[['glance','Overview'],['reports','Reports'],['pubs','Publishers'],['att','Meetings'],['duties','Duties & tasks'],['letters','Letters'],['co','CO visit'],['committee','Committee']];
   let html=`<div class="seg six">${segs.map(([k,l])=>`<button class="${k===secTab?'on':''}" data-a="sectab" data-k="${k}">${l}</button>`).join('')}</div>`;
   if(!curProfile().pin) html+=`<div class="banner"><span style="flex:1">These are confidential congregation records. They stay only on this phone. Set a passcode so nobody else can open them.</span><button class="btn sm" data-a="pinsheet">Set passcode</button></div>`;
-  html += secTab==='glance'?secGlance(): secTab==='reports'?secReports(): secTab==='pubs'?secPubs(): secTab==='att'?secAttendance(): secTab==='duties'?secDuties(): secTab==='letters'?secLetters(): secTab==='co'?secCO(): secCommittee();
+  html += secTab==='glance'?secGlance(): secTab==='reports'?secReports()+(secRepView==='month'&&SEC().pubs.length?pioneerCard():''): secTab==='pubs'?shepCard()+secPubs()+inactiveCard(): secTab==='att'?secAttendance(): secTab==='duties'?sycCard(sycShow())+secDuties()+(sycShow()?'':sycCard(true)): secTab==='letters'?secLetters(): secTab==='co'?secCO(): secCommittee();
   return html;
 };
 function secReports(){
@@ -1990,6 +1992,7 @@ function secReports(){
     <button class="btn wa" data-a="linkssheet" style="margin-top:8px">Send report links to group overseers</button>
     <button class="btn" data-a="monthreport" data-m="${m}" style="margin-top:8px">Monthly congregation report (PDF)</button>
     <button class="btn ghost" data-a="x35grprep" data-m="${m}" style="margin-top:8px">Every publisher's report, by group (PDF)</button>
+    <button class="btn wa" data-a="x36gsum" style="margin-top:8px">Send group summaries to overseers</button>
     <button class="btn ghost" data-a="printsheet" data-k="s21" style="margin-top:8px">Print publisher records for the service year (S-21)</button></div>`;
   if(att.length) html+=`<div class="card"><h2>Needs encouragement<span class="sp"></span><span class="chip" style="background:#FBEAEA;color:#A32D2D">${att.length}</span></h2>
     <p class="muted" style="margin:0 0 6px">No report or no ministry for 2 months in a row.</p>
@@ -2088,6 +2091,10 @@ function secGlance(){
     <button class="btn ghost" data-a="printsheet" data-k="s21" style="margin-top:8px">Send all S-21 cards (PDF or ZIP)</button></div>`;
   html = `<div class="card"><h2>Monthly report · ${monthName(m)}</h2><p class="muted" style="margin:0 0 10px">Totals, attendance, pioneers, missing reports, groups and remittance in one PDF, with a short summary to send on WhatsApp.</p>
     <button class="btn" data-a="monthreport" data-m="${m}">Make the monthly report</button></div>` + html;
+  { const sd=shepDue().due.filter(x=>!x.plan); if(sd.length) html = `<div class="banner"><span style="flex:1"><b>${sd.length} shepherding call${sd.length===1?'':'s'} due</b>: ${sd.slice(0,3).map(x=>esc(x.p.name)).join(', ')}</span><button class="btn sm" data-a="sectab" data-k="pubs">Open</button></div>` + html;
+    const pb=pioRows().filter(r=>r.st==='red'); if(pb.length) html = `<div class="banner"><span style="flex:1"><b>Pioneer${pb.length===1?'':'s'} behind</b>: ${pb.slice(0,3).map(r=>esc(r.p.name)).join(', ')}</span><button class="btn sm" data-a="sectab" data-k="reports">Open</button></div>` + html;
+    if(sycShow() && sycCard(false)) html = `<div class="banner"><span style="flex:1"><b>End of service year checklist</b></span><button class="btn sm" data-a="sectab" data-k="duties">Open</button></div>` + html;
+    html = backupBannerHTML() + html; }
   const brDue=SEC().branch.filter(x=>!x.done && x.due && daysSince(x.due)>=-n(x.remind||3)), fl=missedTwice();
   if(fl.length) html = `<div class="banner"><span style="flex:1"><b>${fl.length} missed 2 meetings in a row</b>: ${fl.slice(0,3).map(x=>esc(x.p.name)).join(', ')}</span><button class="btn sm" data-a="sectab" data-k="att">Open</button></div>` + html;
   if(brDue.length) html = `<div class="banner"><span style="flex:1"><b>Letter${brDue.length===1?'':'s'} to answer</b>: ${brDue.slice(0,3).map(x=>esc(x.subject)+(x.due?' ('+nice(x.due)+')':'')).join(', ')}</span><button class="btn sm" data-a="sectab" data-k="letters">Open</button></div>` + html;
@@ -2261,6 +2268,7 @@ function pubSheet(id){
       <div class="f"><label>Hope</label><select id="puHope"><option value="">—</option><option value="os" ${p.hope==='os'?'selected':''}>Other sheep</option><option value="an" ${p.hope==='an'?'selected':''}>Anointed</option></select></div></div>
     <div class="f2"><label class="row" style="cursor:pointer;border:0"><span class="lbl">Elder</span><input type="checkbox" id="puElder" ${p.elder?'checked':''} style="width:22px;height:22px"></label>
       <label class="row" style="cursor:pointer;border:0"><span class="lbl">Ministerial servant</span><input type="checkbox" id="puMs" ${p.ms?'checked':''} style="width:22px;height:22px"></label></div>
+    ${p.type==='rp'||!id?`<div class="f"><label>Regular pioneer since (month, if this service year)</label><input type="month" id="puPioSince" value="${esc(p.pioSince||'')}"></div>`:''}
     <div class="f"><label>Roles and assignments</label><input type="text" id="puRoles" value="${esc(p.roles||'')}" placeholder="Coordinator, attendant, reader, audio-video, cleaning"></div>
     <div class="f"><label>Something to ask about next time (for friendly messages)</label><input type="text" id="puAsk" value="${esc(p.ask||'')}" placeholder="your new job, the children's exams, your mother's health"></div>
     <div class="f"><label>Notes</label><textarea id="puNotes">${esc(p.notes||'')}</textarea></div>
@@ -2271,7 +2279,7 @@ function pubSheet(id){
     ${id?`<div class="btns" style="margin-top:12px"><button class="btn ghost" style="flex:1" data-a="pubvisit" data-id="${id}">Log a visit</button><button class="btn danger" style="flex:1" data-a="delpub" data-id="${id}">Delete</button></div>`:''}`, ()=>{
       const nm=val('puName').trim(); if(!nm) return fail('puName','Enter the name');
       const rec = id ? p : {id:uid(), visits:[], since:MONTH()};
-      Object.assign(rec,{roles:val('puRoles').trim(), name:nm, phone:val('puPhone').trim(), emName:val('puEmName').trim(), emRel:val('puEmRel').trim(), emPhone:val('puEmPhone').trim(), group:val('puGroup').trim(), type:val('puType'), status:val('puStatus'), baptized:val('puBap'), dob:val('puDob'), gender:val('puSex'), hope:val('puHope'), elder:document.getElementById('puElder').checked, ms:document.getElementById('puMs').checked, notes:val('puNotes').trim(), ask:val('puAsk').trim()});
+      Object.assign(rec,{pioSince:(document.getElementById('puPioSince')||{}).value||rec.pioSince||'', roles:val('puRoles').trim(), name:nm, phone:val('puPhone').trim(), emName:val('puEmName').trim(), emRel:val('puEmRel').trim(), emPhone:val('puEmPhone').trim(), group:val('puGroup').trim(), type:val('puType'), status:val('puStatus'), baptized:val('puBap'), dob:val('puDob'), gender:val('puSex'), hope:val('puHope'), elder:document.getElementById('puElder').checked, ms:document.getElementById('puMs').checked, notes:val('puNotes').trim(), ask:val('puAsk').trim()});
       if(!id) d.pubs.push(rec); return true;
     });
 }
@@ -3159,6 +3167,7 @@ function secTodayCard(){
     ${(()=>{ const lm=secMonthDefault(), lg=groupsList(), ls=linkLog('r',lm), sent=lg.filter(g=>ls[g]&&ls[g].sent).length, got=lg.filter(g=>ls[g]&&ls[g].got).length; return parse(TODAY()).getDate()<=12 && lg.length && got<lg.length ? `<div class="row"><div class="lbl">Report links for ${monthName(lm).split(' ')[0]}<small>${sent} of ${lg.length} sent · ${got} back</small></div><button class="btn sm ${sent<lg.length?'':'ghost'}" data-a="linkssheet">${sent<lg.length?'Send':'Open'}</button></div>` : ''; })()}
     ${soon.map(x=>`<div class="row"><span class="wdot ${dutyClass(x)}" style="margin:0 8px 0 0"></span><div class="lbl">${esc(x.name)}<small>${daysSince(x.due)>0?'Overdue':daysSince(x.due)===0?'Due today':'Due '+nice(x.due)}</small></div><button class="btn sm ghost" data-a="dutydone" data-id="${x.id}">Done</button></div>`).join('')}
     ${d.branch.filter(x=>!x.done && x.due && daysSince(x.due)>=-n(x.remind||3)).map(x=>`<div class="row"><span class="wdot ${branchState(x)}" style="margin:0 8px 0 0"></span><div class="lbl">Reply: ${esc(x.subject)}<small>${daysSince(x.due)>0?'Overdue':daysSince(x.due)===0?'Due today':'Due '+nice(x.due)}</small></div><button class="btn sm ghost" data-a="x31branchdone" data-id="${x.id}">Done</button></div>`).join('')}
+    ${shepDue().due.filter(x=>!x.plan).length?`<div class="row"><div class="lbl">Shepherding calls due<small>${shepDue().due.filter(x=>!x.plan).slice(0,3).map(x=>esc(x.p.name)).join(', ')}</small></div><button class="btn sm" data-a="gosec" data-k="pubs">Open</button></div>`:''}
     ${missedTwice().length?`<div class="row"><div class="lbl">Missed 2 meetings in a row<small>${missedTwice().slice(0,3).map(x=>esc(x.p.name)).join(', ')}</small></div><button class="btn sm" data-a="gosec" data-k="att">Open</button></div>`:''}
     ${d.pubs.length&&parse(TODAY()).getDate()<=20?`<button class="btn sm ghost" data-a="monthreport" data-m="${m}" style="margin-top:8px;width:100%">Monthly report for ${monthName(m).split(' ')[0]} (one tap)</button>`:''}
     ${nbv.length?`<p class="muted" style="margin:8px 0 0">Newly baptized to visit: <b>${nbv.map(p=>esc(p.name)).join(', ')}</b></p>`:''}</div>`;
@@ -3443,7 +3452,7 @@ document.addEventListener('change', async e=>{
     else if(doc.getPageCount()<1) throw new Error('That PDF is empty.');
   }catch(err){ toast(err.message||'That file could not be read'); t.value=''; return; }
   await photoPut(FORM_KEY[t.dataset.formfile], data);
-  const el=document.getElementById('pfState'); if(el) el.innerHTML='✓ Blank form saved on this phone.'; toast('Blank form saved');
+  const el=document.getElementById('pfState'); if(el) el.innerHTML='✓ Blank form saved on this phone. Make one card to check it fills neatly.'; toast('Blank form saved. It will be used from now on');
 });
 
 /* ---------- a publisher's service year, shown in the app ---------- */
@@ -5223,6 +5232,7 @@ function applyCodes(codes){
   if(lastM) secMonth=lastM;
   if(notes.length) d.notes.push({id:uid(), date:TODAY(), title:'Notes from group overseers', text:notes.join('\n')});
   save(); closeSheet(); render();
+  if(nr) S.settings.backupNudge=Date.now();
   if(!nr && !na && CK_SKIP) toast(CK_SKIP+' meeting'+(CK_SKIP===1?' was':'s were')+' already added. The first reply is kept.'); else {
   toast([nr?nr+' report'+(nr===1?'':'s'):'', na?na+' attendance number'+(na===1?'':'s'):''].filter(Boolean).join(' and ')+' added'+(notes.length?' · note saved in Committee':''));
   if(CK_SKIP) setTimeout(()=>toast(CK_SKIP+' meeting'+(CK_SKIP===1?' was':'s were')+' already in, kept the first reply'),2200); }
@@ -5612,7 +5622,7 @@ if(NATIVE){
 /* pictures live in the phone's IndexedDB (more room than normal storage); text notes stay with the rest of your data */
 const PHOTO_DB = () => 'lc-photos-' + KEY;
 function idb(){ return new Promise((res,rej)=>{ const r=indexedDB.open(PHOTO_DB(),1); r.onupgradeneeded=()=>r.result.createObjectStore('p'); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
-async function photoPut(id, data){ const db=await idb(); return new Promise((res,rej)=>{ const t=db.transaction('p','readwrite'); t.objectStore('p').put(data,id); t.oncomplete=()=>res(); t.onerror=()=>rej(t.error); }); }
+async function photoPut(id, data){ photoCache[id]=data; const db=await idb(); return new Promise((res,rej)=>{ const t=db.transaction('p','readwrite'); t.objectStore('p').put(data,id); t.oncomplete=()=>res(); t.onerror=()=>rej(t.error); }); }
 async function photoGet(id){ if(photoCache[id]) return photoCache[id]; const db=await idb(); return new Promise(res=>{ const r=db.transaction('p').objectStore('p').get(id); r.onsuccess=()=>{ if(r.result) photoCache[id]=r.result; res(r.result||null); }; r.onerror=()=>res(null); }); }
 async function photoDel(id){ delete photoCache[id]; try{ const db=await idb(); db.transaction('p','readwrite').objectStore('p').delete(id); }catch(e){} }
 async function photoAll(){ const db=await idb(); return new Promise(res=>{ const out={}, r=db.transaction('p').objectStore('p').openCursor(); r.onsuccess=()=>{ const c=r.result; if(c){ out[c.key]=c.value; c.continue(); } else res(out); }; r.onerror=()=>res(out); }); }
@@ -5995,6 +6005,169 @@ async function groupsReportPdf(m){
 
 document.addEventListener('click', e=>{ const t=e.target.closest('[data-a=x35grprep]'); if(!t) return; const m=t.dataset.m||secMonth||secMonthDefault();
   (async()=>{ const was=t.textContent; t.textContent='Making the PDF…'; t.disabled=true; try{ await savePdfFile(await groupsReportPdf(m), 'Reports by group '+m+'.pdf'); toast('PDF ready'); }catch(err){ toast(err.message||'Could not make the PDF'); } t.textContent=was; t.disabled=false; })(); });
+/* ================= v36: backup reminder ================= */
+function backupDue(){
+  const st=S.settings, last=st.lastBackup||0, days=last?Math.floor((Date.now()-last)/864e5):null;
+  const hasData=(S.sec&&S.sec.pubs&&S.sec.pubs.length)||S.goals.length||Object.keys(S.days).length>3;
+  if(!hasData) return null;
+  if(st.backupNudge && (!last || st.backupNudge>last)) return 'You added reports. Back up now to keep them safe.';
+  if(!last) return 'You have never backed up. Back up now to keep your records safe.';
+  if(days>=14) return `Last backup was ${days} days ago.`;
+  return null;
+}
+function backupBannerHTML(){ const why=backupDue(); if(!why) return '';
+  return `<div class="banner"><span style="flex:1"><b>Back up</b> · ${esc(why)}</span><button class="btn sm" data-a="backup">Back up now</button></div>`; }
+
+/* ================= v36: pioneers on track, and auxiliary pioneers this month ================= */
+function pioGoal(){ return n(SEC().pioGoal)||600; }
+function auxLow(m){ // 15-hour months: March, April and the circuit overseer's visit month, unless changed
+  const d=SEC(), set=d.aux15; const mm=m.slice(5);
+  if(set && set[m]!=null) return !!set[m];
+  if(mm==='03'||mm==='04') return true;
+  const co=d.co||{}; return !!(co.date && co.date.slice(0,7)===m);
+}
+function auxNeed(m){ return auxLow(m)?15:30; }
+function pioRows(){
+  const sy=curSY(), months=syMonthList(sy), last=secMonthDefault(), done=months.filter(m=>m<=last), goal=pioGoal();
+  return activePubs().filter(p=>p.type==='rp').map(p=>{
+    const h=done.reduce((a,m)=>{ const r=rep(m,p.id); return a+(r&&r.shared&&r.hours!=null?n(r.hours):0); },0);
+    const startIdx=p.pioSince?Math.max(0,months.indexOf(p.pioSince)):0;
+    const span=Math.max(1,done.length-startIdx), share=goal/12*span, pct=share?h/share:1;
+    return {p,h,share,pct,st:pct>=1?'green':pct>=0.85?'orange':'red', left:Math.max(0,goal-h), monthsLeft:12-done.length};
+  }).sort((a,b)=>a.pct-b.pct);
+}
+function pioneerCard(){
+  const sy=curSY(), rows=pioRows(), m=secMonthDefault(), aux=activePubs().filter(p=>{ const r=rep(m,p.id); return r&&r.aux; });
+  let html=`<div class="card"><h2>Regular pioneers · ${sy} service year<span class="sp"></span><button class="btn sm ghost" data-a="x36pioset">Settings</button></h2>
+    <p class="muted" style="margin:0 0 8px;font-size:13px">Goal ${pioGoal()} hours for the year. "On track" means at or above where they should be by ${monthName(m)}.</p>`;
+  html+= rows.length ? `<div class="list">${rows.map(r=>`<div class="it" data-a="pubsheet" data-id="${r.p.id}" style="cursor:pointer"><span class="wdot ${r.st}" style="margin-top:6px"></span><div class="x"><b>${esc(r.p.name)}</b><small>${r1(r.h)} h so far · ${r.st==='green'?'on track':r.st==='orange'?'a little behind':'behind'} · ${r1(r.left)} h left${r.monthsLeft?' in '+r.monthsLeft+' month'+(r.monthsLeft===1?'':'s')+' (about '+r1(r.left/r.monthsLeft)+' a month)':''}</small></div></div>`).join('')}</div>
+    <p class="muted" style="margin:6px 0 0;font-size:12.5px">Someone a little behind may only need a kind word or a partner. Tap a name to see the card.</p>` : '<div class="empty">No regular pioneers marked yet. Set Type to Regular pioneer on a publisher\'s page.</div>';
+  html+=`<div class="area">Auxiliary pioneers · ${monthName(m)} (${auxNeed(m)} hours this month)</div>`;
+  html+= aux.length ? `<div class="list">${aux.map(p=>{ const r=rep(m,p.id), h=n(r.hours), ok=h>=auxNeed(m); return `<div class="it"><span class="wdot ${ok?'green':'orange'}" style="margin-top:6px"></span><div class="x"><b>${esc(p.name)}</b><small>${r1(h)} h · ${ok?'reached '+auxNeed(m)+' ✓':'below '+auxNeed(m)+' hours'}</small></div></div>`; }).join('')}</div>` : '<div class="empty">No auxiliary pioneers this month.</div>';
+  return html+'</div>';
+}
+function pioSetSheet(){
+  const d=SEC(), sy=curSY(), months=syMonthList(sy);
+  openSheet(`<h3>Pioneer settings</h3>
+    <div class="f"><label>Regular pioneer goal for the service year (hours)</label><input type="text" inputmode="numeric" id="psGoal" value="${pioGoal()}"></div>
+    <div class="area">Auxiliary pioneer: 15-hour months</div><p class="muted" style="margin:0 0 8px;font-size:13px">Ticked months need 15 hours; other months need 30. March, April and the circuit overseer's visit month are ticked to start with.</p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">${months.map(m=>`<label class="row" style="cursor:pointer;padding:6px 8px;border:1px solid var(--line);border-radius:10px"><span class="lbl" style="font-size:13.5px">${monthName(m).split(' ')[0].slice(0,3)} ${m.slice(2,4)}</span><input type="checkbox" class="psAux" value="${m}" ${auxLow(m)?'checked':''} style="width:20px;height:20px"></label>`).join('')}</div>
+    ${actions}`, ()=>{ const g=n(val('psGoal')); if(!(g>0)) return fail('psGoal','Enter the number of hours'); d.pioGoal=g; d.aux15=d.aux15||{}; document.querySelectorAll('.psAux').forEach(c=>d.aux15[c.value]=c.checked); return true; });
+}
+
+/* ================= v36: shepherding calls due (one year after baptism, or a year since the last visit) ================= */
+function lastVisit(p){ return (p.visits||[]).map(v=>v.date).sort().pop()||''; }
+function shepDue(){
+  const t=TODAY(), yAgo=addDays(t,-365), out=[], none=[];
+  activePubs().forEach(p=>{
+    const lv=lastVisit(p), plan=p.shepPlan||null;
+    if(p.baptized && p.baptized<=yAgo && p.baptized>addDays(t,-730)){ const ann=addDays(p.baptized,365); if(!lv || lv<addDays(ann,-45)){ out.push({p, why:'One year since baptism ('+longDate(ann)+')', plan}); return; } }
+    if(lv && lv<=yAgo) out.push({p, why:'Last visit '+longDate(lv), plan});
+    else if(!lv) none.push(p);
+  });
+  return {due:out, none};
+}
+function shepCard(){
+  const {due,none}=shepDue(); if(!due.length && !none.length) return '';
+  const all=SEC()._shepAll;
+  return `<div class="card"><h2>Shepherding calls due<span class="sp"></span>${due.length?`<span class="chip">${due.length}</span>`:''}</h2>
+    ${due.length?`<div class="list">${due.slice(0,all?999:6).map(x=>`<div class="it" style="flex-wrap:wrap"><span class="wdot ${x.plan?'green':'orange'}" style="margin-top:6px"></span><div class="x" data-a="pubsheet" data-id="${x.p.id}" style="cursor:pointer"><b>${esc(x.p.name)}</b><small>${esc(x.why)}${x.plan?' · '+esc(x.plan.elder)+(x.plan.date?' on '+nice(x.plan.date):''):''}</small></div>
+      <div class="btns" style="width:100%;margin-top:6px"><button class="btn sm ghost" style="flex:1" data-a="x36shepplan" data-id="${x.p.id}">${x.plan?'Change':'Assign an elder'}</button>${x.plan&&x.plan.phone?`<a class="btn sm wa" style="flex:1" target="_blank" rel="noopener" href="https://wa.me/${phoneIntl(x.plan.phone)}?text=${encodeURIComponent(shepPlanMsg(x))}">Remind</a>`:''}<button class="btn sm" style="flex:1" data-a="x36shepdone" data-id="${x.p.id}">Done ✓</button></div></div>`).join('')}</div>${due.length>6&&!all?`<button class="btn sm ghost" data-a="x36shepall" style="margin-top:8px;width:100%">Show all ${due.length}</button>`:''}`:'<p class="muted" style="margin:0">No calls are due.</p>'}
+    ${none.length?`<p class="muted" style="margin:8px 0 0;font-size:12.5px">${none.length} publisher${none.length===1?' has':'s have'} no visit recorded yet. When a visit is made, tap the name and <b>Log a visit</b>, so the app can remind you a year later.</p>`:''}</div>`;
+}
+function shepPlanMsg(x){ const f=x.p.gender==='f'; return `Good ${timeOfDay()} ${firstName(nameOnly(x.plan.elder))}! A kind reminder about the shepherding call to ${titleOf(x.p)}${x.p.name}${x.plan.date?' on '+dayDate(x.plan.date):''}. ${x.why}. Thank you for caring for ${f?'her':x.p.gender==='m'?'him':'them'} 🙏`; }
+function shepPlanSheet(id){
+  const p=SEC().pubs.find(x=>x.id===id), pl=p.shepPlan||{};
+  openSheet(`<h3>Shepherding call: ${esc(p.name)}</h3>
+    <div class="f2"><div class="f"><label>Elder</label><input type="text" id="spElder" value="${esc(pl.elder||'')}" list="spEld"></div><div class="f"><label>His WhatsApp</label><input type="tel" id="spPhone" value="${esc(pl.phone||'')}"></div></div>
+    <datalist id="spEld">${SEC().pubs.filter(x=>x.elder).map(x=>`<option>${esc(x.name)}</option>`).join('')}</datalist>
+    <div class="f"><label>Planned date (optional)</label><input type="date" id="spDate" value="${pl.date||''}"></div>
+    ${actions}`, ()=>{ const e=val('spElder').trim(); if(!e) return fail('spElder','Choose the elder'); p.shepPlan={elder:e, phone:val('spPhone').trim(), date:val('spDate')}; return true; });
+  const el=document.getElementById('spElder'); el.addEventListener('change',()=>{ const q=letterWho(el.value), ph=document.getElementById('spPhone'); if(q&&q.phone&&!ph.value) ph.value=q.phone; });
+}
+
+/* ================= v36: inactive and reactivation ================= */
+function monthsNoShare(p, upto){ let k=0, m=upto; for(let i=0;i<12;i++){ if((p.since||'0000')>m) break; const r=rep(m,p.id); if(r&&r.shared) break; k++; m=prevMonth(m); } return k; }
+function inactiveCard(){
+  const d=SEC(), m=secMonthDefault();
+  const risk=activePubs().filter(p=>monthsNoShare(p,m)>=3).map(p=>({p,k:monthsNoShare(p,m)})).sort((a,b)=>b.k-a.k);
+  const inact=d.pubs.filter(p=>p.status==='inactive');
+  const back=inact.filter(p=>{ const r=rep(m,p.id); return r&&r.shared; });
+  const reac=d.pubs.filter(p=>p.reactivated && p.reactivated>=addDays(TODAY(),-365) && p.status!=='inactive');
+  if(!risk.length && !inact.length && !reac.length) return '';
+  return `<div class="card"><h2>Inactive and reactivation</h2>
+    ${back.length?`<div class="banner" style="margin:0 0 8px"><span style="flex:1"><b>Reporting again:</b> ${back.map(p=>esc(p.name)).join(', ')}</span></div>${back.map(p=>`<button class="btn sm" style="width:100%;margin-bottom:6px" data-a="x36reac" data-id="${p.id}">Mark ${esc(firstName(p.name))} as active again ✓</button>`).join('')}`:''}
+    ${risk.length?`<div class="area">May need help (${risk.length})</div><div class="list">${risk.map(x=>`<div class="it" data-a="pubsheet" data-id="${x.p.id}" style="cursor:pointer"><span class="wdot ${x.k>=5?'red':'orange'}" style="margin-top:6px"></span><div class="x"><b>${esc(x.p.name)}</b><small>${esc(x.p.group||'No group')} · no ministry for ${x.k} month${x.k===1?'':'s'}${x.k>=6?' · now counts as inactive':''}${lastVisit(x.p)?' · last visit '+nice(lastVisit(x.p)):''}</small></div></div>`).join('')}</div>`:''}
+    ${inact.length?`<div class="area">Inactive (${inact.length})</div><div class="list">${inact.map(p=>`<div class="it"><div class="x" data-a="pubsheet" data-id="${p.id}" style="cursor:pointer"><b>${esc(p.name)}</b><small>${lastVisit(p)?'Last visit '+nice(lastVisit(p)):'No visit recorded'}</small></div><button class="btn sm ghost" data-a="pubvisit" data-id="${p.id}">Log a visit</button></div>`).join('')}</div>`:''}
+    ${reac.length?`<div class="area">Reactivated this year 🎉</div><div class="list">${reac.map(p=>`<div class="it"><div class="x"><b>${esc(p.name)}</b><small>Active again since ${nice(p.reactivated)}</small></div></div>`).join('')}</div>`:''}
+    <p class="muted" style="margin:8px 0 0;font-size:12.5px">Six months in a row with no ministry counts as inactive. Change a publisher's Status on their page when the elders agree.</p></div>`;
+}
+
+/* ================= v36: group summaries for the group overseers ================= */
+function groupSigns(g, m){
+  const ps=activePubs().filter(p=>(p.group||'')===g), m1=prevMonth(m), yr=addDays(TODAY(),-365);
+  const s={n:ps.length, in:0, shared:0, st:0, notIn:[], none:[], twoPlus:[], near6:[], newBap:[]};
+  ps.forEach(p=>{ const r=rep(m,p.id);
+    if(!r||!r.got){ s.notIn.push(p); } else { s.in++; if(r.shared){ s.shared++; s.st+=n(r.studies); } }
+    const k=monthsNoShare(p,m);
+    if(k>=4 && k<6) s.near6.push(p); else if(k>=2) s.twoPlus.push(p); else if(r&&r.got&&!r.shared) s.none.push(p);
+    if(p.baptized && p.baptized>=yr) s.newBap.push(p);
+  });
+  return s;
+}
+function groupSummaryMsg(g, m){
+  const d=SEC(), s=groupSigns(g,m), gi=groupInfo(g), nm=firstName(nameOnly(gi.overseer||'')), names=a=>a.map(p=>p.name).join(', ');
+  const prev=((d.grpFlags||{})[prevMonth(m)]||{})[g]||[], better=prev.map(id=>d.pubs.find(p=>p.id===id)).filter(p=>p && rep(m,p.id) && rep(m,p.id).shared);
+  let t=`Good ${timeOfDay()}${nm?' '+nm:''}! Here is ${g}'s report summary for ${monthName(m)}.\n\n${s.in} of ${s.n} reported. ${s.shared} shared in the ministry, with ${s.st} Bible stud${s.st===1?'y':'ies'}. Thank you for your hard work with the group.`;
+  if(better.length) t+=`\n\nGood news: ${names(better)} shared in the ministry this month after we spoke about them last month. Please commend them warmly.`;
+  const lines=[];
+  if(s.notIn.length) lines.push(`Report not in yet: ${names(s.notIn)}`);
+  if(s.none.length) lines.push(`Did not share this month: ${names(s.none)}`);
+  if(s.twoPlus.length) lines.push(`No ministry for 2 or more months: ${names(s.twoPlus)}`);
+  if(s.near6.length) lines.push(`Close to 6 months with no ministry: ${names(s.near6)}`);
+  if(s.newBap.length) lines.push(`Newly baptized (first year): ${names(s.newBap)}`);
+  if(lines.length) t+=`\n\nPublishers who may need your loving help:\n${lines.map(l=>'• '+l).join('\n')}\n\nCould you kindly visit them, or invite them to work along with you in the ministry? A warm word can mean a lot.`;
+  else t+=`\n\nEveryone in the group reported and shared. Please thank them for their good work.`;
+  return t+'\n\nWith Christian love 🙏';
+}
+function groupSumSheet(){
+  const d=SEC(), m=secMonth||secMonthDefault(), groups=groupsList(), sent=((d.grpSent||{})[m])||{};
+  openSheet(`<h3>Group summaries · ${monthName(m)}</h3>
+    <p class="muted" style="margin:0 0 10px">Each group overseer gets only his own group's summary, with names of those who may need help. Send it after the month's reports are in.</p>
+    <div class="list">${groups.map(g=>{ const gi=groupInfo(g), op=letterWho(gi.overseer||''), ph=(op&&op.phone)||'', s=groupSigns(g,m), need=s.notIn.length+s.none.length+s.twoPlus.length+s.near6.length+s.newBap.length;
+      return `<div class="it" style="flex-wrap:wrap"><div class="x"><b>${esc(g)}</b><small>${esc(gi.overseer||'No overseer set')} · ${s.in}/${s.n} reported · ${need} to help${sent[g]?' · sent '+nice(sent[g])+' ✓':''}</small></div>
+        <div class="btns" style="width:100%;margin-top:6px"><a class="btn sm wa" style="flex:1" target="_blank" rel="noopener" data-a="x36gsent" data-k="${esc(g)}" href="https://wa.me/${phoneIntl(ph)}?text=${encodeURIComponent(groupSummaryMsg(g,m))}">${sent[g]?'Send again':'Send to '+esc(firstName(nameOnly(gi.overseer||'overseer')))}</a><button class="btn sm ghost" style="flex:1" data-a="x36gview" data-k="${esc(g)}">See message</button></div></div>`; }).join('')}</div>
+    <p class="muted" style="font-size:12.5px;margin:8px 0 0">Set each group's overseer under Publishers → Field service groups so the message goes straight to him.</p>
+    <button class="btn ghost" data-a="close" style="margin-top:10px">Close</button>`, null);
+}
+
+/* ================= v36: end of service year checklist ================= */
+const SYC_ITEMS=[['s21','Print or save last year\'s S-21 cards for everyone','printsheet','s21'],['s88','Print or save last year\'s S-88 attendance record','printsheet','s88'],['pio','Check each regular pioneer\'s hours for the year','sectab','reports'],['inact','Review the inactive list and plan visits','sectab','pubs'],['groups','Check field service groups for the new year','sectab','pubs'],['moved','Mark anyone who moved away, and send their cards','sectab','pubs'],['branch','Check letters from the branch about the new service year','sectab','letters'],['backup','Make a backup after everything is done','backup','']];
+function sycShow(){ const t=TODAY(), mm=t.slice(5,7), dd=n(t.slice(8)); return mm==='09'||(mm==='08'&&dd>=20)||(mm==='10'&&dd<=31); }
+function sycCard(force){
+  if(!force && !sycShow()) return '';
+  const d=SEC(), sy=n(TODAY().slice(5,7))>=9?curSY()-1:curSY(), done=((d.syc||{})[sy])||{}, nd=SYC_ITEMS.filter(([k])=>done[k]).length;
+  if(!force && nd===SYC_ITEMS.length) return '';
+  return `<div class="card"><h2>End of the ${sy} service year<span class="sp"></span><span class="chip">${nd}/${SYC_ITEMS.length}</span></h2>
+    <div class="list">${SYC_ITEMS.map(([k,l,a,ak])=>`<div class="it"><input type="checkbox" data-a="x36syc" data-k="${k}" data-y="${sy}" ${done[k]?'checked':''} style="width:22px;height:22px;margin-top:2px"><div class="x"><b style="${done[k]?'text-decoration:line-through;opacity:.6':''}">${esc(l)}</b></div><button class="btn sm ghost" data-a="${a}" ${ak?`data-k="${ak}"`:''}>Open</button></div>`).join('')}</div>
+    <p class="muted" style="font-size:12.5px;margin:8px 0 0">Shows from late August to October. Also on Duties &amp; tasks all year.</p></div>`;
+}
+
+document.addEventListener('click', e=>{
+  const t=e.target.closest('[data-a]'); if(!t || !/^x36/.test(t.dataset.a)) return;
+  const a=t.dataset.a, id=t.dataset.id, d=SEC();
+  if(a==='x36pioset') pioSetSheet();
+  if(a==='x36shepplan') shepPlanSheet(id);
+  if(a==='x36shepall'){ d._shepAll=1; render(); }
+  if(a==='x36shepdone'){ const p=d.pubs.find(x=>x.id===id); if(!p) return; p.visits=p.visits||[]; p.visits.push({id:uid(), date:TODAY(), by:(p.shepPlan&&p.shepPlan.elder)||'', note:'Shepherding call'}); delete p.shepPlan; save(); render(); toast('Visit saved. Next reminder in a year'); }
+  if(a==='x36reac'){ const p=d.pubs.find(x=>x.id===id); if(!p) return; p.status='active'; p.reactivated=TODAY(); save(); render(); toast(firstName(p.name)+' is active again 🎉'); }
+  if(a==='x36gview'){ const g=t.dataset.k, m=secMonth||secMonthDefault(); openSheet(`<h3>${esc(g)}</h3><div style="white-space:pre-wrap;font-size:14.5px">${esc(groupSummaryMsg(g,m))}</div><div class="btns" style="margin-top:12px"><button class="btn ghost" style="flex:1" data-a="x36gback">Back</button></div>`, null); }
+  if(a==='x36gback') groupSumSheet();
+  if(a==='x36gsent'){ const g=t.dataset.k, m=secMonth||secMonthDefault(); d.grpSent=d.grpSent||{}; (d.grpSent[m]=d.grpSent[m]||{})[g]=TODAY();
+    const s=groupSigns(g,m); d.grpFlags=d.grpFlags||{}; (d.grpFlags[m]=d.grpFlags[m]||{})[g]=[...s.none,...s.twoPlus,...s.near6].map(p=>p.id); save(); setTimeout(groupSumSheet,500); }
+  if(a==='x36syc'){ const y=t.dataset.y; d.syc=d.syc||{}; (d.syc[y]=d.syc[y]||{})[t.dataset.k]=t.checked; save(); setTimeout(render,50); }
+  if(a==='x36gsum') groupSumSheet();
+});
 </script>
 </body>
 </html>
