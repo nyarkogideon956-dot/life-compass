@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0C3C78">
+<meta name="robots" content="noindex">
+<title>Shepherding planning</title>
+<link rel="icon" href="icon.svg">
+<style>
+:root{--navy:#0C3C78;--blue:#1565C0;--sky:#E8F0FB;--sky2:#D3E3F8;--bg:#F4F7FC;--ink:#0E2240;--muted:#5B6B82;--ok:#1E8E5A;--warn:#D9822B;--bad:#C62828;--line:#E2E8F2}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--navy);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px}
+header img{width:30px;height:30px;border-radius:8px;background:#fff}
+header b{font-size:18px;flex:1}
+#live{font-size:12.5px;opacity:.9;text-align:right}
+main{max-width:640px;margin:0 auto;padding:12px 12px 90px}
+.card{background:#fff;border-radius:16px;padding:14px;margin:0 0 12px;box-shadow:0 1px 3px rgba(12,60,120,.08)}
+h2{font-size:15px;margin:0 0 8px;color:var(--navy);display:flex;align-items:center;gap:8px}
+h2 .n{background:var(--sky);border-radius:20px;padding:1px 9px;font-size:13px}
+.muted{color:var(--muted)} small{font-size:13px}
+.it{border-top:1px solid var(--line);padding:10px 0;display:flex;gap:10px;align-items:flex-start}
+.it:first-of-type{border-top:0}
+.dot{width:10px;height:10px;border-radius:50%;margin-top:7px;flex:none;background:var(--warn)}
+.dot.green{background:var(--ok)} .dot.red{background:var(--bad)}
+.x{flex:1;min-width:0} .x b{display:block} .x small{display:block;color:var(--muted)}
+.chip{display:inline-block;background:var(--sky);color:var(--navy);border-radius:20px;padding:0 8px;font-size:12px;font-weight:600;margin-left:4px;vertical-align:1px}
+.btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+button,.btn{border:0;border-radius:12px;padding:11px 14px;font:600 15px system-ui,sans-serif;background:var(--navy);color:#fff;cursor:pointer}
+button.ghost{background:var(--sky);color:var(--navy)} button.sm{padding:7px 11px;font-size:13.5px;border-radius:10px} button.bad{background:#FDECEC;color:var(--bad)}
+button:disabled{opacity:.5}
+.fab{position:fixed;right:16px;bottom:18px;z-index:6;box-shadow:0 4px 14px rgba(12,60,120,.3);padding:14px 18px;border-radius:30px}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+input,select{width:100%;border:1px solid var(--sky2);border-radius:10px;padding:10px;font:16px system-ui,sans-serif;background:#fff;color:var(--ink)}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.chips span{background:var(--sky);border-radius:20px;padding:4px 10px;font-size:14px;cursor:pointer}
+.err{color:var(--bad);font-size:13.5px;margin-top:6px}
+#sheet .bg{position:fixed;inset:0;background:rgba(14,34,64,.45);z-index:10;display:flex;align-items:flex-end;justify-content:center}
+#sheet .sh{background:#fff;width:100%;max-width:640px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px 24px}
+#sheet h3{margin:0 0 6px;color:var(--navy)}
+.empty{color:var(--muted);text-align:center;padding:18px 6px}
+#toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 14px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:20;max-width:90vw}
+#toast.on{opacity:1}
+</style>
+</head>
+<body>
+<header><img src="icon.svg" alt=""><b id="ttl">Shepherding planning</b><div id="live">Connecting…</div></header>
+<main id="main"><div class="card"><div class="empty">Opening the planning page…</div></div></main>
+<button class="fab" id="fab" hidden>+ Plan a visit</button>
+<div id="sheet"></div><div id="toast"></div>
+<script>
+/* Shared shepherding planning page for Life Compass.
+   Only what is on the shared schedule is here: who, when, the two brothers, the purpose and done.
+   The secretary's private notes and the brothers' reports never leave his app.
+   Everything is locked with a key that exists only in the link (after the #), so Firebase only stores scrambled text. */
+const LATE_DAYS=14;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const b64d=s=>{ s=String(s).replace(/-/g,'+').replace(/\./g,'/'); while(s.length%4) s+='='; const t=atob(s), u=new Uint8Array(t.length); for(let i=0;i<t.length;i++) u[i]=t.charCodeAt(i); return u; };
+const b64e=u=>{ let s=''; for(let i=0;i<u.length;i+=0x8000) s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000)); return btoa(s); };
+const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const TODAY=()=>ymd(new Date());
+const parse=s=>{ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
+const nice=s=>s?parse(s).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}):'';
+const daysSince=s=>s?Math.round((parse(TODAY())-parse(s))/864e5):0;
+const nameKey=s=>String(s||'').trim().replace(/^(bro|brother|sis|sister)\.?\s+/i,'').toLowerCase().replace(/\s+/g,' ');
+const firstName=s=>String(s||'').trim().split(/\s+/)[0]||'';
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+function toast(t){ const e=$('toast'); e.textContent=t; e.classList.add('on'); clearTimeout(toast.t); toast.t=setTimeout(()=>e.classList.remove('on'),2600); }
+function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=()=>rej(new Error('load')); document.head.appendChild(s); }); }
+
+let ROOM, KEY, CFG, db, META={names:[],bros:[],cong:''}, V={}, ME=localStorage.getItem('lcplan.name')||'', lastBy='', ready=false, showAllDone=false;
+function fail(msg){ $('main').innerHTML=`<div class="card"><div class="empty">${msg}</div></div>`; $('live').textContent=''; }
+async function enc(obj){ const iv=crypto.getRandomValues(new Uint8Array(12)); const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},KEY,new TextEncoder().encode(JSON.stringify(obj)))); const all=new Uint8Array(12+ct.length); all.set(iv); all.set(ct,12); return b64e(all); }
+async function dec(s){ const all=b64d(s.replace(/\+/g,'-').replace(/\//g,'.')); return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:all.slice(0,12)},KEY,all.slice(12)))); }
+
+async function start(){
+  const h=location.hash.slice(1).split('.');
+  if(h.length<3){ fail('This link is not complete. Ask the secretary to send it again.'); return; }
+  try{ ROOM=h[0]; const c=JSON.parse(new TextDecoder().decode(b64d(h.slice(2).join('.')))); CFG={apiKey:c.a, authDomain:c.d, projectId:c.p, appId:c.i};
+    KEY=await crypto.subtle.importKey('raw', b64d(h[1]), 'AES-GCM', false, ['encrypt','decrypt']); }
+  catch(e){ fail('This link could not be read. Ask the secretary to send it again.'); return; }
+  history.replaceState(null,'',location.pathname+location.hash);
+  try{ const v='10.12.2', b='https://www.gstatic.com/firebasejs/'+v+'/';
+    await loadScript(b+'firebase-app-compat.js'); await loadScript(b+'firebase-auth-compat.js'); await loadScript(b+'firebase-firestore-compat.js'); }
+  catch(e){ fail('No internet. Connect and open the link again.'); return; }
+  const app=firebase.initializeApp(CFG,'plan'), au=app.auth();     /* its own sign-in, separate from Life Compass */
+  try{ if(!au.currentUser) await new Promise(r=>{ const u=au.onAuthStateChanged(()=>{ u(); r(); }); setTimeout(r,4000); });
+    if(!au.currentUser) await au.signInAnonymously(); }
+  catch(e){ fail(/admin-restricted|operation-not-allowed/.test(String(e.code||e.message))?'The secretary needs to turn on <b>Anonymous</b> sign-in in Firebase (Authentication → Sign-in method). Then open the link again.':'Could not connect. Check your internet and open the link again.'); return; }
+  db=app.firestore(); const room=db.collection('plan').doc(ROOM);
+  room.onSnapshot(async s=>{ if(!s.exists){ if(!ready) fail('This planning page has been closed by the secretary.'); return; } try{ META=await dec(s.data().m); }catch(e){ fail('This link does not match the planning page. Ask the secretary for the newest link.'); return; } render(); },
+    e=>{ fail(/permission/i.test(String(e.code||e.message))?'The secretary needs to add the planning rule in Firebase (Firestore → Rules). Then open the link again.':'Lost connection. It will come back when you are online.'); });
+  room.collection('v').onSnapshot(async q=>{
+    const before=ready; let changedBy='';
+    for(const ch of q.docChanges()){ const d=ch.doc.data(), id=ch.doc.id;
+      if(ch.type==='removed' || d.del){ delete V[id]; continue; }
+      try{ const v=await dec(d.d); v.id=id; v.at=d.at||0; V[id]=v; if(before && !ch.doc.metadata.hasPendingWrites && d.by && d.by!==ME) changedBy=d.by; }catch(e){} }
+    ready=true; $('live').innerHTML='● Live'+(changedBy?'<br><small>'+esc(firstName(changedBy))+' just changed something</small>':'');
+    if(changedBy) toast(firstName(changedBy)+' updated the schedule');
+    render(); if(!ME) askName();
+  }, ()=>{ $('live').textContent='Offline…'; });
+}
+function askName(){
+  openSheet(`<h3>Welcome</h3><p class="muted" style="margin:0 0 6px">Type your name, so the others can see who made each change.</p>
+    <label>Your name</label><input id="meName" list="brosL" placeholder="Brother …"><datalist id="brosL">${META.bros.map(b=>`<option>${esc(b[0])}</option>`).join('')}</datalist>
+    <div class="btns"><button style="flex:1" id="meOk">Continue</button></div>`);
+  $('meOk').onclick=()=>{ const v=$('meName').value.trim(); if(!v){ $('meName').focus(); return; } ME=v; localStorage.setItem('lcplan.name',v); closeSheet(); render(); };
+}
+
+/* ---------- the schedule ---------- */
+const root=v=>v.followOf||v.id;
+const chain=v=>Object.values(V).filter(x=>root(x)===root(v)).sort((a,b)=>(a.seq||1)-(b.seq||1));
+const whoOf=v=>{ const ns=v.names||[]; return ns.length>1?(v.fam||'Family')+' ('+ns.map(firstName).join(', ')+')':(ns[0]||''); };
+const pair=v=>[v.b1,v.b2].filter(Boolean).join(' & ');
+const late=v=>!v.done && !v.resched && v.date && daysSince(v.date)>=LATE_DAYS;
+function row(v){
+  const st=v.done?['green','Done '+nice(v.done)]:v.resched?['red','Needs a new date']:late(v)?['red','Not done yet · '+daysSince(v.date)+' days since '+nice(v.date)]:['', v.date?nice(v.date)+(v.time?' · '+esc(v.time):''):'Date not set'];
+  const ch=chain(v), next=ch.filter(x=>(x.seq||1)>(v.seq||1));
+  return `<div class="it"><span class="dot ${st[0]}"></span><div class="x"><b>${esc(whoOf(v))}${(v.seq||1)>1?`<span class="chip">Visit ${v.seq}</span>`:''}</b>
+    <small>${st[1]}</small><small>${esc(pair(v))}${v.purpose?' · '+esc(v.purpose):''}</small>
+    ${ch.length>1&&(v.seq||1)===Math.max(...ch.map(x=>x.seq||1))?`<small>Earlier: ${ch.filter(x=>x!==v).map(x=>'visit '+(x.seq||1)+(x.done?' done '+nice(x.done):' not done')).join(' · ')}</small>`:''}
+    <div class="btns">${v.done?(next.length?'':`<button class="sm" data-a="follow" data-id="${v.id}">Plan a follow-up</button>`):`<button class="sm" data-a="done" data-id="${v.id}">Done ✓</button>`}<button class="sm ghost" data-a="edit" data-id="${v.id}">Change</button></div></div></div>`;
+}
+function render(){
+  if(!ready) return;
+  $('ttl').textContent='Shepherding planning'+(META.cong?' · '+META.cong:'');
+  $('fab').hidden=false;
+  const all=Object.values(V), open=all.filter(v=>!v.done), done=all.filter(v=>v.done).sort((a,b)=>(b.done||'').localeCompare(a.done||''));
+  const lt=open.filter(v=>late(v)||v.resched), up=open.filter(v=>!late(v)&&!v.resched).sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999'));
+  let h='';
+  if(lt.length) h+=`<div class="card"><h2>Needs attention <span class="n">${lt.length}</span></h2><p class="muted" style="margin:0 0 4px;font-size:13.5px">Not done ${LATE_DAYS} days after the date, or the brothers asked for a new date.</p>${lt.map(row).join('')}</div>`;
+  h+=`<div class="card"><h2>Planned <span class="n">${up.length}</span></h2>${up.length?up.map(row).join(''):'<div class="empty">No visits planned yet. Tap <b>+ Plan a visit</b>.</div>'}</div>`;
+  if(done.length) h+=`<div class="card"><h2>Done <span class="n">${done.length}</span></h2>${done.slice(0,showAllDone?999:8).map(row).join('')}${done.length>8&&!showAllDone?'<div class="btns"><button class="sm ghost" data-a="alldone" style="flex:1">Show all</button></div>':''}</div>`;
+  h+=`<p class="muted" style="font-size:12.5px;text-align:center;margin:4px 8px">Changes show on every phone with this page open, and in the secretary's app. Private notes and visit reports are not on this page.${ME?' · You are <b>'+esc(ME)+'</b> (<a href="#" data-a="rename">change</a>)':''}</p>`;
+  $('main').innerHTML=h;
+}
+
+/* ---------- planning a visit ---------- */
+let E=null;
+function editSheet(v, followOf){
+  E=v?JSON.parse(JSON.stringify(v)):{id:uid(), names:[], fam:'', date:'', time:'', b1:'', b2:'', purpose:'', seq:1};
+  if(followOf){ const p=V[followOf], ch=chain(p); Object.assign(E,{names:[...(p.names||[])], fam:p.fam||'', b1:p.b1, b2:p.b2, purpose:'Follow-up visit', followOf:root(p), seq:Math.max(...ch.map(x=>x.seq||1))+1}); }
+  draw();
+  function draw(){
+    openSheet(`<h3>${v?'Change visit':followOf?'Plan a follow-up (visit '+E.seq+')':'Plan a visit'}</h3>
+      <label>Who is visited (add one person, or each person in a family)</label>
+      <div class="f2" style="grid-template-columns:1fr auto"><input id="eAdd" list="namesL" placeholder="Name"><button class="ghost" id="eAddB" type="button">Add</button></div>
+      <datalist id="namesL">${META.names.map(n=>`<option>${esc(n)}</option>`).join('')}</datalist>
+      <div class="chips">${E.names.map((n,i)=>`<span data-i="${i}">${esc(n)} ✕</span>`).join('')}</div>
+      ${E.names.length>1?`<label>Family name</label><input id="eFam" value="${esc(E.fam||'')}" placeholder="Mensah family">`:''}
+      <div class="f2"><div><label>Date</label><input type="date" id="eDate" value="${esc(E.date||'')}"></div><div><label>Time (optional)</label><input id="eTime" value="${esc(E.time||'')}" placeholder="4 pm"></div></div>
+      <div class="f2"><div><label>Brother 1</label><input id="eB1" list="brosL" value="${esc(E.b1||'')}"></div><div><label>Brother 2</label><input id="eB2" list="brosL" value="${esc(E.b2||'')}"></div></div>
+      <datalist id="brosL">${META.bros.map(b=>`<option value="${esc(b[0])}">${b[1]==='e'?'Elder':'Ministerial servant'}</option>`).join('')}</datalist>
+      <label>Short purpose</label><input id="ePurp" value="${esc(E.purpose||'')}" list="purpL" maxlength="60" placeholder="Encouragement visit">
+      <datalist id="purpL"><option>Encouragement visit</option><option>Follow-up visit</option><option>Visit one year after baptism</option><option>Family encouragement visit</option><option>Comfort and support</option><option>Help and encouragement in the ministry</option></datalist>
+      ${v&&v.done?`<label>Done on</label><input type="date" id="eDone" value="${esc(v.done)}">`:''}
+      <div id="eErr" class="err"></div>
+      <div class="btns"><button class="ghost" style="flex:1" data-a="close">Cancel</button><button style="flex:1" id="eSave">Save</button></div>
+      ${v?`<div class="btns"><button class="sm bad" style="flex:1" id="eDel">Delete this visit</button></div>`:''}`);
+    const keep=()=>{ const g=i=>$(i)?$(i).value.trim():null; [['eFam','fam'],['eDate','date'],['eTime','time'],['eB1','b1'],['eB2','b2'],['ePurp','purpose']].forEach(([i,k])=>{ const x=g(i); if(x!=null) E[k]=x; }); if($('eDone')) E.done=$('eDone').value; };
+    $('eAddB').onclick=()=>{ keep(); const n=$('eAdd').value.trim(); if(!n) return; const m=META.names.find(x=>nameKey(x)===nameKey(n))||n; if(!E.names.some(x=>nameKey(x)===nameKey(m))) E.names.push(m); draw(); setTimeout(()=>{ const f=$('eAdd'); if(f) f.focus(); },50); };
+    $('eAdd').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); $('eAddB').click(); } };
+    document.querySelectorAll('.chips span').forEach(s=>s.onclick=()=>{ keep(); E.names.splice(+s.dataset.i,1); draw(); });
+    $('eSave').onclick=async()=>{ keep(); const err=t=>{ $('eErr').textContent=t; };
+      if(!E.names.length) return err('Add who is being visited');
+      if(!E.b1 || !E.b2) return err('Choose the two brothers');
+      if(nameKey(E.b1)===nameKey(E.b2)) return err('Choose two different brothers');
+      const role=n=>(META.bros.find(b=>nameKey(b[0])===nameKey(n))||[])[1]||'';
+      const r1=role(E.b1), r2=role(E.b2);
+      if(META.bros.length){ for(const [n,r] of [[E.b1,r1],[E.b2,r2]]) if(!r) return err(n+' is not on the list of elders and ministerial servants'); if(r1!=='e' && r2!=='e') return err('At least one of the two must be an elder'); }
+      if(!E.done) delete E.done; if(v && v.date!==E.date) delete E.resched;
+      $('eSave').disabled=true; await put(E); closeSheet(); toast('Saved'); };
+    if($('eDel')) $('eDel').onclick=async()=>{ if(!confirm('Delete this visit for everyone?')) return; await del(v.id); closeSheet(); toast('Deleted'); };
+  }
+}
+async function put(v){
+  const clean={...v}; delete clean.at; delete clean.id; if(clean.done==null) delete clean.done; if(clean.done) delete clean.resched;
+  const at=Date.now(); V[v.id]={...clean, id:v.id, at}; render();
+  try{ await db.collection('plan').doc(ROOM).collection('v').doc(v.id).set({d:await enc(clean), at, by:ME||'', del:0}); }catch(e){ toast('Not saved: no connection'); }
+}
+async function del(id){ delete V[id]; render(); try{ await db.collection('plan').doc(ROOM).collection('v').doc(id).set({d:'', at:Date.now(), by:ME||'', del:1}); }catch(e){ toast('Not deleted: no connection'); } }
+
+function openSheet(h){ $('sheet').innerHTML=`<div class="bg" data-a="closebg"><div class="sh">${h}</div></div>`; }
+function closeSheet(){ $('sheet').innerHTML=''; }
+document.addEventListener('click', async e=>{
+  const t=e.target.closest('[data-a]'); if(!t) return; const a=t.dataset.a, id=t.dataset.id;
+  if(a==='closebg' && e.target!==t) return;
+  if(a==='close'||a==='closebg') closeSheet();
+  if(a==='edit') editSheet(V[id]);
+  if(a==='follow') editSheet(null, id);
+  if(a==='done'){ const v=V[id]; if(!v) return; const d=prompt('Date of the visit (YYYY-MM-DD)', v.date&&v.date<=TODAY()?v.date:TODAY()); if(!d) return; if(!/^\d{4}-\d\d-\d\d$/.test(d)){ toast('Use the form 2026-11-14'); return; } await put({...v, done:d}); toast('Marked done'); }
+  if(a==='alldone'){ showAllDone=true; render(); }
+  if(a==='rename'){ e.preventDefault(); askName(); }
+});
+$('fab').onclick=()=>{ if(!ME){ askName(); return; } editSheet(null); };
+start();
+</script>
+</body>
+</html>
