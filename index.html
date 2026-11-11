@@ -242,7 +242,7 @@ body.formmode main{padding-bottom:40px}
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 39;
+const APP_VERSION = 40;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -455,7 +455,7 @@ function load(){
 }
 let S = load();
 (function tidy(){ try{ const keep=addDays(ymd(new Date()),-14); Object.keys(S.fired||{}).forEach(k=>{ if(k<keep) delete S.fired[k]; }); }catch(e){} })();
-function save(quiet){ if(!quiet && S && S.settings) S.settings.lastChange=Date.now(); try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast('Could not save — storage full?'); } scheduleNativeSoon(); if(!quiet && typeof asSoon==='function' && typeof AS!=='undefined' && AS && !AS.merging) try{ asSoon(); }catch(e){} }
+function save(quiet){ if(!quiet && S && S.settings) S.settings.lastChange=Date.now(); try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast('Could not save — storage full?'); } scheduleNativeSoon(); if(!quiet && typeof asSoon==='function' && typeof AS!=='undefined' && AS && !AS.merging) try{ asSoon(); }catch(e){} if(typeof planSoon==='function' && typeof PL!=='undefined') try{ planSoon(); }catch(e){} }
 
 /* ---------- helpers ---------- */
 function ymd(d){ const z=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate()); }
@@ -815,6 +815,7 @@ function dueOn(date){
   if(secOn('secretary') && S.sec) (S.sec.branch||[]).filter(x=>!x.done && x.due && (date===x.due || date===addDays(x.due,-n(x.remind||0)) || (date===TODAY() && x.due<date))).forEach(x=>out.push({key:'branch:'+x.id+':'+date, time:'09:00', title:(x.due<date?'Overdue reply: ':date===x.due?'Reply due today: ':'Reply coming up: ')+x.subject+' (from '+fromOf(x)+')', kind:'duty', id:x.id, created:Date.now(), quietMiss:true}));
   if(secOn('secretary') && S.sec) (S.sec.duties||[]).filter(x=>x.due && (x.due===date || (date===TODAY() && x.due<date))).forEach(x=>out.push({key:'duty:'+x.id+':'+x.due, time:'09:00', title:(x.due<date?'Overdue: ':'Due today: ')+x.name, kind:'duty', id:x.id, created:Date.now(), quietMiss:true}));
   if(secOn('secretary') && S.sec && (S.sec.pubs||[]).length && date.slice(8)==='01') out.push({key:'links:'+date, time:'09:00', title:'Send the report links to the group overseers, and the attendance link', kind:'links', created:Date.now(), quietMiss:true});
+  try{ shepAlarms(date, out); }catch(e){}
   if(AL().diaryOn) out.push({key:'diary', time:AL().diaryTime, title:'Write about your day', kind:'diary', sound:AL().diarySound||'', created:Date.now(), quietMiss:true});
   return out.sort((a,b)=>mins(a.time)-mins(b.time));
 }
@@ -888,6 +889,7 @@ function ring(item){
     : item.kind==='followup'?`<button class="btn" data-al="people">See who to message</button>`
     : item.kind==='links'?`<button class="btn" data-al="links">Send the links now</button>`
     : item.kind==='duty'?`<button class="btn" data-al="sec">Open Secretary</button>`
+    : item.kind==='shep'?`<button class="btn" data-al="shep">Open the shepherding schedule</button>`
     : item.kind==='event'?`<button class="btn" data-al="invite">Invite people now</button>`
     : item.kind==='diary'?`<button class="btn" data-al="diary">Write now</button>`
     : item.kind==='study'?`<button class="btn" data-al="studied">OK, I'm starting</button>`
@@ -907,6 +909,7 @@ document.addEventListener('click', e=>{
   if(a==='taken'){ const m=S.medTaken[TODAY()]||(S.medTaken[TODAY()]={}); m[it.id+':'+it.slot]=true; save(); toast('Marked as taken'); }
   if(a==='done'){ const x=S.todos.find(t=>t.id===it.id); if(x){ x.done=true; x.doneDate=TODAY(); save(); } toast('Done'); }
   if(a==='sec'){ tab='sec'; secTab='duties'; }
+  if(a==='shep'){ tab='sec'; secTab='pubs'; }
   if(a==='invite'){ const evId=it.id; closeAlarm(); inviteSheet(evId); return; }
   if(a==='people'){ tab='others'; peopleTab='met'; peopleFilter='due'; }
   if(a==='links'){ closeAlarm(); tab='sec'; secTab='reports'; render(); linksSheet(); return; }
@@ -2094,6 +2097,7 @@ function secGlance(){
     <button class="btn ghost" data-a="printsheet" data-k="s21" style="margin-top:8px">Send all S-21 cards (PDF or ZIP)</button></div>`;
   html = `<div class="card"><h2>Monthly report · ${monthName(m)}</h2><p class="muted" style="margin:0 0 10px">Totals, attendance, pioneers, missing reports, groups and remittance in one PDF, with a short summary to send on WhatsApp.</p>
     <button class="btn" data-a="monthreport" data-m="${m}">Make the monthly report</button></div>` + html;
+  { const sa=shepAttention(), sn=sa.late.length+sa.fu.length+sa.resched.length; if(sn) html = `<div class="banner"><span style="flex:1"><b>Shepherding visits need you</b>: ${[...sa.fu,...sa.late,...sa.resched].slice(0,3).map(v=>esc(shepWho(v))).join(', ')}</span><button class="btn sm" data-a="sectab" data-k="pubs">Open</button></div>` + html; }
   { const sd=shepDue().due.filter(x=>!x.plan); if(sd.length) html = `<div class="banner"><span style="flex:1"><b>${sd.length} shepherding call${sd.length===1?'':'s'} due</b>: ${sd.slice(0,3).map(x=>esc(x.p.name)).join(', ')}</span><button class="btn sm" data-a="sectab" data-k="pubs">Open</button></div>` + html;
     const pb=pioRows().filter(r=>r.st==='red'); if(pb.length) html = `<div class="banner"><span style="flex:1"><b>Pioneer${pb.length===1?'':'s'} behind</b>: ${pb.slice(0,3).map(r=>esc(r.p.name)).join(', ')}</span><button class="btn sm" data-a="sectab" data-k="reports">Open</button></div>` + html;
     if(sycShow() && sycCard(false)) html = `<div class="banner"><span style="flex:1"><b>End of service year checklist</b></span><button class="btn sm" data-a="sectab" data-k="duties">Open</button></div>` + html;
@@ -5242,7 +5246,7 @@ function applyCodes(codes){
   codes.forEach(c=>{
     if(c.t==='v'){ const v=shepList().find(x=>x.id===c.id); if(!v) return;
       if(c.st===1){ shepFinish(v, c.date||TODAY(), c.by, c.rep); nv++; }
-      else if(c.st===2){ v.resched=(c.by?firstName(nameOnly(c.by))+': ':'')+(c.rep||'needs a new date'); nv++; } return; }
+      else if(c.st===2){ v.resched=(c.by?firstName(nameOnly(c.by))+': ':'')+(c.rep||'needs a new date'); shepTouch(v); nv++; } return; }
     if(c.t==='r'){ d.reports[c.m]=d.reports[c.m]||{};
       c.r.forEach(([id,s,h,st,a,rm])=>{ const p=findPub(id,c.g); if(!p) return; const old=d.reports[c.m][p.id]||{};
         d.reports[c.m][p.id]={got:TODAY(), shared:!!s, aux:!!a&&!isPioneer(p), hours:s&&h!=null?n(h):null, studies:s?n(st):0, remarks:(rm||'').trim()||old.remarks||''}; nr++; });
@@ -5617,6 +5621,7 @@ function handleNativeAction(a){
   } else if(ex.kind==='diary'){ tab='today'; setTimeout(()=>{ const b=document.getElementById('diaryBox'); if(b){ b.scrollIntoView({block:'center'}); b.focus(); } }, 300); }
   else if(ex.kind==='study'){ tab='faith'; faithTab='study'; }
   else if(ex.kind==='duty'){ tab='sec'; secTab='duties'; }
+  else if(ex.kind==='shep'){ tab='sec'; secTab='pubs'; }
   else if(ex.kind==='event'){ tab='others'; peopleTab='invite'; }
   else if(ex.kind==='followup'){ tab='others'; peopleTab='met'; peopleFilter='due'; }
   else if(ex.kind==='links'){ tab='sec'; secTab='reports'; setTimeout(linksSheet,300); }
@@ -6150,6 +6155,13 @@ function groupSummaryMsg(g, m){
   const prev=((d.grpFlags||{})[prevMonth(m)]||{})[g]||[], better=prev.map(id=>d.pubs.find(p=>p.id===id)).filter(p=>p && rep(m,p.id) && rep(m,p.id).shared);
   let t=`Good ${timeOfDay()}${nm?' '+nm:''}! Here is ${g}'s report summary for ${monthName(m)}.\n\n${s.in} of ${s.n} reported. ${s.shared} shared in the ministry, with ${s.st} Bible stud${s.st===1?'y':'ies'}. Thank you for your hard work with the group.`;
   if(better.length) t+=`\n\nGood news: ${names(better)} shared in the ministry this month after we spoke about them last month. Please commend them warmly.`;
+  { const rows=pubsInGroup(g).filter(p=>p.status!=='inactive').map(p=>({p, r:rep(m,p.id)})).filter(x=>x.r && x.r.shared);
+    const yes=rows.filter(x=>n(x.r.studies)>0).sort((a,b)=>n(b.r.studies)-n(a.r.studies)), no=rows.filter(x=>!(n(x.r.studies)>0));
+    const pio=rows.filter(x=>(isPioneer(x.p)||x.r.aux) && n(x.r.studies)<2);
+    if(rows.length){ t+=`\n\nBible studies this month:`;
+      t+= yes.length?`\n• Conducted a Bible study: ${yes.map(x=>x.p.name+' ('+n(x.r.studies)+')').join(', ')}`:`\n• Nobody in the group reported a Bible study this month.`;
+      if(no.length) t+=`\n• No Bible study this month: ${names(no.map(x=>x.p))}`;
+      if(pio.length) t+=`\n• Pioneers with fewer than 2 Bible studies: ${pio.map(x=>x.p.name+' ('+n(x.r.studies)+(x.r.aux&&!isPioneer(x.p)?', auxiliary':'')+')').join(', ')}. Maybe you could encourage them, or help them find someone to study with.`; } }
   const lines=[], sg=MY().signs;
   if(sg.notIn && s.notIn.length) lines.push(`Report not in yet: ${names(s.notIn)}`);
   if(sg.none && s.none.length) lines.push(`Did not share this month: ${names(s.none)}`);
@@ -6437,14 +6449,21 @@ const SHEP_PURPOSES=['Encouragement visit','Visit one year after baptism','Help 
 function shepSchedCard(){
   const L=shepList(), open=L.filter(v=>!v.done).sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999')), done=L.filter(v=>v.done).sort((a,b)=>(b.done||'').localeCompare(a.done||''));
   const showAll=SEC()._shepDoneAll;
-  const row=v=>{ const [lbl,col]=SHEP_STATE[shepState(v)];
-    return `<div class="it" style="flex-wrap:wrap"><span class="wdot ${col}" style="margin-top:6px"></span><div class="x" data-a="x39edit" data-id="${v.id}" style="cursor:pointer"><b>${esc(shepWhoFull(v))}</b><small>${v.date?nice(v.date)+(v.time?' · '+esc(v.time):''):'No date yet'} · ${esc(shepPair(v))}<br>${esc(v.purpose||'')}${v.purpose?' · ':''}${lbl}${v.done&&v.report?' · '+esc(v.report.slice(0,70))+(v.report.length>70?'…':''):''}${v.resched?' · '+esc(v.resched):''}</small></div>
-      ${v.done?'':`<div class="btns" style="width:100%;margin-top:6px"><button class="btn sm wa" style="flex:1" data-a="x39send" data-id="${v.id}">${v.sent&&(v.sent.b1||v.sent.b2)?'Send again':'Send to the two brothers'}</button><button class="btn sm ghost" style="flex:1" data-a="x39done" data-id="${v.id}">Done ✓</button></div>`}</div>`; };
+  const row=v=>{ let [lbl,col]=SHEP_STATE[shepState(v)]; const late=shepLate(v), fu=shepFuDue(v), last=shepIsLast(v);
+    if(late){ lbl='Not done yet · '+daysSince(v.date)+' days since the date'; col='red'; } if(fu){ lbl='Done '+nice(v.done)+' · follow-up due '+nice(v.fuDue); col='red'; }
+    else if(v.done && v.fuDue && last) lbl='Done '+nice(v.done)+' · follow-up '+nice(v.fuDue);
+    return `<div class="it" style="flex-wrap:wrap"><span class="wdot ${col}" style="margin-top:6px"></span><div class="x" data-a="x39edit" data-id="${v.id}" style="cursor:pointer"><b>${esc(shepWhoFull(v))}${(v.seq||1)>1?` <span class="chip">Visit ${v.seq}</span>`:''}</b><small>${v.date?nice(v.date)+(v.time?' · '+esc(v.time):''):'No date yet'} · ${esc(shepPair(v))}<br>${esc(v.purpose||'')}${v.purpose?' · ':''}${lbl}${v.done&&v.report?' · '+esc(v.report.slice(0,70))+(v.report.length>70?'…':''):''}${v.resched?' · '+esc(v.resched):''}</small></div>
+      ${v.done?(last?`<div class="btns" style="width:100%;margin-top:6px"><button class="btn sm ${fu?'':'ghost'}" style="flex:1" data-a="x40follow" data-id="${v.id}">Plan a follow-up</button><select class="btn sm ghost x40fuSel" style="flex:1" data-id="${v.id}"><option value="">${v.fuDue?'Change reminder':'Remind me later…'}</option>${[0,1,2,3,4,6].map(w=>`<option value="${w}">${w?w+' week'+(w===1?'':'s')+' after':'No reminder'}</option>`).join('')}</select></div>`:'')
+        :`<div class="btns" style="width:100%;margin-top:6px"><button class="btn sm ${late?'':'wa'}" style="flex:1" data-a="x39send" data-id="${v.id}">${late?'Remind the brothers':v.sent&&(v.sent.b1||v.sent.b2)?'Send again':'Send to the two brothers'}</button><button class="btn sm ghost" style="flex:1" data-a="x39done" data-id="${v.id}">Done ✓</button></div>`}</div>`; };
+  const att=shepAttention(), nAtt=att.late.length+att.fu.length+att.resched.length;
   return `<div class="card"><h2>Shepherding schedule<span class="sp"></span><button class="btn sm ghost" data-a="x39edit">${svg('plus',15)} Plan a visit</button></h2>
     <p class="muted" style="margin:0 0 8px;font-size:13px">Two brothers per visit: two elders, or an elder with a ministerial servant. Your note goes only to them, each through his own link. They tick <b>Done</b> and send it back to you.</p>
+    ${nAtt?`<div class="banner" style="margin:0 0 8px"><span>${[att.late.length?att.late.length+' not done '+SHEP_LATE+' days after the date':'', att.fu.length?att.fu.length+' follow-up'+(att.fu.length===1?'':'s')+' due':'', att.resched.length?att.resched.length+' need'+(att.resched.length===1?'s':'')+' a new date':''].filter(Boolean).join(' · ')}</span></div>`:''}
+    ${att.fu.length?`<div class="area">Follow-ups due</div><div class="list">${att.fu.map(row).join('')}</div><div class="area">Planned</div>`:''}
     ${open.length?`<div class="list">${open.map(row).join('')}</div>`:'<p class="muted" style="margin:0">No visits planned.</p>'}
-    ${done.length?`<div class="area">Done (${done.length})</div><div class="list">${done.slice(0,showAll?999:3).map(row).join('')}</div>${done.length>3&&!showAll?`<button class="btn sm ghost" data-a="x39doneall" style="margin-top:6px;width:100%">Show all ${done.length}</button>`:''}`:''}
-    <div class="btns" style="margin-top:10px"><button class="btn ghost" style="flex:1" data-a="x39pdf">Schedule PDF to share</button><button class="btn ghost" style="flex:1" data-a="x39paste">Paste a brother's reply</button></div></div>`;
+    ${done.length?`<div class="area">Done (${done.length})</div><div class="list">${done.filter(v=>!shepFuDue(v)).slice(0,showAll?999:3).map(row).join('')}</div>${done.length>3&&!showAll?`<button class="btn sm ghost" data-a="x39doneall" style="margin-top:6px;width:100%">Show all ${done.length}</button>`:''}`:''}
+    <div class="btns" style="margin-top:10px"><button class="btn ghost" style="flex:1" data-a="x39pdf">Schedule PDF to share</button><button class="btn ghost" style="flex:1" data-a="x39paste">Paste a brother's reply</button></div>
+    <button class="btn ${planRoom()?'ghost':''}" data-a="x40plan" style="margin-top:8px">${planRoom()?'✓ Live planning page with the elders':'Plan together live with the elders'}</button></div>`;
 }
 var SV=null;   // the visit being edited
 function shepVisitSheet(id, pubId){
@@ -6454,7 +6473,7 @@ function shepVisitSheet(id, pubId){
     const due=shepDue().due.find(x=>x.p.id===pubId); if(due && !SV.purpose) SV.purpose=/baptism/i.test(due.why)?'Visit one year after baptism':'Encouragement visit'; }
   const d=SEC(), bros=d.pubs.filter(p=>p.status!=='moved' && (p.elder||p.ms)).sort((a,b)=>(b.elder?1:0)-(a.elder?1:0)||a.name.localeCompare(b.name));
   const roleTxt=nm=>{ const r=shepRole(nm); return nm&&r?`<small class="muted" style="display:block;margin-top:2px">${esc(r)}</small>`:''; };
-  openSheet(`<h3>${v?'Shepherding visit':'Plan a shepherding visit'}</h3>
+  openSheet(`<h3>${v?'Shepherding visit'+((v.seq||1)>1?' · visit '+v.seq:''):SV.followOf?'Plan a follow-up · visit '+SV.seq:'Plan a shepherding visit'}</h3>
     <div class="area" style="margin-top:0">Who is visited</div>
     <div class="sndrow" style="grid-template-columns:1fr auto;margin-bottom:6px"><input type="text" id="svAdd" list="svPubs" placeholder="Publisher's name"><button class="btn ghost" data-a="x39addname" style="padding:0 14px">Add</button></div>
     <datalist id="svPubs">${d.pubs.filter(p=>p.status!=='moved').map(p=>`<option>${esc(p.name)}</option>`).join('')}</datalist>
@@ -6470,7 +6489,9 @@ function shepVisitSheet(id, pubId){
     <div class="f"><label>Short purpose (this shows on the shared schedule)</label><input type="text" id="svPurp" list="svPurpL" value="${esc(SV.purpose||'')}" placeholder="Encouragement visit" maxlength="60"></div>
     <datalist id="svPurpL">${SHEP_PURPOSES.map(x=>`<option>${esc(x)}</option>`).join('')}</datalist>
     <div class="f"><label>Your note for the two brothers (private)</label><textarea id="svNote" style="min-height:100px" placeholder="What to talk about, how they are doing, a scripture to share…">${esc(SV.note||'')}</textarea></div>
-    <p class="muted" style="font-size:12.5px;margin:-4px 0 10px">🔒 Only the two brothers see this, through their own link. It never goes on the shared PDF.</p>
+    <p class="muted" style="font-size:12.5px;margin:-4px 0 10px">🔒 Only the two brothers see this, through their own link. It never goes on the shared PDF or the planning page.</p>
+    ${shepFuWeeksField(SV.fuWeeks)}
+    ${shepChainHTML(SV)}
     ${v&&v.done?`<div class="banner" style="margin:0 0 10px"><span><b>Done ${nice(v.done)}</b>${v.by?' · reported by '+esc(v.by):''}${v.report?'<br>'+esc(v.report):''}</span></div>`:''}
     ${actions}
     ${v?`<button class="btn ghost" data-a="x39del" data-id="${v.id}" style="margin-top:8px;color:var(--bad)">Delete this visit</button>`:''}`, ()=>{
@@ -6481,7 +6502,7 @@ function shepVisitSheet(id, pubId){
       const p1=shepBro(SV.b1), p2=shepBro(SV.b2);
       for(const [p,idf] of [[p1,'svB1'],[p2,'svB2']]) if(p && !p.elder && !p.ms) return fail(idf, esc(p.name)+' is not marked as an elder or ministerial servant');
       if(p1 && p2 && !p1.elder && !p2.elder) return fail('svB2','At least one of the two must be an elder');
-      const rec={...SV}; delete rec.fresh; const i=L.findIndex(x=>x.id===rec.id);
+      const rec={...SV}; delete rec.fresh; shepFuSet(rec); shepTouch(rec); const i=L.findIndex(x=>x.id===rec.id);
       if(i>=0){ const old=L[i]; if(old.b1!==rec.b1||old.b2!==rec.b2||old.date!==rec.date||old.note!==rec.note||old.purpose!==rec.purpose) rec.sent={}; if(old.date!==rec.date) delete rec.resched; L[i]=rec; } else L.push(rec);
       shepMarkPlan(rec); SV=null; setTimeout(()=>{ if(!rec.done) shepSendSheet(rec.id); },120); return true; });
   const fillPh=(nmId,phId)=>{ const p=shepBro(val(nmId)), ph=document.getElementById(phId); if(p&&p.phone&&!ph.value.trim()) ph.value=p.phone; };
@@ -6491,10 +6512,10 @@ function shepVisitSheet(id, pubId){
 }
 function svKeep(){ if(!SV) return; const g=i=>{ const e=document.getElementById(i); return e?e.value.trim():null; };
   [['svFam','fam'],['svDate','date'],['svTime','time'],['svB1','b1'],['svB2','b2'],['svB1ph','b1ph'],['svB2ph','b2ph'],['svPurp','purpose']].forEach(([i,k])=>{ const x=g(i); if(x!=null) SV[k]=x; });
-  const nt=document.getElementById('svNote'); if(nt) SV.note=nt.value.trim(); }
+  const nt=document.getElementById('svNote'); if(nt) SV.note=nt.value.trim(); const fu=document.getElementById('svFu'); if(fu) SV.fuWeeks=fu.value?n(fu.value):''; }
 function shepMarkPlan(v){ (v.names||[]).forEach(nm=>{ const p=shepBro(nm); if(!p) return; if(v.done) delete p.shepPlan; else p.shepPlan={elder:shepPair(v), phone:v.b1ph||'', date:v.date||'', visit:v.id}; }); }
 function shepFinish(v, date, by, report){
-  v.done=date||TODAY(); if(by) v.by=v.by&&nameKey(v.by)!==nameKey(by)?v.by+' and '+by:by; if(report){ v.report=v.report&&v.report!==report?v.report+'\n'+report:report; } delete v.resched;
+  shepTouch(v); v.done=date||TODAY(); shepFuSet(v); if(by) v.by=v.by&&nameKey(v.by)!==nameKey(by)?v.by+' and '+by:by; if(report){ v.report=v.report&&v.report!==report?v.report+'\n'+report:report; } delete v.resched;
   (v.names||[]).forEach(nm=>{ const p=shepBro(nm); if(!p) return; p.visits=p.visits||[]; if(!p.visits.some(x=>x.shepId===v.id)) p.visits.push({id:uid(), date:v.done, by:shepPair(v), note:'Shepherding visit'+(v.purpose?': '+v.purpose:''), shepId:v.id}); delete p.shepPlan; });
 }
 /* the link each brother receives */
@@ -6597,7 +6618,7 @@ document.addEventListener('click', async e=>{
   if(a==='x39edit'){ SV=null; shepVisitSheet(id||null); }
   if(a==='x39addname'){ svKeep(); const v=val('svAdd').trim(); if(!v){ toast('Type or choose a name'); return; } const p=letterWho(v), nm=p?p.name:v; if(!SV.names.some(x=>nameKey(x)===nameKey(nm))) SV.names.push(nm); shepVisitSheet(SV.fresh?null:SV.id); setTimeout(()=>{ const f=document.getElementById('svAdd'); if(f) f.focus(); },80); }
   if(a==='x39delname'){ svKeep(); SV.names.splice(n(t.dataset.k),1); shepVisitSheet(SV.fresh?null:SV.id); }
-  if(a==='x39del'){ if(!confirm('Delete this visit?')) return; const L=shepList(), i=L.findIndex(x=>x.id===id); if(i>=0){ const v=L[i]; (v.names||[]).forEach(nm=>{ const p=shepBro(nm); if(p&&p.shepPlan&&p.shepPlan.visit===v.id) delete p.shepPlan; }); L.splice(i,1); } SV=null; save(); closeSheet(); render(); toast('Deleted'); }
+  if(a==='x39del'){ if(!confirm('Delete this visit?')) return; const L=shepList(), i=L.findIndex(x=>x.id===id); if(i>=0){ const v=L[i]; (v.names||[]).forEach(nm=>{ const p=shepBro(nm); if(p&&p.shepPlan&&p.shepPlan.visit===v.id) delete p.shepPlan; }); L.splice(i,1); const d=SEC(); d.planGone=d.planGone||[]; d.planGone.push({id, at:Date.now()}); } SV=null; save(); closeSheet(); render(); toast('Deleted'); }
   if(a==='x39send') shepSendSheet(id);
   if(a==='x39sent'){ const v=shepList().find(x=>x.id===id); if(v){ v.sent=v.sent||{}; v.sent[t.dataset.k]=TODAY(); save(); setTimeout(()=>{ if(document.querySelector('[data-a=x39sent]')) shepSendSheet(id); render(); },900); } }
   if(a==='x39done'){ const v=shepList().find(x=>x.id===id); if(!v) return; shepFinish(v, TODAY(), '', ''); save(); render(); toast('Visit saved as done'); }
@@ -6610,6 +6631,133 @@ document.addEventListener('click', async e=>{
   if(a==='x39gc') groupCardsSheet(t.dataset.k);
   if(a==='x39gcgo') groupCardsGo(t.dataset.k, t);
 });
+
+/* ================= v40: follow-up visits, late visits, live planning page with the elders ================= */
+const SHEP_LATE=14;   // days after the planned date before a visit shows as "not done yet"
+function shepTouch(v){ v.up=Date.now(); return v; }
+function shepRoot(v){ return v.followOf||v.id; }
+function shepChain(v){ return shepList().filter(x=>shepRoot(x)===shepRoot(v)).sort((a,b)=>(a.seq||1)-(b.seq||1)); }
+function shepIsLast(v){ return !shepList().some(x=>shepRoot(x)===shepRoot(v) && (x.seq||1)>(v.seq||1)); }
+function shepLate(v){ return !v.done && !v.resched && v.date && daysSince(v.date)>=SHEP_LATE; }
+function shepFuDue(v){ return v.done && v.fuDue && shepIsLast(v) && v.fuDue<=TODAY(); }
+function shepAttention(){ const L=shepList(); return {late:L.filter(shepLate), fu:L.filter(shepFuDue), resched:L.filter(v=>!v.done&&v.resched)}; }
+function shepFuSet(v){ if(v.done && n(v.fuWeeks)>0) v.fuDue=addDays(v.done, n(v.fuWeeks)*7); else delete v.fuDue; }
+function shepFollowSheet(id){ const p=shepList().find(x=>x.id===id); if(!p) return; const ch=shepChain(p);
+  SV={id:uid(), fresh:true, names:[...(p.names||[])], fam:p.fam||'', date:p.fuDue&&p.fuDue>=TODAY()?p.fuDue:'', time:'', b1:p.b1||'', b2:p.b2||'', b1ph:p.b1ph||'', b2ph:p.b2ph||'', purpose:'Follow-up visit', note:'', followOf:shepRoot(p), seq:Math.max(...ch.map(x=>x.seq||1))+1, fuWeeks:p.fuWeeks||''};
+  shepVisitSheet(null); }
+function shepFuWeeksField(cur){ return `<div class="f"><label>After this visit, remind me to send the brothers back</label><select id="svFu"><option value="">No follow-up</option>${[1,2,3,4,6].map(w=>`<option value="${w}" ${n(cur)===w?'selected':''}>${w} week${w===1?'':'s'} after the visit</option>`).join('')}</select></div>`; }
+function shepChainHTML(v){ const ch=v.id?shepChain(v).filter(x=>x.id!==v.id):[]; if(!ch.length) return '';
+  return `<div class="area">Earlier and later visits</div><div class="list">${ch.map(x=>`<div class="it"><span class="wdot ${x.done?'green':'orange'}" style="margin-top:6px"></span><div class="x"><b>Visit ${x.seq||1}</b><small>${x.done?'Done '+nice(x.done):x.date?'Planned '+nice(x.date):'Not dated'} · ${esc(shepPair(x))}${x.report?'<br>'+esc(x.report):''}</small></div></div>`).join('')}</div>`; }
+
+/* ---------- reminders (rings like the other Secretary reminders) ---------- */
+function shepAlarms(date, out){
+  if(!secOn('secretary') || !S.sec) return;
+  shepList().forEach(v=>{
+    if(!v.done && !v.resched && v.date && date===addDays(v.date, SHEP_LATE)) out.push({key:'shl:'+v.id, time:'09:00', title:'Shepherding visit not done yet: '+shepWho(v)+' ('+shepPair(v)+')', kind:'shep', created:Date.now(), quietMiss:true});
+    if(v.done && v.fuDue===date && shepIsLast(v)) out.push({key:'shf:'+v.id, time:'09:00', title:'Time for a follow-up visit: '+shepWho(v), kind:'shep', created:Date.now(), quietMiss:true});
+  });
+}
+
+/* ---------- the live planning page (plan.html) ---------- */
+var PL={unsub:null, remote:{}, timer:null, busy:false, key:null};
+function planRoom(){ return SEC().planRoom||null; }
+function planUrl(r){ const c=(asCfg()||{}).cfg||{}; return WEB_URL+'plan.html#'+r.id+'.'+r.key+'.'+b64uEnc({a:c.apiKey, d:c.authDomain, p:c.projectId, i:c.appId}); }
+async function planKey(){ const r=planRoom(); if(!r) return null; if(PL.key && PL.key.id===r.id) return PL.key.k; const k=await crypto.subtle.importKey('raw', b64ToBytes(b64std(r.key)), 'AES-GCM', false, ['encrypt','decrypt']); PL.key={id:r.id, k}; return k; }
+async function planEnc(obj){ const k=await planKey(), iv=crypto.getRandomValues(new Uint8Array(12)); const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},k,new TextEncoder().encode(JSON.stringify(obj)))); const all=new Uint8Array(12+ct.length); all.set(iv); all.set(ct,12); return bytesToB64(all); }
+async function planDec(s){ const k=await planKey(), all=b64ToBytes(s); return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:all.slice(0,12)},k,all.slice(12)))); }
+const PLAN_FIELDS=['names','fam','date','time','b1','b2','purpose','done','followOf','seq','fuWeeks','fuDue'];
+function planShared(v){ const o={}; PLAN_FIELDS.forEach(k=>{ if(v[k]!==undefined && v[k]!=='' && v[k]!==null) o[k]=v[k]; }); if(v.resched) o.resched=1; return o; }
+function planMeta(){ const d=SEC(), live=d.pubs.filter(p=>p.status!=='moved');
+  return {cong:congInfo().name||'', names:live.map(p=>p.name).sort(), bros:live.filter(p=>p.elder||p.ms).map(p=>[p.name, p.elder?'e':'m'])}; }
+function planCol(){ return AS.db.collection('plan').doc(planRoom().id).collection('v'); }
+async function planStart(){
+  const r=planRoom(); if(!r || !AS.db || !AS.user) return;
+  if(PL.unsub){ PL.unsub(); PL.unsub=null; } PL.remote={};
+  try{ await AS.db.collection('plan').doc(r.id).set({m:await planEnc(planMeta()), at:Date.now()}); }catch(e){ PL.err=String(e.code||e.message||e); return; }
+  PL.err='';
+  PL.unsub=planCol().onSnapshot(async q=>{
+    let changed=0, who='';
+    for(const ch of q.docChanges()){ const id=ch.doc.id, x=ch.doc.data()||{}; if(ch.type==='removed'){ delete PL.remote[id]; continue; }
+      PL.remote[id]={at:x.at||0, del:!!x.del};
+      if(ch.doc.metadata.hasPendingWrites) continue;
+      if((SEC().planGone||[]).some(g=>g.id===id)) continue;
+      const L=shepList(), i=L.findIndex(v=>v.id===id), loc=i>=0?L[i]:null;
+      if(loc && (loc.up||0)>=(x.at||0)) continue;
+      if(x.del){ if(loc){ (loc.names||[]).forEach(nm=>{ const p=shepBro(nm); if(p&&p.shepPlan&&p.shepPlan.visit===id) delete p.shepPlan; }); L.splice(i,1); changed++; who=x.by||who; } continue; }
+      let sv; try{ sv=await planDec(x.d); }catch(e){ continue; }
+      const v=loc||{id, note:'', b1ph:'', b2ph:''}; const wasDone=v.done;
+      PLAN_FIELDS.forEach(k=>{ if(sv[k]===undefined) delete v[k]; else v[k]=sv[k]; });
+      if(sv.resched){ if(!v.resched) v.resched='Needs a new date'; } else delete v.resched;
+      ['b1','b2'].forEach(b=>{ const p=shepBro(v[b]); if(p&&p.phone&&!v[b+'ph']) v[b+'ph']=p.phone; });
+      v.up=x.at||Date.now();
+      if(!loc) L.push(v);
+      if(v.done && !wasDone){ const keepUp=v.up; shepFinish(v, v.done, '', ''); v.up=keepUp; } else shepMarkPlan(v);
+      changed++; who=x.by||who;
+    }
+    if(changed){ PL.busy=true; save(true); PL.busy=false; render(); toast('Planning page: '+changed+' change'+(changed===1?'':'s')+(who?' from '+firstName(who):'')); }
+    planSoon(500);
+  }, e=>{ PL.err=String(e.code||e.message||e); });
+}
+function planSoon(ms){ if(!planRoom() || !AS.db || !AS.user || PL.busy) return; clearTimeout(PL.timer); PL.timer=setTimeout(planPush, ms||1500); }
+async function planPush(){
+  const r=planRoom(); if(!r || !AS.db || !AS.user || !PL.unsub) return;
+  try{
+    for(const v of shepList()){ const rm=PL.remote[v.id]; if(!v.up) v.up=1; if(rm && !rm.del && rm.at>=v.up) continue; if(rm && rm.del && rm.at>=v.up) continue;
+      await planCol().doc(v.id).set({d:await planEnc(planShared(v)), at:v.up, by:congInfo().secName||S.settings.name||'Secretary', del:0}); PL.remote[v.id]={at:v.up, del:false}; }
+    const gone=SEC().planGone||[]; for(const g of gone){ if(PL.remote[g.id] && PL.remote[g.id].del) continue; await planCol().doc(g.id).set({d:'', at:g.at, by:congInfo().secName||'Secretary', del:1}); PL.remote[g.id]={at:g.at, del:true}; }
+    SEC().planGone=gone.filter(g=>Date.now()-g.at<30*864e5);
+  }catch(e){ PL.err=String(e.code||e.message||e); }
+}
+function planRules(){ return `    match /plan/{room} {\n      allow get, create, update, delete: if request.auth != null;\n      match /v/{visit} {\n        allow read, write: if request.auth != null;\n      }\n    }`; }
+function planSheet(){
+  const r=planRoom(), on=asOn() && AS.user;
+  const err=PL.err||'', perm=/permission/i.test(err);
+  openSheet(`<h3>Live planning page</h3>
+    <p class="muted" style="margin:0 0 10px">A page you and the elders open together while you plan. Everyone sees the same schedule change at once, and anyone can add a visit, change a date, mark it done or plan a follow-up. Changes come into your app by themselves. Your private notes and the brothers' reports stay in your app only.</p>
+    ${!on?`<div class="banner" style="margin:0 0 10px"><span>The planning page uses your automatic sync (Firebase). Turn on <b>Automatic sync</b> on this device first, then come back here.</span></div><button class="btn" data-a="x38sheet">Automatic sync</button>`
+    :!r?`<div class="area" style="margin-top:0">One-time setup in Firebase (about 2 minutes)</div>
+      <ol style="margin:0 0 10px;padding-left:20px;font-size:14px;line-height:1.55"><li>Open <b>console.firebase.google.com</b> → your project <b>${esc(((asCfg()||{}).cfg||{}).projectId||'')}</b>.</li>
+        <li><b>Authentication → Sign-in method → Add new provider → Anonymous → Enable → Save.</b> This lets the elders open the page without a password.</li>
+        <li><b>Firestore Database → Rules.</b> Paste the lines below just above the last two closing <b>}</b> brackets, keeping your other rules. Tap <b>Publish</b>.</li></ol>
+      <textarea readonly style="font:12px monospace;min-height:120px" id="plRules">${esc(planRules())}</textarea>
+      <button class="btn ghost" data-a="x40copyrules" style="margin:6px 0 12px">Copy these lines</button>
+      <button class="btn" data-a="x40create">I've done it: make the planning page</button>`
+    :`${perm?`<div class="banner" style="margin:0 0 10px;background:#FDECEC;border-color:#F5C2C2;color:var(--bad)"><span>Firebase is refusing the planning page. Check the two setup steps (Anonymous sign-in, and the rule below in Firestore → Rules).</span></div><textarea readonly style="font:12px monospace;min-height:110px">${esc(planRules())}</textarea><button class="btn ghost" data-a="x40copyrules" style="margin:6px 0 10px">Copy the rule</button>`:err?`<p class="err" style="margin:0 0 8px">Not connected right now (${esc(err.slice(0,60))}). It will retry when you are online.</p>`:`<p class="muted" style="margin:0 0 10px">✓ The planning page is live${PL.unsub?' and connected':''}.</p>`}
+      <div class="f2"><div class="f"><label>Send to (elder)</label><input type="text" id="plTo" list="plEld" placeholder="Name"></div><div class="f"><label>His WhatsApp</label><input type="tel" id="plPh"></div></div>
+      <datalist id="plEld">${SEC().pubs.filter(p=>p.elder).map(p=>`<option>${esc(p.name)}</option>`).join('')}</datalist>
+      <a class="btn wa" id="plSend" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(planMsg(''))}">Send the link on WhatsApp</a>
+      <a class="btn ghost" target="_blank" rel="noopener" href="${esc(planUrl(r))}" style="margin-top:8px">Open the planning page</a>
+      <p class="muted" style="font-size:12.5px;margin:8px 0">Anyone with the link can see and change the schedule, so send it only to the elders. The page is locked with a key in the link, so Firebase only stores scrambled text.</p>
+      <button class="btn ghost" data-a="x40close" style="color:var(--bad)">Close the planning page (the old link stops working)</button>`}
+    <button class="btn ghost" data-a="close" style="margin-top:8px">Done</button>`, null);
+  const to=document.getElementById('plTo'); if(to){ const upd=()=>{ const p=letterWho(to.value), ph=document.getElementById('plPh'); if(p&&p.phone&&!ph.value) ph.value=p.phone; document.getElementById('plSend').href='https://wa.me/'+phoneIntl(ph.value)+'?text='+encodeURIComponent(planMsg(to.value)); };
+    to.addEventListener('change',upd); document.getElementById('plPh').addEventListener('input',upd); }
+}
+function planMsg(nm){ return `Good ${timeOfDay()}${nm?' '+firstName(nameOnly(nm)):''}! Here is our shepherding planning page. We can both plan the visits on it at the same time, and every change shows up straight away. Please keep the link to yourself 🙏\n${planUrl(planRoom()||{id:'',key:''})}`; }
+async function planCreate(){
+  const id=b64url(crypto.getRandomValues(new Uint8Array(15))).replace(/[.\-]/g,'x'), key=b64url(crypto.getRandomValues(new Uint8Array(16)));
+  SEC().planRoom={id, key, made:TODAY()}; save(true); PL.key=null;
+  await planStart();
+  if(PL.err){ toast(/permission/i.test(PL.err)?'Firebase refused it. Check the rule and Anonymous sign-in.':'Could not reach Firebase'); }
+  else toast('Planning page ready');
+  planSheet();
+}
+async function planClose(){
+  const r=planRoom(); if(!r) return; if(!confirm('Close the planning page? The link you sent stops working. Your schedule stays in your app.')) return;
+  try{ const q=await planCol().get(); for(const d of q.docs) await d.ref.delete(); await AS.db.collection('plan').doc(r.id).delete(); }catch(e){}
+  if(PL.unsub) PL.unsub(); PL.unsub=null; PL.remote={}; delete SEC().planRoom; save(true); closeSheet(); render(); toast('Planning page closed');
+}
+document.addEventListener('click', e=>{
+  const t=e.target.closest('[data-a]'); if(!t || !/^x40/.test(t.dataset.a)) return;
+  const a=t.dataset.a, id=t.dataset.id;
+  if(a==='x40plan') planSheet();
+  if(a==='x40create'){ t.disabled=true; t.textContent='Making it…'; planCreate(); }
+  if(a==='x40close') planClose();
+  if(a==='x40copyrules') copyText(planRules(), 'Rule copied');
+  if(a==='x40follow') shepFollowSheet(id);
+});
+document.addEventListener('change', e=>{ const t=e.target; if(!t.classList || !t.classList.contains('x40fuSel') || t.value==='') return;
+  const v=shepList().find(x=>x.id===t.dataset.id); if(!v) return; v.fuWeeks=n(t.value)||''; shepFuSet(v); shepTouch(v); save(); render(); toast(v.fuDue?'Follow-up reminder on '+nice(v.fuDue):'No follow-up reminder'); });
 
 /* ================= v38: automatic sync between my own devices (Firebase, locked with a passphrase) ================= */
 var AS={busy:false, merging:false, timer:null, unsub:null, status:'', db:null, user:null, lastHash:'', echo:0};
@@ -6687,6 +6835,7 @@ async function asDownload(meta){
       ctx=await syncMerge(d); asDedupe(); } finally { AS.merging=false; }
     S.settings.autoSync.seen=meta.ver; S.settings.autoSync.lastDown=Date.now(); save(true);
     render(); asSet('Synced '+new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}));
+    try{ if(planRoom() && !PL.unsub) planStart(); else if(!planRoom() && PL.unsub){ PL.unsub(); PL.unsub=null; } planSoon(); }catch(e){}
     const inH=asContentHash(dCopy), myH=asContentHash(S);
     AS.lastHash=inH;
     if(ctx.added||ctx.removed||ctx.changed) toast('Synced: '+[ctx.added?ctx.added+' new':'', ctx.changed?ctx.changed+' updated':'', ctx.removed?ctx.removed+' removed':''].filter(Boolean).join(', '));
@@ -6703,7 +6852,7 @@ async function asStart(){
     if(!AS.user){ asSet('Signed out. Open Automatic sync to sign in again.'); return; }
     if(AS.unsub) AS.unsub();
     AS.unsub=AS.db.collection('lc').doc(AS.user.uid).onSnapshot(s=>{ asDownload(s.exists?s.data():null); }, ()=>asSet('Waiting for internet…'));
-    asSoon(2000);
+    asSoon(2000); try{ planStart(); }catch(e){}
   }catch(e){ asSet('Offline. Sync will start when you are online.'); }
 }
 function asSheet(){
