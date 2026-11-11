@@ -77,10 +77,11 @@ async function enc(obj){ const iv=crypto.getRandomValues(new Uint8Array(12)); co
 async function dec(s){ const all=b64d(s.replace(/\+/g,'-').replace(/\//g,'.')); return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:all.slice(0,12)},KEY,all.slice(12)))); }
 
 async function start(){
-  const h=location.hash.slice(1).split('.');
-  if(h.length<3){ fail('This link is not complete. Ask the secretary to send it again.'); return; }
-  try{ ROOM=h[0]; const c=JSON.parse(new TextDecoder().decode(b64d(h.slice(2).join('.')))); CFG={apiKey:c.a, authDomain:c.d, projectId:c.p, appId:c.i};
-    KEY=await crypto.subtle.importKey('raw', b64d(h[1]), 'AES-GCM', false, ['encrypt','decrypt']); }
+  /* link: room (no dots) . key (always 22 characters, may itself contain a dot) . settings */
+  const raw=decodeURIComponent(location.hash.slice(1)).trim(), i=raw.indexOf('.');
+  if(i<1 || raw.length<i+25 || raw[i+23]!=='.'){ fail('This link is not complete. Ask the secretary to send it again.'); return; }
+  try{ ROOM=raw.slice(0,i); const c=JSON.parse(new TextDecoder().decode(b64d(raw.slice(i+24)))); CFG={apiKey:c.a, authDomain:c.d, projectId:c.p, appId:c.i};
+    KEY=await crypto.subtle.importKey('raw', b64d(raw.slice(i+1,i+23)), 'AES-GCM', false, ['encrypt','decrypt']); }
   catch(e){ fail('This link could not be read. Ask the secretary to send it again.'); return; }
   history.replaceState(null,'',location.pathname+location.hash);
   try{ const v='10.12.2', b='https://www.gstatic.com/firebasejs/'+v+'/';
