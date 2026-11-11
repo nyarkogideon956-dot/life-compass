@@ -242,7 +242,7 @@ body.formmode main{padding-bottom:40px}
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 37;
+const APP_VERSION = 38;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -455,7 +455,7 @@ function load(){
 }
 let S = load();
 (function tidy(){ try{ const keep=addDays(ymd(new Date()),-14); Object.keys(S.fired||{}).forEach(k=>{ if(k<keep) delete S.fired[k]; }); }catch(e){} })();
-function save(quiet){ if(!quiet && S && S.settings) S.settings.lastChange=Date.now(); try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast('Could not save — storage full?'); } scheduleNativeSoon(); }
+function save(quiet){ if(!quiet && S && S.settings) S.settings.lastChange=Date.now(); try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast('Could not save — storage full?'); } scheduleNativeSoon(); if(!quiet && typeof asSoon==='function' && typeof AS!=='undefined' && AS && !AS.merging) try{ asSoon(); }catch(e){} }
 
 /* ---------- helpers ---------- */
 function ymd(d){ const z=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate()); }
@@ -4660,6 +4660,8 @@ function syncLoad(file){
 function syncSheet(){
   const st=S.settings, when=t=>t?new Date(t).toLocaleString(undefined,{weekday:'short',day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}):'never';
   openSheet(`<h3>Sync with my other device</h3>
+    <button class="btn" data-a="x38sheet" style="margin:0 0 12px">${typeof asOn==='function'&&asOn()?'✓ Automatic sync is on':'Automatic sync (no more sending files)'}</button>
+    <div class="area" style="margin-top:0">Or by hand, with a file</div>
     <p class="muted" style="margin:-4px 0 12px">This device: <b>${esc(deviceName())}</b> · <button class="linkbtn" data-a="syncrename">rename</button></p>
     <div class="area" style="margin-top:0">1 · When you finish on this device</div>
     <button class="btn" data-a="syncsend">Send my data</button>
@@ -6405,6 +6407,162 @@ document.addEventListener('click', e=>{
 });
 
 function memoDue(){ const d=SEC(), days=MY().remindMemoDays; return (d.memos||[]).filter(x=>x.kind==='ocgm'&&x.meet&&x.meet.date&&x.meet.date>=TODAY()&&daysSince(x.meet.date)>=-days&&(x.to||[]).some(c=>!(x.remSent||{})[c])); }
+/* ================= v38: automatic sync between my own devices (Firebase, locked with a passphrase) ================= */
+var AS={busy:false, merging:false, timer:null, unsub:null, status:'', db:null, user:null, lastHash:''};
+function asCfg(){ return (S.settings.autoSync)||null; }
+function asPass(){ try{ return localStorage.getItem('lc.syncPass')||''; }catch(e){ return ''; } }
+function asOn(){ const c=asCfg(); return !!(c && c.on && c.cfg && c.cfg.apiKey && asPass()); }
+function asSet(st){ AS.status=st; const el=document.getElementById('asStatus'); if(el) el.textContent=st; }
+function parseFbConfig(txt){ const o={}; ['apiKey','authDomain','projectId','appId','messagingSenderId','storageBucket'].forEach(k=>{ const m=String(txt).match(new RegExp(k+'["\']?\\s*:\\s*["\']([^"\']+)["\']')); if(m) o[k]=m[1]; }); return o.apiKey&&o.projectId?o:null; }
+function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=()=>rej(new Error('Could not load '+src)); document.head.appendChild(s); }); }
+async function asFirebase(){
+  if(!window.firebase || !window.firebase.firestore){ const v='10.12.2', b='https://www.gstatic.com/firebasejs/'+v+'/';
+    await loadScript(b+'firebase-app-compat.js'); await loadScript(b+'firebase-auth-compat.js'); await loadScript(b+'firebase-firestore-compat.js'); }
+  const fb=window.firebase; if(!fb.apps || !fb.apps.length) fb.initializeApp(asCfg().cfg);
+  return fb;
+}
+async function asSignIn(email, password, create){
+  const fb=await asFirebase(), au=fb.auth();
+  try{ const r=await au.signInWithEmailAndPassword(email, password); return r.user; }
+  catch(e){ if(create && /user-not-found|invalid-credential|invalid-login/i.test(String(e.code||e.message))){ const r=await au.createUserWithEmailAndPassword(email, password); return r.user; } throw e; }
+}
+var AS_LOCAL=['autoSync','lastSyncIn','lastSyncOut','lastSyncFrom','lastBackup','backupNudge'];
+function asStrip(o){ const c={...o}; delete c.__sync; delete c.__photos; delete c.syncBase; c.settings={...(o.settings||{})}; AS_LOCAL.forEach(k=>delete c.settings[k]); return c; }
+function canon(v){ if(Array.isArray(v)){ let a=v; if(a.length && a.every(x=>x&&typeof x==='object'&&x.id!=null)) a=[...a].sort((x,y)=>String(x.id)<String(y.id)?-1:String(x.id)>String(y.id)?1:0); return '['+a.map(canon).join(',')+']'; } if(v&&typeof v==='object') return '{'+Object.keys(v).sort().filter(k=>v[k]!==undefined).map(k=>JSON.stringify(k)+':'+canon(v[k])).join(',')+'}'; return JSON.stringify(v===undefined?null:v); }
+function asContentHash(o){ const c=asStrip(o); c.settings={...c.settings}; delete c.settings.lastChange; return asHash(canon(c)); }
+function asHash(s){ let h=0; for(let i=0;i<s.length;i+=7) h=(h*31+s.charCodeAt(i))|0; return h+':'+s.length; }
+function asDedupe(){
+  const d=S.sec; if(!d || !Array.isArray(d.duties)) return;
+  const best={};
+  d.duties.forEach(x=>{ const k=(x.name||'')+'|'+(x.freq||''); const b=best[k]; if(!b || (x.due||'')>(b.due||'') || ((x.due||'')===(b.due||'') && String(x.id)<String(b.id))) best[k]=x; });
+  const keep=new Set(Object.values(best)); d.duties=d.duties.filter(x=>keep.has(x));
+}
+async function asCheck(chk){ try{ return (await unlockText(typeof chk==='string'?JSON.parse(chk):chk, asPass()))==='lc-ok'; }catch(e){ return false; } }
+async function asUpload(){
+  if(!asOn() || AS.busy || AS.merging || !AS.user) return;
+  AS.busy=true;
+  try{
+    const h=asContentHash(S);
+    if(h===AS.lastHash){ AS.busy=false; return; }
+    const pack=asStrip({...S, __sync:{v:1, at:Date.now(), changed:S.settings.lastChange||0, device:deviceId(), name:deviceName(), base:S.syncBase||[]}});
+    pack.__sync={v:1, at:Date.now(), changed:S.settings.lastChange||0, device:deviceId(), name:deviceName(), base:S.syncBase||[]};
+    const plain=JSON.stringify(pack);
+    const locked=await lockText(plain, asPass()), ver=Date.now()+'_'+deviceId().slice(0,6), size=700000, parts=[];
+    for(let i=0;i<locked.length;i+=size) parts.push(locked.slice(i,i+size));
+    const root=AS.db.collection('lc').doc(AS.user.uid);
+    const old=(await root.get()).data()||{};
+    if(old.chk && !(await asCheck(old.chk))){ asSet('The sync passphrase is different on your other device'); AS.busy=false; return; }
+    if(old.ver && old.device!==deviceId() && old.ver!==(asCfg()||{}).seen){ AS.busy=false; await asDownload(old); return; }
+    const chk=old.chk || await lockText('lc-ok', asPass());
+    for(let i=0;i<parts.length;i++) await root.collection('parts').doc(ver+'_'+i).set({d:parts[i]});
+    await root.set({ver, chk, n:parts.length, at:Date.now(), device:deviceId(), name:deviceName()});
+    if(old.ver && old.n) for(let i=0;i<old.n;i++){ try{ await root.collection('parts').doc(old.ver+'_'+i).delete(); }catch(e){} }
+    AS.lastHash=h; S.settings.autoSync.lastUp=Date.now(); S.settings.autoSync.seen=ver; save(true);
+    asSet('Synced '+new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}));
+  }catch(e){ asSet('Waiting for internet…'); setTimeout(()=>asSoon(),30000); }
+  AS.busy=false;
+}
+async function asDownload(meta){
+  if(AS.dl) return;
+  if(!meta || !meta.ver || meta.device===deviceId() || meta.ver===(asCfg()||{}).seen) return;
+  AS.dl=true;
+  try{
+    asSet('Getting changes from '+(meta.name||'your other device')+'…');
+    const root=AS.db.collection('lc').doc(AS.user.uid); let txt='';
+    for(let i=0;i<meta.n;i++){ const p=await root.collection('parts').doc(meta.ver+'_'+i).get(); if(!p.exists) throw new Error('missing part'); txt+=p.data().d; }
+    let plain; try{ plain=await unlockText(JSON.parse(txt), asPass()); }catch(e){ asSet('The sync passphrase is different on your other device'); toast('Sync: the passphrase does not match your other device'); return; }
+    const d=JSON.parse(plain); const dCopy=JSON.parse(plain);
+    AS.merging=true; let ctx;
+    try{
+      if(AS.replaceOnce){
+        try{ localStorage.setItem('lc.beforeSync', JSON.stringify(S)); }catch(e){}
+        const keep={...S.settings}, f=fresh(), loc={}; SYNC_LOCAL.forEach(k=>loc[k]=S[k]);
+        S={...f, ...loc, settings:{...f.settings, autoSync:keep.autoSync, setupAsked:true, setupDone:true, themeAsked:true, lastBackup:keep.lastBackup, lastChange:0}};
+        AS.replaceOnce=false;
+      }
+      ctx=await syncMerge(d); asDedupe(); } finally { AS.merging=false; }
+    S.settings.autoSync.seen=meta.ver; S.settings.autoSync.lastDown=Date.now(); save(true);
+    render(); asSet('Synced '+new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}));
+    const inH=asContentHash(dCopy), myH=asContentHash(S);
+    AS.lastHash=inH;
+    if(myH!==inH){ if(ctx.added||ctx.removed||ctx.changed) toast('Synced: '+ctx.added+' new, '+ctx.changed+' updated'); asSoon(1500); }
+    else if(ctx.added||ctx.removed) toast('Synced: '+ctx.added+' new'+(ctx.removed?', '+ctx.removed+' removed':''));
+  }catch(e){ asSet('Will try again soon'); }
+  finally{ AS.dl=false; }
+}
+function asSoon(ms){ if(!asOn()) return; clearTimeout(AS.timer); AS.timer=setTimeout(asUpload, ms||6000); }
+async function asStart(){
+  if(!asOn()) return;
+  try{
+    asSet('Connecting…'); const fb=await asFirebase(); AS.db=fb.firestore();
+    AS.user=fb.auth().currentUser || await new Promise(res=>{ const u=fb.auth().onAuthStateChanged(x=>{ u&&u(); res(x); }); setTimeout(()=>res(null),8000); });
+    if(!AS.user){ asSet('Signed out. Open Automatic sync to sign in again.'); return; }
+    if(AS.unsub) AS.unsub();
+    AS.unsub=AS.db.collection('lc').doc(AS.user.uid).onSnapshot(s=>{ asDownload(s.exists?s.data():null); }, ()=>asSet('Waiting for internet…'));
+    asSoon(2000);
+  }catch(e){ asSet('Offline. Sync will start when you are online.'); }
+}
+function asSheet(){
+  const c=asCfg()||{}, when=t=>t?new Date(t).toLocaleString(undefined,{weekday:'short',day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}):'never';
+  openSheet(`<h3>Automatic sync</h3>
+    <p class="muted" style="margin:-4px 0 10px">Keeps this device and your other device the same, by itself, whenever you are online. Only someone signed in with your sync email can reach the data, and it is locked with your passphrase before it leaves this device.</p>
+    ${asOn()?`<div class="banner" style="margin:0 0 10px"><span style="flex:1"><b>Sync is on</b> · ${esc(c.email||'')}<br><span id="asStatus">${esc(AS.status||'Starting…')}</span></span></div>
+      <p class="muted" style="font-size:13px;margin:0 0 10px">This device: ${esc(deviceName())} · last sent ${when(c.lastUp)} · last received ${when(c.lastDown)}</p>
+      <div class="btns"><button class="btn" style="flex:1" data-a="x38now">Sync now</button><button class="btn ghost" style="flex:1" data-a="x38off">Turn off</button></div>`
+    :`<div class="area">1 · Your Firebase settings (once)</div>
+      <div class="f"><label>Paste the firebaseConfig from your Firebase project</label><textarea id="asCfg" style="min-height:90px;font-size:12.5px" placeholder="apiKey: &quot;…&quot;, authDomain: &quot;…&quot;, projectId: &quot;…&quot;, appId: &quot;…&quot;">${c.cfg?esc(JSON.stringify(c.cfg)):''}</textarea></div>
+      <div class="area">2 · Sign in (same on both devices)</div>
+      <div class="f"><label>Sync email</label><input type="email" id="asEmail" value="${esc(c.email||'')}" autocomplete="username"></div>
+      <div class="f"><label>Sync password (at least 6 characters)</label><input type="password" id="asPw" autocomplete="current-password"></div>
+      <div class="area">3 · Sync passphrase (same on both devices)</div>
+      <div class="f"><label>Locks your data before it is sent. Never sent anywhere. Don't forget it.</label><input type="password" id="asPass" value="${esc(asPass())}" autocomplete="off"></div>
+      <button class="btn" data-a="x38on">Turn on sync</button>
+      <p class="muted" style="font-size:12.5px;margin:8px 0 0">First device: the account is created for you. Second device: use the same email, password and passphrase. Your data on both devices is merged, nothing is wiped. Keep making backups too.</p>`}
+    <button class="btn ghost" data-a="close" style="margin-top:10px">Close</button>`, null);
+}
+function asChoose(){
+  const nm=esc(AS.pendingName||'your other device');
+  openSheet(`<h3>One more step</h3>
+    <p style="margin:0 0 10px">${nm} is already syncing, and this device also has its own data. What should this device do?</p>
+    <button class="btn" data-a="x38take" style="width:100%;margin-bottom:8px">Use the data from ${nm}</button>
+    <p class="muted" style="font-size:13px;margin:-2px 0 12px">Best if you typed or imported your publishers separately on each device. This device's data is replaced (a copy is kept on this device in case you need it).</p>
+    <button class="btn ghost" data-a="x38both" style="width:100%;margin-bottom:8px">Combine both</button>
+    <p class="muted" style="font-size:13px;margin:-2px 0 12px">Best if you have been moving data between the two with Send/Load file. If the same publisher was typed on both devices separately, they will show twice.</p>
+    <button class="btn ghost" data-a="close">Cancel</button>`, null);
+}
+function asGo(replace){ AS.replaceOnce=!!replace; S.settings.autoSync.on=true; save(true); closeSheet(); toast('Sync is on'); asStart(); }
+async function asTurnOn(){
+  const cfg=parseFbConfig(val('asCfg')), email=val('asEmail').trim(), pw=val('asPw'), pass=val('asPass');
+  if(!cfg) return fail('asCfg','Paste the whole firebaseConfig (it needs apiKey and projectId)');
+  if(!/@/.test(email)) return fail('asEmail','Enter an email');
+  if(pw.length<6) return fail('asPw','At least 6 characters');
+  if(pass.length<6) return fail('asPass','Use at least 6 characters');
+  S.settings.autoSync={...(S.settings.autoSync||{}), cfg, email, on:false}; save(true);
+  try{ localStorage.setItem('lc.syncPass', pass); }catch(e){}
+  const btn=document.querySelector('[data-a=x38on]'); if(btn){ btn.textContent='Connecting…'; btn.disabled=true; }
+  try{
+    AS.user=await asSignIn(email, pw, true);
+    const fb=await asFirebase(); AS.db=AS.db||fb.firestore();
+    let meta=null; try{ meta=(await AS.db.collection('lc').doc(AS.user.uid).get()).data()||null; }catch(e){}
+    if(meta && meta.chk && !(await asCheck(meta.chk))){ if(btn){ btn.textContent='Turn on sync'; btn.disabled=false; } return fail('asPass','This passphrase is different from the one on your other device'); }
+    const mine=(S.sec&&(S.sec.pubs||[]).length)||0, hasMine=mine || (S.goals||[]).length || Object.keys(S.days||{}).length>3;
+    if(meta && meta.ver && hasMine){ AS.pendingName=meta.name||'your other device'; return asChoose(); }
+    S.settings.autoSync.on=true; save(true); closeSheet(); toast('Sync is on'); asStart();
+  }catch(e){ S.settings.autoSync.on=false; save(true); if(btn){ btn.textContent='Turn on sync'; btn.disabled=false; }
+    const m=String(e.code||e.message||e); toast(/wrong-password|invalid-credential|invalid-login/.test(m)?'Wrong sync password for this email':/network|offline|load/i.test(m)?'No internet, or Firebase could not load':/operation-not-allowed/.test(m)?'In Firebase, turn on Email/Password sign-in first':'Could not sign in: '+m.slice(0,80)); }
+}
+document.addEventListener('click', e=>{
+  const t=e.target.closest('[data-a]'); if(!t || !/^x38/.test(t.dataset.a)) return;
+  const a=t.dataset.a;
+  if(a==='x38sheet') asSheet();
+  if(a==='x38on') asTurnOn();
+  if(a==='x38take') asGo(true);
+  if(a==='x38both') asGo(false);
+  if(a==='x38now'){ AS.lastHash=''; asUpload().then(()=>toast('Sent')); }
+  if(a==='x38off'){ if(!confirm('Turn off automatic sync on this device? Your data stays on this device.')) return; S.settings.autoSync.on=false; save(true); if(AS.unsub) AS.unsub(); AS.unsub=null; try{ window.firebase&&window.firebase.auth().signOut(); }catch(e){} closeSheet(); toast('Sync is off on this device'); }
+});
+window.addEventListener('online', ()=>{ if(asOn()) asStart(); });
+setTimeout(()=>{ try{ asStart(); }catch(e){} }, 1500);
 </script>
 </body>
 </html>
