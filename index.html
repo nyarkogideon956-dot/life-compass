@@ -242,7 +242,7 @@ body.formmode main{padding-bottom:40px}
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 40;
+const APP_VERSION = 41;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -1875,6 +1875,8 @@ function readCode1(c){
   return {secs, parts, lock: body&(1<<6) ? (body>>7)&0xffff : null};
 }
 function applyCode(r){
+  if(shareLimited() && (r.full || PARTS.some(([k])=>r.parts[k] && !partGiven(k)))){ toast('This code adds parts you were not given. Ask the person who shared the app with you.'); return; }
+  S.settings.setupFull=!!r.full; S.settings.partsGiven={...r.parts}; delete S.settings.ownerUnlocked;
   S.settings.sections = {...r.secs, secretary:!!r.full}; S.settings.parts = r.parts; S.settings.sectionLock = r.lock; S.settings.setupAsked=true; S.settings.setupDone=true; save();
   const lk=document.getElementById('lock'); if(lk && lk.dataset.setup){ lk.hidden=true; delete lk.dataset.setup; }
   tab='today'; closeSheet(); render(); window.scrollTo(0,0);
@@ -1893,12 +1895,13 @@ function setupCodeSheet(prefill){
 function shareAppSheet(){
   openSheet(`<h3>Share Life Compass</h3>
     <p class="muted" style="margin:0 0 10px">Tick only the parts the other person should see, then tap <b>Make the code</b>. They type the code into their app.</p>
-    ${[['faith','Faith'],['ministry','Ministry'],['people','People'],['other','Other']].map(([g,gl])=>`<div class="area">${gl}</div>`+PARTS.filter(x=>g==='other'?['goals','health','money'].includes(x[2]):x[2]===g).map(([k,l])=>`<label class="row" style="cursor:pointer"><span class="lbl">${l}</span><input type="checkbox" class="shSec" value="${k}" ${['bible','study','notes','meeting','goals','health'].includes(k)?'checked':''} style="width:22px;height:22px"></label>`).join('')).join('')}
+    ${shareLimited()?'<p class="muted" style="margin:0 0 8px;font-size:13px">You can share only the parts that were shared with you.</p>':''}
+    ${[['faith','Faith'],['ministry','Ministry'],['people','People'],['other','Other']].filter(([g])=>PARTS.some(x=>(g==='other'?['goals','health','money'].includes(x[2]):x[2]===g) && partGiven(x[0]))).map(([g,gl])=>`<div class="area">${gl}</div>`+PARTS.filter(x=>(g==='other'?['goals','health','money'].includes(x[2]):x[2]===g) && partGiven(x[0])).map(([k,l])=>`<label class="row" style="cursor:pointer"><span class="lbl">${l}</span><input type="checkbox" class="shSec" value="${k}" ${['bible','study','notes','meeting','goals','health'].includes(k)?'checked':''} style="width:22px;height:22px"></label>`).join('')).join('')}
     <div class="f" style="margin-top:10px"><label>Lock PIN (optional, 4 numbers)</label><input type="text" inputmode="numeric" maxlength="8" id="shPin" placeholder="Leave empty and the app picks one" autocomplete="off">
       <p class="muted" style="margin:4px 0 0;font-size:12.5px">The PIN stops them switching the other parts back on in Settings. Keep it; don't send it to them.</p></div>
     <button class="btn" data-a="shmake">Make the code for these parts</button>
     <div id="shOut"></div>
-    <div class="area" style="margin-top:18px">Or send everything</div>${shareFullHTML()}`, null);
+    ${shareLimited()?'':`<div class="area" style="margin-top:18px">Or send everything</div>${shareFullHTML()}`}`, null);
 }
 function shareMessage(code){
   return `Hi! I'd like to share Life Compass with you. It's the app I use to plan my day, track Bible reading and more. It works offline.\n\n1) Android: download and install it here:\n${APK_URL}\n(If your phone warns you, allow installing from Chrome, then tap Install anyway.)\n\n2) Open the app, tap the gear ⚙ at the top, then "Enter setup code", and type:\n${code}\n\niPhone or computer? Open this link instead:\n${WEB_URL}?setup=${code.replace(/-/g,'')}`;
@@ -1913,8 +1916,8 @@ function sectionsHTML(){
   const st=S.settings, locked=st.sectionLock!=null;
   return `<div class="area" style="margin-top:20px">What this app shows</div>
     ${locked?`<p class="muted" style="margin:0 0 8px">Set up by someone else. Showing: ${PARTS.filter(([k])=>partOn(k)).map(x=>esc(x[1])).join(', ')}.</p><button class="btn ghost" data-a="unlocksec">Change (needs PIN)</button>`
-      :`${SECTIONS.map(([k,l])=>`<label class="row" style="cursor:pointer"><span class="lbl">${l}</span><input type="checkbox" class="secTog" value="${k}" ${secOn(k)?'checked':''} style="width:22px;height:22px"></label>`).join('')}`}
-    ${locked?'':`<label class="row" style="cursor:pointer"><span class="lbl">Congregation secretary<small>Your records stay on this phone. Sharing the app never sends them.</small></span><input type="checkbox" class="secTog" value="secretary" ${secOn('secretary')?'checked':''} style="width:22px;height:22px"></label>`}
+      :`${SECTIONS.filter(([k])=>!shareLimited() || PARTS.some(x=>x[2]===k && partGiven(x[0]))).map(([k,l])=>`<label class="row" style="cursor:pointer"><span class="lbl">${l}</span><input type="checkbox" class="secTog" value="${k}" ${secOn(k)?'checked':''} style="width:22px;height:22px"></label>`).join('')}`}
+    ${locked||shareLimited()?'':`<label class="row" style="cursor:pointer"><span class="lbl">Congregation secretary<small>Your records stay on this phone. Sharing the app never sends them.</small></span><input type="checkbox" class="secTog" value="secretary" ${secOn('secretary')?'checked':''} style="width:22px;height:22px"></label>`}
     <div class="btns" style="margin-top:10px"><button class="btn ghost" style="flex:1" data-a="shareapp">Share the app</button><button class="btn ghost" style="flex:1" data-a="setupcode">Enter setup code</button></div>`;
 }
 document.addEventListener('change', e=>{
@@ -1922,7 +1925,8 @@ document.addEventListener('change', e=>{
   if(t.classList.contains('secTog')){
     const secs={...(S.settings.sections||{})}; secs[t.value]=t.checked;
     if(t.value!=='secretary' && !SECTIONS.some(([k])=>secs[k]!==false)){ t.checked=true; toast('Keep at least one part on'); return; }
-    if(S.settings.parts && t.value!=='secretary'){ PARTS.filter(x=>x[2]===t.value).forEach(x=>S.settings.parts[x[0]]=t.checked); }
+    if(t.value==='secretary' && t.checked && shareLimited()){ t.checked=false; return; }
+    if(S.settings.parts && t.value!=='secretary'){ PARTS.filter(x=>x[2]===t.value).forEach(x=>S.settings.parts[x[0]]=t.checked && partGiven(x[0])); }
     S.settings.sections=secs; save(); renderNav(); toast(t.checked?'Shown':'Hidden');
   }
 });
@@ -2586,7 +2590,12 @@ function letterSheet(type){
     <p class="muted" style="font-size:12.5px;margin:-4px 0 10px">Signed by ${signers().map(([nm,t])=>esc(nm||t)).join(', ')}. The signatures are added under the letter.${signers().some(x=>!x[0])?' <a href="#" data-a="congsheet">Add the missing names</a>.':''}</p>
     <div class="btns" style="flex-direction:column">
       <button class="btn" data-a="x31lthub">Copy letter and open JW Hub</button>
-      <button class="btn ghost" data-a="x31ltpdf">${ltCanCards()?'PDF to attach (letter + S-21 cards)':'PDF to attach (letter with signatures)'}</button>
+      <button class="btn ghost" data-a="x41prev">Preview and adjust the letter</button>
+      <button class="btn ghost" data-a="x31ltpdf">Letter PDF (with signatures)</button>
+      <div id="ltCards" ${ltCanCards()?'':'hidden'} style="display:flex;flex-direction:column;gap:8px"><div class="area" style="margin:6px 0 0">S-21 cards (editable, for their secretary)</div>
+        <button class="btn ghost" data-a="x41s21chk">Check and correct the S-21</button>
+        <button class="btn ghost" data-a="x41s21pdf">S-21 PDF</button>
+        <button class="btn" data-a="x41both">Make both PDFs (letter + S-21)</button></div>
       <div class="area" style="margin:8px 0 0">Or send another way</div>
       <div class="f" style="margin:0"><div class="sndrow"><input type="tel" id="ltWa" value="${esc(LT.wa||c.lastWa||'')}" placeholder="WhatsApp number (or leave empty)"><button class="btn wa" data-a="x31ltwa" aria-label="WhatsApp">➤</button></div>
       ${letterElders().length?`<div class="chips2" style="margin-top:6px">${letterElders().map(p=>`<button data-a="x31ltpickwa" data-k="${esc(p.phone)}">${esc(p.name)}</button>`).join('')}</div>`:''}</div>
@@ -2595,7 +2604,7 @@ function letterSheet(type){
       <button class="btn ghost" data-a="x31ltcopy">Copy the letter</button>
       ${type==='out'&&LT.mode==='one'?`<button class="btn ghost" id="ltMoved" data-a="x31ltmoved" ${letterWho(LT.name)&&letterWho(LT.name).status!=='moved'?'':'hidden'}>Mark ${esc(firstName(LT.name)||'')} as moved away</button>`:''}
       <button class="btn ghost" data-a="close">Close</button></div>
-    <p class="muted" style="font-size:12.5px;margin:8px 0 0">JW Hub: the letter is copied. In JW Hub, start a new message, paste it, and attach the PDF from your Downloads.</p>`, null);
+    <p class="muted" style="font-size:12.5px;margin:8px 0 0">JW Hub: the letter is copied. In JW Hub, start a new message, paste it, and attach the PDF${ltCanCards()?'s (letter and S-21)':''} from your Downloads.</p>`, null);
   const keep=()=>{ LT.body=val('ltBody'); LT.subj=val('ltSubj'); };
   const refresh=()=>{ const r=ltMine()||ltBodyText(); if(!LT.edited){ document.getElementById('ltBody').value=r.body; } if(!LT.subjEdited) document.getElementById('ltSubj').value=r.subj; };
   const map=[['ltName','name'],['ltCong','cong'],['ltEmail','email'],['ltDate','date'],['ltNote','note'],['ltFamName','famName'],['ltGroom','groom'],['ltBride','bride'],['ltTime','time'],['ltSpeaker','speaker'],['ltContact','contact'],['ltCond','cond'],['ltPartner','partner'],['ltQuals','quals'],['ltSince','since']];
@@ -2606,7 +2615,7 @@ function letterSheet(type){
   const sync=()=>{ const p=LT.mode==='one'&&LT.name?letterWho(LT.name):null, w=document.getElementById('ltSexWrap'), mv=document.getElementById('ltMoved');
     if(w) w.hidden=!(LT.mode==='one' && LT.name && (!p || !p.gender));
     if(mv){ mv.hidden=!(p && p.status!=='moved'); mv.textContent='Mark '+firstName(LT.name||'')+' as moved away'; }
-    const pdf=document.querySelector('[data-a=x31ltpdf]'); if(pdf) pdf.textContent=ltCanCards()?'PDF to attach (letter + S-21 cards)':'PDF to attach (letter with signatures)'; };
+    const cw=document.getElementById('ltCards'); if(cw) cw.hidden=!ltCanCards(); };
   const nm=document.getElementById('ltName'); if(nm) nm.addEventListener('input',sync);
   document.getElementById('ltBody').addEventListener('input',()=>{ LT.edited=true; LT.body=val('ltBody'); });
   document.getElementById('ltSubj').addEventListener('input',()=>{ LT.subjEdited=true; LT.subj=val('ltSubj'); });
@@ -2655,7 +2664,9 @@ async function makeLetterPdf(body, subj, withCards){
   const lines=String(body).split('\n'); const skip=(c.name||'[our]')+' Congregation';
   if(lines[0]===skip) lines.shift(); if(c.city && lines[0]===c.city) lines.shift();
   K.text('Subject: '+subj,{size:10.5,f:K.bold}); K.gap(6);
-  K.text(lines.join('\n').replace(/^\n+/,''),{size:10.5});
+  let rich=(typeof LT!=='undefined' && LT && LT.rich)?ltReconcile(String(body)).slice():null;
+  if(rich){ while(rich.length && (ltPlain([rich[0]])===skip || (c.city && ltPlain([rich[0]])===c.city))) rich.shift(); while(rich.length && !ltPlain([rich[0]]).trim()) rich.shift(); await ltDrawRich(K, rich); }
+  else K.text(lines.join('\n').replace(/^\n+/,''),{size:10.5});
   K.gap(10); K.need(150); K.text('With warm Christian love,',{size:10.5}); K.gap(34);
   const sg=signers(), w=(K.W-2*K.M-24)/3;
   sg.forEach(([nm,t,ph],i)=>{ const x=K.M+i*(w+12); K.page.drawLine({start:{x,y:K.y},end:{x:x+w,y:K.y},thickness:0.7,color:K.ink});
@@ -3328,7 +3339,7 @@ async function makeS21(people, sy, totals){
   const font=await out.embedFont(L.StandardFonts.Helvetica), bold=await out.embedFont(L.StandardFonts.HelveticaBold), ink=L.rgb(0.05,0.13,0.35);
   const fit=(t,max,size)=>{ t=String(t||''); while(t && font.widthOfTextAtSize(t,size)>max) t=t.slice(0,-1); return t; };
   const centre=(page,t,cx,y,size=10,f=font)=>{ t=String(t); page.drawText(t,{x:cx-f.widthOfTextAtSize(t,size)/2, y, size, font:f, color:ink}); };
-  const add = async (fillFn) => { const [pg]=await out.copyPages(src,[0]); out.addPage(pg); fillFn(pg); };
+  const add = async (fillFn) => { const [pg]=await out.copyPages(src,[0]); out.addPage(pg); try{ pg.node.delete(L.PDFName.of('Annots')); }catch(e){} fillFn(pg); };   // v41: printed cards are locked
   for(const p of people){
     const y=pubYear(p, sy);
     await add(pg=>{
@@ -4854,7 +4865,7 @@ document.addEventListener('click', e => {
     case 'scapply': { const r=readCode(val('scCode')); if(!r){ fail('scCode','That code is not right'); break; } applyCode(r); break; }
     case 'shareapp': shareAppSheet(); break;
     case 'shmake': {
-      const secs={}; document.querySelectorAll('.shSec').forEach(c=>secs[c.value]=c.checked);
+      const secs={}; document.querySelectorAll('.shSec').forEach(c=>secs[c.value]=c.checked && partGiven(c.value));
       if(!Object.values(secs).some(Boolean)){ toast('Choose at least one part'); break; }
       let pin=val('shPin').trim(); if(pin && !/^\d{4,8}$/.test(pin)){ fail('shPin','Use 4 to 8 numbers'); break; } if(!pin){ pin=String(1000+Math.floor(Math.random()*9000)); document.getElementById('shPin').value=pin; }
       const code=makeCode2(secs,pin), msg=shareMessage(code);
@@ -4865,7 +4876,7 @@ document.addEventListener('click', e => {
       break;
     }
     case 'unlocksec': unlockSectionsSheet(); break;
-    case 'ulgo': { const pin=val('ulPin').trim(); if(pin16(pin)===S.settings.sectionLock){ S.settings.sectionLock=null; save(); closeSheet(); settingsSheet(); toast('Unlocked. You can now change what the app shows.'); } else fail('ulPin','Wrong PIN'); break; }
+    case 'ulgo': { const pin=val('ulPin').trim(); if(pin16(pin)===S.settings.sectionLock){ S.settings.sectionLock=null; S.settings.ownerUnlocked=true; save(); closeSheet(); settingsSheet(); toast('Unlocked. You can now change what the app shows.'); } else fail('ulPin','Wrong PIN'); break; }
     case 'gonotes': closeSheet(); tab='notes'; render(); window.scrollTo(0,0); break;
     case 'nfilter': notesFilter=t.dataset.k; render(); break;
     case 'notesheet': noteSheet(id); break;
@@ -5785,6 +5796,7 @@ function needsSetup(){
   const st=S.settings||{};
   if(st.setupDone || ('sectionLock' in st) || st.parts) return false;     // a code was already entered
   if(ownerSignal(S)) return false;                                         // the owner's own device
+  try{ if(JSON.stringify(S).length > JSON.stringify(fresh()).length + 600){ S.settings.setupDone=true; save(true); return false; } }catch(e){}   // v41: already in use before setup codes
   if(P.current!=='main'){ try{ if(ownerSignal(JSON.parse(localStorage.getItem(keyFor('main'))||'null'))) return false; }catch(e){} }
   return true;
 }
@@ -5861,6 +5873,7 @@ function personSheet(){
     });
 }
 
+try{ if(S.settings.parts && !S.settings.partsGiven){ S.settings.partsGiven={...S.settings.parts}; if(PARTS.every(([k])=>S.settings.parts[k]!==false)) S.settings.setupFull=true; save(true); } }catch(e){}   // v41: remember what was shared
 let SETUP_PREFILL=''; try{ SETUP_PREFILL=new URLSearchParams(location.search).get('setup')||''; if(SETUP_PREFILL) history.replaceState(null,'',location.pathname); }catch(e){}
 if(FORM) renderForm(); else if(needsLock()) showLock(); else { render(); if(needsSetup()) showSetup(SETUP_PREFILL); else if(SETUP_PREFILL) setTimeout(()=>setupCodeSheet(SETUP_PREFILL), 400); }
 setTimeout(checkAlarms, 1500);
@@ -5885,9 +5898,9 @@ document.addEventListener('click', e=>{
       const go=()=>{ toast('Letter copied. Paste it in JW Hub'); setTimeout(()=>window.open(JWHUB_URL,'_blank'),600); };
       (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(go,()=>{ const b=document.getElementById('ltBody'); b.focus(); b.select(); toast('Press and hold the letter, then Copy. Then open JW Hub'); }); break; }
     case 'x31ltpdf': { const ps=ltPeople().filter(p=>p.id), cards=ltCanCards(); const body=val('ltBody'), subj=ltSubj();
-      (async()=>{ if(cards && !(await photoGet(FORM_KEY.s21))){ toast('Add your blank S-21 card once, then try again'); printSheet('s21'); return; }
+      (async()=>{
         const was=t.textContent; t.textContent='Making the PDF…'; t.disabled=true;
-        try{ await savePdfFile(await makeLetterPdf(body, subj, cards?ps:null), safeName(subj).slice(0,60)+'.pdf', subj); letterDone('pdf'); toast(NATIVE?'Choose where to send it':'PDF saved to Downloads. Attach it in JW Hub'); }
+        try{ await savePdfFile(await makeLetterPdf(body, subj, null), safeName(subj).slice(0,60)+'.pdf', subj); letterDone('pdf'); toast(NATIVE?'Choose where to send it':'PDF saved to Downloads. Attach it in JW Hub'); }
         catch(err){ toast(err.message||'Could not make the PDF'); }
         t.textContent=was; t.disabled=false; })(); break; }
     case 'x31ltwa': { const num=phoneIntl(val('ltWa')); LT.wa=val('ltWa').trim(); if(LT.wa) congInfo().lastWa=LT.wa; letterDone('whatsapp'); window.open('https://wa.me/'+num+'?text='+encodeURIComponent('*'+ltSubj()+'*\n\n'+letterFull()),'_blank'); break; }
@@ -6631,6 +6644,238 @@ document.addEventListener('click', async e=>{
   if(a==='x39gc') groupCardsSheet(t.dataset.k);
   if(a==='x39gcgo') groupCardsGo(t.dataset.k, t);
 });
+
+/* ================= v41: S-21 editable for transfers, letter preview with formatting, separate PDFs, S-21 check, sharing limits ================= */
+/* ---------- S-21 that stays editable (for the receiving congregation's secretary) ---------- */
+async function makeS21Editable(people, years){
+  const L=await loadPdfLib(), blank=await photoGet(FORM_KEY.s21); if(!blank) throw new Error('Add your blank S-21 card first.');
+  const bytes=b64ToBytes(blank), out=await L.PDFDocument.create(), font=await out.embedFont(L.StandardFonts.Helvetica);
+  const date=x=>x?nice(x).replace(/^\w+, /,'')+' '+x.slice(0,4):'';
+  let pi=0, any=false;
+  for(const p of people) for(const sy of years){ pi++;
+    const src=await L.PDFDocument.load(bytes), af=src.catalog.getOrCreateAcroForm(), page=src.getPage(0), annots=page.node.Annots(), sfx='.'+pi;
+    let named=0;
+    if(annots) for(let i=0;i<annots.size();i++){ const ref=annots.get(i), d=src.context.lookup(ref, L.PDFDict); if(!d || !d.get(L.PDFName.of('T'))) continue;
+      d.set(L.PDFName.of('T'), L.PDFString.of(d.lookup(L.PDFName.of('T')).decodeText()+sfx)); af.addField(ref); named++; }
+    if(named<60) throw new Error('NOFIELDS');
+    const form=src.getForm(), tf=nm=>{ try{ return form.getTextField(nm+sfx); }catch(e){ return null; } }, cb=nm=>{ try{ return form.getCheckBox(nm+sfx); }catch(e){ return null; } };
+    const set=(nm,v)=>{ if(v==null||v==='') return; const f=tf(nm); if(f) f.setText(pdfClean(String(v))); };
+    const tick=(nm,on)=>{ const f=cb(nm); if(f&&on) f.check(); };
+    const y=pubYear(p, sy);
+    set('900_1_Text_SanSerif',p.name); set('900_2_Text_SanSerif',date(p.dob)); set('900_5_Text_SanSerif',date(p.baptized));
+    tick('900_3_CheckBox',p.gender==='m'); tick('900_4_CheckBox',p.gender==='f'); tick('900_6_CheckBox',p.hope==='os'); tick('900_7_CheckBox',p.hope==='an');
+    tick('900_8_CheckBox',p.elder); tick('900_9_CheckBox',p.ms); tick('900_10_CheckBox',p.type==='rp'); tick('900_11_CheckBox',p.type==='sp'); tick('900_12_CheckBox',p.type==='fm');
+    set('900_13_Text_C_SanSerif',sy);
+    y.rows.forEach((r,i)=>{ const k=20+i; tick('901_'+k+'_CheckBox',r.shared); if(r.studies!=='' && r.shared) set('902_'+k+'_Text_C_SanSerif',r.studies); tick('903_'+k+'_CheckBox',r.aux); if(r.hours!=='') set('904_'+k+'_S21_Value',r1(r.hours)); set('905_'+k+'_Text_SanSerif',r.remarks); });
+    if(y.hours) set('904_32_S21_Value',r1(y.hours));
+    form.updateFieldAppearances(await src.embedFont(L.StandardFonts.Helvetica));
+    const [cp]=await out.copyPages(src,[0]); out.addPage(cp); any=true;
+    const an=cp.node.Annots(); if(an) for(let i=0;i<an.size();i++){ const ref=an.get(i), d=out.context.lookup(ref, L.PDFDict); if(d&&d.get(L.PDFName.of('T'))) out.catalog.getOrCreateAcroForm().addField(ref); }
+  }
+  if(any){ const of=out.getForm(); of.getFields().forEach(f=>{ if(f instanceof L.PDFTextField) f.setFontSize(f.getName().startsWith('905')?8:10); }); of.updateFieldAppearances(font);
+    out.catalog.getOrCreateAcroForm().dict.set(L.PDFName.of('DR'), out.context.obj({Font:{Helvetica:font.ref}})); }
+  return out.save();
+}
+/* transfer cards: editable when the blank card has its boxes, otherwise the printed (locked) card */
+async function s21Transfer(people){
+  const sy=curSY();
+  try{ return await makeS21Editable(people, [sy-1, sy]); }
+  catch(e){ if(e.message!=='NOFIELDS') throw e;
+    const L=await loadPdfLib(), out=await L.PDFDocument.create();
+    for(const p of people) for(const y of [sy-1, sy]){ const src=await L.PDFDocument.load(await makeS21([p], y, [])); (await out.copyPages(src, src.getPageIndices())).forEach(pg=>out.addPage(pg)); }
+    return out.save(); }
+}
+
+/* ---------- several files at once (letter + S-21) ---------- */
+async function savePdfFiles(files, text){
+  if(NATIVE){ const F=window.Capacitor.Plugins.Filesystem, Sh=window.Capacitor.Plugins.Share, uris=[];
+    for(const f of files){ const r=await F.writeFile({path:f.name, data:bytesToB64(f.bytes), directory:'CACHE'}); uris.push(r.uri); }
+    if(text){ try{ await navigator.clipboard.writeText(text); }catch(e){} }
+    await Sh.share({title:files.map(f=>f.name).join(' + '), files:uris, dialogTitle:'Choose where to send both files'}); return; }
+  for(const f of files){ await savePdfFile(f.bytes, f.name); await new Promise(r=>setTimeout(r,700)); }
+}
+
+/* ---------- letter preview: type in it, bold, italic, size, left/centre/right ---------- */
+const LT_SIZES={s:9, n:10.5, b:13}, LT_CSS={s:'12.5px', n:'14.5px', b:'18px'};
+function ltPlain(rich){ return rich.map(l=>l.runs.map(r=>r.t).join('')).join('\n'); }
+function ltReconcile(body){   // keep the formatting of every line that is still the same
+  const old=LT.rich||[]; if(ltPlain(old)===body) return old;
+  return body.split('\n').map((t,i)=>{ const o=old[i]; if(o && ltPlain([o])===t) return o; return {a:(o&&o.a)||'l', s:(o&&o.s)||'n', runs:t?[{t, b:false, i:false}]:[]}; });
+}
+function ltRich(){ return ltReconcile(LT.edited?LT.body:(ltMine()||ltBodyText()).body); }
+function ltPreviewSheet(){
+  const c=congInfo(), rich=ltRich(), subj=LT.subjEdited?LT.subj:(ltMine()||ltBodyText()).subj, sg=signers();
+  const head=[(c.name||'[our]')+' Congregation', c.city||'\u0000'];
+  let lead=true; const hideIt=l=>{ if(!lead) return false; const t=ltPlain([l]); if(head.includes(t)) return true; lead=false; return false; };
+  const lineHTML=l=>`<div data-s="${l.s}" ${hideIt(l)?'hidden':''} style="text-align:${{l:'left',c:'center',r:'right'}[l.a]};font-size:${LT_CSS[l.s]}">${l.runs.length?l.runs.map(r=>{ let h=esc(r.t); if(r.b) h='<b>'+h+'</b>'; if(r.i) h='<i>'+h+'</i>'; return h; }).join(''):'<br>'}</div>`;
+  openSheet(`<h3>Preview the letter</h3>
+    <div class="lpBar" style="position:sticky;top:-16px;z-index:3;background:#fff;padding:8px 0;display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--line)">
+      <button class="btn sm ghost" data-lp="bold" style="font-weight:800;min-width:40px">B</button><button class="btn sm ghost" data-lp="italic" style="font-style:italic;font-family:serif;min-width:40px">I</button>
+      <span style="width:6px"></span><button class="btn sm ghost" data-lp="s" data-k="s">Small</button><button class="btn sm ghost" data-lp="s" data-k="n">Normal</button><button class="btn sm ghost" data-lp="s" data-k="b">Big</button>
+      <span style="width:6px"></span><button class="btn sm ghost" data-lp="a" data-k="l" title="Left">⇤ Left</button><button class="btn sm ghost" data-lp="a" data-k="c" title="Centre">Centre</button><button class="btn sm ghost" data-lp="a" data-k="r" title="Right">Right ⇥</button></div>
+    <p class="muted" style="font-size:12.5px;margin:8px 0">Tap in the letter to type. Select words, then tap <b>B</b> or <b>I</b>. Size and left/centre/right change the whole line you are on.</p>
+    <div style="background:#fff;border:1px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.08);border-radius:6px;padding:22px 18px;color:#111;font-family:Helvetica,Arial,sans-serif">
+      <div style="font-weight:700;font-size:17px">${esc((c.name||'Our')+' Congregation')}</div>
+      <div style="font-size:12px;color:#666;margin-bottom:14px">${esc([c.city,c.email].filter(Boolean).join('  ·  '))}</div>
+      <div style="font-size:14.5px;margin-bottom:8px"><b>Subject: </b><input id="lpSubj" value="${esc(subj)}" style="border:0;border-bottom:1px dashed #bbb;font:bold 14.5px Helvetica,Arial,sans-serif;width:75%;padding:2px 0;background:transparent"></div>
+      <div id="lpEd" contenteditable="true" spellcheck="true" style="outline:none;line-height:1.45;min-height:200px;white-space:pre-wrap">${rich.map(lineHTML).join('')}</div>
+      <div style="font-size:14.5px;margin-top:14px">With warm Christian love,</div>
+      <div style="display:grid;grid-template-columns:repeat(${Math.max(1,sg.length)},1fr);gap:10px;margin-top:30px">${sg.map(([nm,t,ph])=>`<div style="border-top:1px solid #333;padding-top:4px;font-size:12px"><b>${esc(nm||' ')}</b><br><span style="color:#666">${esc(t)}</span>${ph?'<br>Tel: '+esc(ph):''}</div>`).join('')}</div>
+    </div>
+    <div class="btns" style="margin-top:12px"><button class="btn ghost" style="flex:1" data-lp="back">Done, back to the letter</button><button class="btn" style="flex:1" data-lp="pdf">Letter PDF</button></div>`, null);
+  const ed=document.getElementById('lpEd');
+  try{ document.execCommand('defaultParagraphSeparator', false, 'div'); document.execCommand('styleWithCSS', false, false); }catch(e){}
+  ed.addEventListener('input', ()=>{ if(!ed.firstElementChild){ ed.innerHTML='<div data-s="n"><br></div>'; } });
+}
+function lpLines(){ const ed=document.getElementById('lpEd'); if(!ed) return [];
+  const sel=window.getSelection(); if(!sel.rangeCount) return [];
+  const r=sel.getRangeAt(0), kids=[...ed.children];
+  const lineOf=nd=>{ while(nd && nd.parentNode!==ed) nd=nd.parentNode; return nd; };
+  const a=lineOf(r.startContainer), b=lineOf(r.endContainer); if(!a||!b) return [];
+  const i=kids.indexOf(a), j=kids.indexOf(b); return kids.slice(Math.min(i,j), Math.max(i,j)+1);
+}
+function lpRead(){   // the editor back into lines of styled words
+  const ed=document.getElementById('lpEd'); if(!ed) return null;
+  const lines=[];
+  const walk=(nd,b,i,runs)=>{ if(nd.nodeType===3){ const t=nd.textContent.replace(/ /g,' ').replace(/\n/g,' '); if(t) runs.push({t,b,i}); return; }
+    if(nd.nodeType!==1) return; if(nd.tagName==='BR') return;
+    const st=nd.style||{}, tg=nd.tagName;
+    const nb=b || tg==='B' || tg==='STRONG' || n(st.fontWeight)>=600 || st.fontWeight==='bold', ni=i || tg==='I' || tg==='EM' || st.fontStyle==='italic';
+    nd.childNodes.forEach(c=>walk(c,nb,ni,runs)); };
+  const sizeOf=el=>{ if(el.dataset && el.dataset.s) return el.dataset.s; const f=parseFloat(el.style&&el.style.fontSize); return f? (f<13.5?'s':f>16?'b':'n') : 'n'; };
+  const alignOf=el=>{ const t=(el.style&&el.style.textAlign)||''; return t==='center'?'c':t==='right'?'r':'l'; };
+  ed.childNodes.forEach(nd=>{
+    if(nd.nodeType===3){ if(nd.textContent.trim()||lines.length) lines.push({a:'l', s:'n', runs:[{t:nd.textContent, b:false, i:false}]}); return; }
+    if(nd.nodeType!==1) return;
+    if(nd.tagName==='BR'){ lines.push({a:'l',s:'n',runs:[]}); return; }
+    const runs=[]; walk(nd,false,false,runs);
+    const merged=[]; runs.forEach(r=>{ const p=merged[merged.length-1]; if(p && p.b===r.b && p.i===r.i) p.t+=r.t; else merged.push({...r}); });
+    lines.push({a:alignOf(nd), s:sizeOf(nd), runs:merged});
+  });
+  return lines;
+}
+function lpSave(){ const lines=lpRead(); if(!lines) return; LT.rich=lines; LT.body=ltPlain(lines); LT.edited=true;
+  const s=document.getElementById('lpSubj'); if(s){ LT.subj=s.value.trim(); LT.subjEdited=true; } }
+document.addEventListener('mousedown', e=>{ if(e.target.closest('[data-lp]') && ['bold','italic','s','a'].includes(e.target.closest('[data-lp]').dataset.lp)) e.preventDefault(); });
+document.addEventListener('click', async e=>{
+  const t=e.target.closest('[data-lp]'); if(!t) return; const k=t.dataset.lp;
+  if(k==='bold'||k==='italic'){ document.getElementById('lpEd').focus(); document.execCommand(k); return; }
+  if(k==='s'){ lpLines().forEach(d=>{ d.dataset.s=t.dataset.k; d.style.fontSize=LT_CSS[t.dataset.k]; }); return; }
+  if(k==='a'){ lpLines().forEach(d=>{ d.style.textAlign={l:'left',c:'center',r:'right'}[t.dataset.k]; }); return; }
+  if(k==='back'){ lpSave(); letterSheet(LT.type); return; }
+  if(k==='pdf'){ lpSave(); const was=t.textContent; t.textContent='Making the PDF…'; t.disabled=true;
+    try{ await savePdfFile(await makeLetterPdf(LT.body, LT.subj, null), safeName(LT.subj).slice(0,60)+'.pdf', LT.subj); letterDone('pdf'); toast(NATIVE?'Choose where to send it':'Letter PDF saved to Downloads'); }
+    catch(err){ toast(err.message||'Could not make the PDF'); }
+    t.textContent=was; t.disabled=false; }
+});
+/* draw the formatted letter into the PDF */
+async function ltDrawRich(K, lines){
+  const L=K.L, f={ '00':K.font, '10':K.bold, '01':await K.doc.embedFont(L.StandardFonts.HelveticaOblique), '11':await K.doc.embedFont(L.StandardFonts.HelveticaBoldOblique) };
+  const w=K.W-2*K.M;
+  for(const ln of lines){
+    const size=LT_SIZES[ln.s]||10.5, lh=size*1.45;
+    if(!ln.runs.length || !ln.runs.some(r=>r.t.trim())){ K.need(lh); K.y-=lh; continue; }
+    // words made of styled pieces (a word may change style in the middle)
+    const words=[]; let cur=null;
+    ln.runs.forEach(r=>{ const font=f[(r.b?'1':'0')+(r.i?'1':'0')]; pdfClean(r.t).split(/(\s+)/).forEach(part=>{ if(!part) return; if(/^\s+$/.test(part)){ cur=null; return; }
+      if(!cur){ cur={segs:[], w:0}; words.push(cur); } cur.segs.push({t:part, font}); cur.w+=font.widthOfTextAtSize(part,size); }); });
+    const sp=K.font.widthOfTextAtSize(' ',size), rows=[]; let row=[], rw=0;
+    words.forEach(wd=>{ const add=(row.length?sp:0)+wd.w; if(row.length && rw+add>w){ rows.push([row,rw]); row=[wd]; rw=wd.w; } else { row.push(wd); rw+=add; } });
+    if(row.length) rows.push([row,rw]);
+    rows.forEach(([r,rw])=>{ K.need(lh); let x=K.M+(ln.a==='c'?(w-rw)/2:ln.a==='r'?w-rw:0);
+      r.forEach((wd,idx)=>{ if(idx) x+=sp; wd.segs.forEach(s=>{ K.page.drawText(s.t,{x, y:K.y-size, size, font:s.font, color:K.ink}); x+=s.font.widthOfTextAtSize(s.t,size); }); });
+      K.y-=lh; });
+  }
+}
+
+/* ---------- check and correct the S-21 before sending (saves to the records) ---------- */
+let SC=null;
+function hmIn(h){ if(h===''||h==null) return ''; const m=Math.round(n(h)*60); return Math.floor(m/60)+':'+String(m%60).padStart(2,'0'); }
+function hmParse(s){ s=String(s||'').trim().toLowerCase(); if(!s) return null;
+  let m; if((m=s.match(/^(\d+(?:\.\d+)?)$/))) return n(m[1]);
+  if((m=s.match(/^(\d+)\s*(?::|h|hr|hrs)\s*(\d{1,2})?\s*(?:m|min|mins)?$/))) return n(m[1])+n(m[2]||0)/60;
+  if((m=s.match(/^(\d+)\s*(?:m|min|mins)$/))) return n(m[1])/60;
+  return NaN; }
+function s21CheckSheet(idx){
+  const ps=ltPeople().map(p=>p.id?SEC().pubs.find(x=>x.id===p.id):null).filter(Boolean); if(!ps.length){ toast('Choose a publisher from your records first'); return; }
+  SC={i:Math.min(idx||0, ps.length-1), ids:ps.map(p=>p.id)};
+  const p=ps[SC.i], sy=curSY();
+  const yearHTML=y=>{ const py=pubYear(p,y);
+    return `<div class="area">${y} service year <span class="muted" style="font-weight:400">(${syLabel(y)})</span></div>
+      <div style="display:grid;grid-template-columns:44px 30px 46px 30px 1fr;gap:4px 6px;align-items:center;font-size:10.5px;color:var(--muted)"><span>Month</span><span>Shared</span><span>Studies</span><span>Aux.</span><span>Hours (h:mm)</span></div>
+      ${py.rows.map(r=>`<div data-sc-m="${r.m}" style="border-top:1px solid var(--line);padding:5px 0">
+        <div style="display:grid;grid-template-columns:44px 30px 46px 30px 1fr;gap:4px 6px;align-items:center">
+          <b style="font-size:13px">${parse(r.m+'-01').toLocaleDateString(undefined,{month:'short'})}</b>
+          <input type="checkbox" data-f="shared" ${r.shared?'checked':''} style="width:22px;height:22px">
+          <input type="number" min="0" inputmode="numeric" data-f="studies" value="${r.studies===''?'':r.studies}" style="padding:6px 4px">
+          <input type="checkbox" data-f="aux" ${r.aux?'checked':''} style="width:22px;height:22px">
+          <input type="text" data-f="hours" value="${r.r&&r.r.hours!=null?hmIn(r.r.hours):''}" placeholder="—" style="padding:6px">
+        </div>
+        <input type="text" data-f="remarks" value="${esc(r.remarks)}" placeholder="Remarks" style="margin-top:4px;padding:6px;font-size:13px">
+        <input type="hidden" data-f="orig" value="${esc(JSON.stringify([r.shared,r.studies===''?'':n(r.studies),r.aux,r.r&&r.r.hours!=null?r1(n(r.r.hours)):null,r.remarks]))}">
+      </div>`).join('')}`; };
+  openSheet(`<h3>Check the S-21 card</h3>
+    ${ps.length>1?`<div class="chips2" style="margin-bottom:8px">${ps.map((x,i)=>`<button class="${i===SC.i?'on':''}" data-sc="who" data-k="${i}">${esc(firstName(x.name))}</button>`).join('')}</div>`:''}
+    <p class="muted" style="font-size:12.5px;margin:0 0 8px">Correct anything here. It saves to ${esc(firstName(p.name))}'s records in your app, so the monthly reports and totals change too.</p>
+    <div class="f"><label>Name</label><input type="text" id="scName" value="${esc(p.name)}"></div>
+    <div class="f2"><div class="f"><label>Date of birth</label><input type="date" id="scDob" value="${p.dob||''}"></div><div class="f"><label>Date of baptism</label><input type="date" id="scBap" value="${p.baptized||''}"></div></div>
+    <div class="f2"><div class="f"><label>Brother or sister</label><select id="scSex"><option value="">Choose</option><option value="m" ${p.gender==='m'?'selected':''}>Male</option><option value="f" ${p.gender==='f'?'selected':''}>Female</option></select></div>
+      <div class="f"><label>Hope</label><select id="scHope"><option value="">Not set</option><option value="os" ${p.hope==='os'?'selected':''}>Other sheep</option><option value="an" ${p.hope==='an'?'selected':''}>Anointed</option></select></div></div>
+    <div class="f2"><div class="f"><label>Pioneer</label><select id="scType"><option value="">Publisher</option><option value="rp" ${p.type==='rp'?'selected':''}>Regular pioneer</option><option value="sp" ${p.type==='sp'?'selected':''}>Special pioneer</option><option value="fm" ${p.type==='fm'?'selected':''}>Field missionary</option></select></div>
+      <div class="f"><label>Appointed</label><select id="scApp"><option value="">No</option><option value="elder" ${p.elder?'selected':''}>Elder</option><option value="ms" ${p.ms?'selected':''}>Ministerial servant</option></select></div></div>
+    <div id="scYears">${yearHTML(sy)}${yearHTML(sy-1)}</div>
+    <p id="scErr" class="err" style="margin:8px 0 0"></p>
+    <div class="btns" style="margin-top:12px;flex-direction:column"><button class="btn" data-sc="save">Save the corrections</button><button class="btn ghost" data-sc="savepdf">Save and make the S-21 PDF</button><button class="btn ghost" data-sc="back">Back to the letter</button></div>`, null);
+}
+function s21CheckSave(){
+  const d=SEC(), p=d.pubs.find(x=>x.id===SC.ids[SC.i]); if(!p) return false;
+  const err=document.getElementById('scErr'); err.textContent='';
+  const nm=val('scName').trim(); if(!nm){ err.textContent='Enter the name'; return false; }
+  const rows=[...document.querySelectorAll('[data-sc-m]')], upd=[];
+  for(const el of rows){ const g=f=>el.querySelector('[data-f='+f+']');
+    const hr=hmParse(g('hours').value); if(Number.isNaN(hr)){ err.textContent='Hours for '+monthName(el.dataset.scM)+' should look like 2:30 or 2.5'; g('hours').focus(); return false; }
+    const now=[g('shared').checked, g('studies').value===''?'':n(g('studies').value), g('aux').checked, hr==null?null:r1(hr), g('remarks').value.trim()];
+    if(JSON.stringify(now)!==g('orig').value) upd.push([el.dataset.scM, now, hr]); }
+  p.name=nm; p.dob=val('scDob'); p.baptized=val('scBap'); p.gender=val('scSex'); p.hope=val('scHope'); p.type=val('scType');
+  const ap=val('scApp'); p.elder=ap==='elder'; p.ms=ap==='ms';
+  upd.forEach(([m,[sh,st,ax,,rm],hr])=>{ d.reports[m]=d.reports[m]||{}; const r=d.reports[m][p.id]||(d.reports[m][p.id]={});
+    r.shared=sh; r.studies=st===''?0:st; r.aux=ax; if(hr==null) delete r.hours; else r.hours=hr; if(rm) r.remarks=rm; else delete r.remarks; });
+  if(LT && LT.mode==='one' && nameKey(LT.name)!==nameKey(nm) && SC.ids.length===1) LT.name=nm;
+  save(); toast(upd.length?'Saved · '+upd.length+' month'+(upd.length===1?'':'s')+' corrected':'Saved'); return true;
+}
+document.addEventListener('click', async e=>{
+  const t=e.target.closest('[data-sc]'); if(!t || !SC) return; const k=t.dataset.sc;
+  if(k==='who'){ if(s21CheckSave()) s21CheckSheet(n(t.dataset.k)); }
+  if(k==='save'){ s21CheckSave(); }
+  if(k==='back'){ letterSheet(LT.type); }
+  if(k==='savepdf'){ if(!s21CheckSave()) return; const was=t.textContent; t.textContent='Making the PDF…'; t.disabled=true;
+    try{ await ltS21Pdf(); }catch(err){ toast(err.message||'Could not make the PDF'); } t.textContent=was; t.disabled=false; }
+});
+
+/* ---------- letter buttons ---------- */
+function ltCardPeople(){ return ltPeople().filter(p=>p.id).map(p=>SEC().pubs.find(x=>x.id===p.id)).filter(Boolean); }
+function ltS21Name(){ const ps=ltCardPeople(); return 'S-21 '+safeName(ps.length>1?(ltG().fam||ps[0].name):ps[0].name)+'.pdf'; }
+async function ltS21Pdf(){ if(!(await photoGet(FORM_KEY.s21))){ toast('Add your blank S-21 card once, then try again'); printSheet('s21'); return; }
+  await savePdfFile(await s21Transfer(ltCardPeople()), ltS21Name()); toast(NATIVE?'Choose where to send it':'S-21 PDF saved to Downloads'); }
+document.addEventListener('click', async e=>{
+  const t=e.target.closest('[data-a]'); if(!t || !/^x41/.test(t.dataset.a)) return; const a=t.dataset.a;
+  const keep=()=>{ if(document.getElementById('ltBody')){ LT.body=val('ltBody'); LT.subj=val('ltSubj'); } };
+  if(a==='x41prev'){ keep(); ltPreviewSheet(); }
+  if(a==='x41s21chk'){ keep(); s21CheckSheet(0); }
+  if(a==='x41s21pdf'||a==='x41both'){ keep(); const was=t.textContent; t.textContent='Making…'; t.disabled=true;
+    try{ if(a==='x41s21pdf') await ltS21Pdf();
+      else { if(!(await photoGet(FORM_KEY.s21))){ toast('Add your blank S-21 card once, then try again'); printSheet('s21'); }
+        else { const subj=val('ltSubj')||ltBodyText().subj, body=val('ltBody');
+          await savePdfFiles([{bytes:await makeLetterPdf(body, subj, null), name:safeName(subj).slice(0,60)+'.pdf'}, {bytes:await s21Transfer(ltCardPeople()), name:ltS21Name()}], subj);
+          letterDone('pdf'); toast(NATIVE?'Choose where to send both files':'Both PDFs saved to Downloads. Attach both in JW Hub'); } } }
+    catch(err){ toast(err.message||'Could not make the PDF'); }
+    t.textContent=was; t.disabled=false; }
+});
+
+/* ---------- sharing: people can only pass on what they were given ---------- */
+function shareLimited(){ const st=S.settings||{}; if(!st.parts || st.setupFull || st.ownerUnlocked) return false;
+  const given=st.partsGiven||st.parts; return PARTS.some(([k])=>given[k]===false); }
+function partGiven(k){ const st=S.settings||{}; return !shareLimited() || (st.partsGiven||st.parts||{})[k]!==false; }
 
 /* ================= v40: follow-up visits, late visits, live planning page with the elders ================= */
 const SHEP_LATE=14;   // days after the planned date before a visit shows as "not done yet"
