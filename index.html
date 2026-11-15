@@ -242,7 +242,7 @@ body.formmode main{padding-bottom:40px}
 
 <script>
 /* ---------- storage ---------- */
-const APP_VERSION = 41;
+const APP_VERSION = 42;
 const PKEY = 'lifecompass.profiles';
 function loadProfiles(){ try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p&&p.list&&p.list.length) return p; }catch(e){} return {list:[{id:'main',name:'',pin:null}], current:'main'}; }
 let P = loadProfiles();
@@ -2627,8 +2627,50 @@ function letterDone(how){
   if(cn){ let o=d.congs.find(x=>x.name.toLowerCase()===cn.toLowerCase()); if(!o){ o={id:uid(), name:cn, secretary:'', email:'', phone:''}; d.congs.push(o); } if(LT.email) o.email=LT.email; }
   const c=congInfo(); c.style=c.style||{}; c.style[LT.type]=LT.style;
   const today=d.letters.find(l=>l.type===LT.type && l.date===TODAY() && l.name===ltWhoText());
-  if(today) today.how=how; else d.letters.push({id:uid(), type:LT.type, name:ltWhoText(), cong:cn, date:TODAY(), how}); save();
+  const tb=document.getElementById('ltBody'), ts=document.getElementById('ltSubj');
+  const body=tb?tb.value:(LT.edited?LT.body:(ltMine()||ltBodyText()).body), subj=(ts&&ts.value)||(LT.subjEdited?LT.subj:(ltMine()||ltBodyText()).subj);
+  const copy={subj, body, rich:LT.rich?JSON.parse(JSON.stringify(ltReconcile(body))):null, sg:signers()};   // v42: the letter itself is kept
+  if(today){ today.how=how; today.copy=copy; } else d.letters.push({id:uid(), type:LT.type, name:ltWhoText(), cong:cn, date:TODAY(), how, copy}); save();
 }
+function signTextOf(sg){ const c=congInfo(); return '\n\nWith warm Christian love,\n\n'+sg.map(([nm,t,ph])=>(nm||'________________')+'\n'+t+(ph?'\nTel: '+ph:'')).join('\n\n')+`\n\nFor the body of elders, ${c.name||'[our]'} Congregation`; }
+function sentLetterSheet(id){
+  const l=SEC().letters.find(x=>x.id===id); if(!l) return; const cp=l.copy, title=(LETTERS.find(x=>x[0]===l.type)||['','Letter'])[1];
+  const how={hub:'JW Hub',whatsapp:'WhatsApp',email:'email',pdf:'PDF',copy:'copied'}[l.how]||l.how||'';
+  if(!cp){ openSheet(`<h3>${esc(title)}</h3><p class="muted" style="margin:0 0 10px">${esc(l.name||'')}${l.cong?' · to '+esc(l.cong):''} · ${nice(l.date)}${how?' · '+esc(how):''}</p>
+    <div class="banner" style="margin:0 0 10px"><span>This letter was sent before Life Compass kept copies, so only this record is saved. Letters you send from now on are kept in full.</span></div>
+    <button class="btn ghost" data-a="close">Close</button>`, null); return; }
+  const c=congInfo(), head=[(c.name||'[our]')+' Congregation', c.city||'\u0000'];
+  const lines=cp.rich||cp.body.split('\n').map(t=>({a:'l',s:'n',runs:t?[{t,b:false,i:false}]:[]}));
+  let lead=true; const shown=lines.filter(ln=>{ if(lead && head.includes(ltPlain([ln]))) return false; lead=false; return true; });
+  const lineHTML=ln=>`<div style="text-align:${{l:'left',c:'center',r:'right'}[ln.a]||'left'};font-size:${LT_CSS[ln.s]||'14.5px'};min-height:1.2em">${ln.runs.map(r=>{ let h=esc(r.t); if(r.b) h='<b>'+h+'</b>'; if(r.i) h='<i>'+h+'</i>'; return h; }).join('')}</div>`;
+  const full=cp.body+signTextOf(cp.sg||signers());
+  openSheet(`<h3>${esc(title)}</h3>
+    <p class="muted" style="margin:0 0 10px">${esc(l.name||'')}${l.cong?' · to '+esc(l.cong):''} · sent ${nice(l.date)}${how?' by '+esc(how):''}</p>
+    <div style="background:#fff;border:1px solid var(--line);border-radius:6px;padding:18px 16px;color:#111;font-family:Helvetica,Arial,sans-serif;line-height:1.45">
+      <div style="font-weight:700;font-size:16px">${esc((c.name||'Our')+' Congregation')}</div>
+      <div style="font-size:14px;margin:10px 0 8px"><b>Subject: ${esc(cp.subj)}</b></div>
+      ${shown.map(lineHTML).join('')}
+      <div style="font-size:14px;margin-top:12px">With warm Christian love,</div>
+      <div style="font-size:12px;color:#555;margin-top:8px">${(cp.sg||[]).map(([nm,t])=>esc((nm||'____')+' ('+t+')')).join(' · ')}</div></div>
+    <div class="btns" style="margin-top:12px;flex-direction:column">
+      <button class="btn" data-a="x42pdf" data-id="${l.id}">Make the PDF again</button>
+      <button class="btn ghost" data-a="x42copy" data-id="${l.id}">Copy the letter</button>
+      <a class="btn wa" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent('*'+cp.subj+'*\n\n'+full)}">Send on WhatsApp</a>
+      <button class="btn ghost" data-a="x42reuse" data-id="${l.id}">Use as a new letter (you can change it)</button>
+      <button class="btn ghost" data-a="close">Close</button></div>`, null);
+}
+document.addEventListener('click', async e=>{
+  const t=e.target.closest('[data-a]'); if(!t || !/^x42/.test(t.dataset.a)) return;
+  const l=SEC().letters.find(x=>x.id===t.dataset.id); if(!l) return; const cp=l.copy;
+  if(t.dataset.a==='x42open') sentLetterSheet(l.id);
+  if(!cp) return;
+  if(t.dataset.a==='x42pdf'){ const was=t.textContent; t.textContent='Making the PDF…'; t.disabled=true;
+    try{ await savePdfFile(await makeLetterPdf(cp.body, cp.subj, null, {rich:cp.rich, sg:cp.sg}), safeName(cp.subj).slice(0,60)+'.pdf', cp.subj); toast(NATIVE?'Choose where to send it':'PDF saved to Downloads'); }
+    catch(err){ toast(err.message||'Could not make the PDF'); } t.textContent=was; t.disabled=false; }
+  if(t.dataset.a==='x42copy') copyText(cp.subj+'\n\n'+cp.body+signTextOf(cp.sg||signers()), 'Letter copied');
+  if(t.dataset.a==='x42reuse'){ LT=null; letterSheet(l.type); Object.assign(LT,{body:cp.body, edited:true, subj:cp.subj, subjEdited:true, rich:cp.rich?JSON.parse(JSON.stringify(cp.rich)):null, cong:l.cong||''});
+    if(l.name && LT.mode==='one') LT.name=l.name; letterSheet(l.type); toast('Copied into a new letter. Change what you need.'); }
+});
 
 /* ---------- a small PDF layout helper (letters, contact list, CO visit, minutes) ---------- */
 const pdfClean = x => String(x??'').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[–—]/g,'-').replace(/ɛ/g,'e').replace(/Ɛ/g,'E').replace(/ɔ/g,'o').replace(/Ɔ/g,'O').replace(/GH₵\s?/g,'GHS ').replace(/₵/g,'GHS ').replace(/✓/g,'Yes').replace(/[^\x09\x0A\x20-\x7E\xA0-\xFF]/g,'');
@@ -2658,17 +2700,17 @@ async function pdfKit(){
   K.save=()=>doc.save();
   return K;
 }
-async function makeLetterPdf(body, subj, withCards){
+async function makeLetterPdf(body, subj, withCards, saved){   // saved: a kept copy {rich, sg}
   const K=await pdfKit(), c=congInfo();
   K.letterhead();
   const lines=String(body).split('\n'); const skip=(c.name||'[our]')+' Congregation';
   if(lines[0]===skip) lines.shift(); if(c.city && lines[0]===c.city) lines.shift();
   K.text('Subject: '+subj,{size:10.5,f:K.bold}); K.gap(6);
-  let rich=(typeof LT!=='undefined' && LT && LT.rich)?ltReconcile(String(body)).slice():null;
+  let rich=saved?(saved.rich?saved.rich.slice():null):(typeof LT!=='undefined' && LT && LT.rich)?ltReconcile(String(body)).slice():null;
   if(rich){ while(rich.length && (ltPlain([rich[0]])===skip || (c.city && ltPlain([rich[0]])===c.city))) rich.shift(); while(rich.length && !ltPlain([rich[0]]).trim()) rich.shift(); await ltDrawRich(K, rich); }
   else K.text(lines.join('\n').replace(/^\n+/,''),{size:10.5});
   K.gap(10); K.need(150); K.text('With warm Christian love,',{size:10.5}); K.gap(34);
-  const sg=signers(), w=(K.W-2*K.M-24)/3;
+  const sg=(saved&&saved.sg)||signers(), w=(K.W-2*K.M-24)/3;
   sg.forEach(([nm,t,ph],i)=>{ const x=K.M+i*(w+12); K.page.drawLine({start:{x,y:K.y},end:{x:x+w,y:K.y},thickness:0.7,color:K.ink});
     K.page.drawText(pdfClean(nm||' '),{x,y:K.y-13,size:10,font:K.bold,color:K.ink});
     const tl=K.lines(t,8.5,K.font,w); tl.forEach((l,j)=>K.page.drawText(l,{x,y:K.y-26-j*10,size:8.5,font:K.font,color:K.grey}));
@@ -2734,11 +2776,11 @@ function branchMsg(x){ return `Good ${timeOfDay()} ${firstName(nameOnly(x.who))}
 /* one dated log of every letter, in and out */
 let logFilter='all';
 function letterLogCard(){
-  const d=SEC(), rows=[...d.letters.map(l=>({k:'out', date:l.date, title:(LETTERS.find(x=>x[0]===l.type)||['','Letter'])[1], sub:[l.name, l.cong&&'to '+l.cong, l.how&&({hub:'JW Hub',whatsapp:'WhatsApp',email:'email',pdf:'PDF',copy:'copied'}[l.how]||l.how)].filter(Boolean).join(' · ')})),
+  const d=SEC(), rows=[...d.letters.map(l=>({k:'out', lid:l.id, kept:!!l.copy, date:l.date, title:(LETTERS.find(x=>x[0]===l.type)||['','Letter'])[1], sub:[l.name, l.cong&&'to '+l.cong, l.how&&({hub:'JW Hub',whatsapp:'WhatsApp',email:'email',pdf:'PDF',copy:'copied'}[l.how]||l.how)].filter(Boolean).join(' · ')})),
     ...d.branch.map(x=>({k:'in', date:x.received||x.created||'', title:x.subject, sub:'from '+fromOf(x)+(x.ref?' · '+x.ref:''), id:x.id}))].filter(r=>logFilter==='all'||r.k===logFilter).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   if(!d.letters.length && !d.branch.length) return '';
   return `<div class="card"><h2>Letter log</h2><div class="chips2">${[['all','All'],['in','Received'],['out','Sent']].map(([k,l])=>`<button class="${k===logFilter?'on':''}" data-a="x32log" data-k="${k}">${l}</button>`).join('')}</div>
-    <div class="list">${rows.slice(0,40).map(r=>`<div class="it" ${r.id?`data-a="x31branch" data-id="${r.id}" style="cursor:pointer"`:''}><div style="min-width:54px;font-weight:700;font-size:13px;color:${r.k==='in'?'var(--navy)':'var(--ok)'}">${r.k==='in'?'IN':'OUT'}<br><span class="muted" style="font-weight:400">${r.date?nice(r.date).replace(/^\w+, /,''):''}</span></div><div class="x"><b>${esc(r.title)}</b><small>${esc(r.sub||'')}</small></div></div>`).join('')}</div>
+    <div class="list">${rows.slice(0,40).map(r=>`<div class="it" ${r.id?`data-a="x31branch" data-id="${r.id}" style="cursor:pointer"`:r.lid?`data-a="x42open" data-id="${r.lid}" style="cursor:pointer"`:''}><div style="min-width:54px;font-weight:700;font-size:13px;color:${r.k==='in'?'var(--navy)':'var(--ok)'}">${r.k==='in'?'IN':'OUT'}<br><span class="muted" style="font-weight:400">${r.date?nice(r.date).replace(/^\w+, /,''):''}</span></div><div class="x"><b>${esc(r.title)}</b><small>${esc(r.sub||'')}</small></div></div>`).join('')}</div>
     ${rows.length>40?`<p class="muted" style="font-size:12.5px;margin:6px 0 0">Showing the newest 40 of ${rows.length}.</p>`:''}</div>`;
 }
 
